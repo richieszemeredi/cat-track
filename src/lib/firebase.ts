@@ -35,6 +35,11 @@ export const auth = getAuth(app)
 // disposable — cloud is the source of truth (iOS may evict IndexedDB).
 export const db = initializeFirestore(app, {
   localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() }),
+  // WebKit (Playwright e2e) stalls on the default fetch-stream WebChannel
+  // backchannel against the emulator: writes are sent but their acks (and all
+  // later listen results) never arrive. Classic long-polling is reliable
+  // there; production keeps the SDK's default auto-detection.
+  ...(isEmulatorMode ? { experimentalForceLongPolling: true } : {}),
 })
 
 if (isEmulatorMode) {

@@ -23,9 +23,15 @@ export const Route = createRootRouteWithContext<RouterContext>()({
 
 function RootComponent() {
   const { user, loading } = useAuth()
-  if (loading) return <Splash />
-  if (user === null) return <SignInScreen />
-  return <MembershipGate user={user} />
+  return (
+    <>
+      {loading ? <Splash /> : user === null ? <SignInScreen /> : <MembershipGate user={user} />}
+      {/* Mounted on every screen (incl. sign-in): useRegisterSW inside is the
+          only thing that registers the service worker, and the offline app
+          shell must work before the user is signed in. */}
+      <UpdateToast />
+    </>
+  )
 }
 
 function MembershipGate({ user }: { user: User }) {
@@ -64,7 +70,6 @@ function AppShell() {
         <Outlet />
       </ErrorBoundary>
       <TabBar />
-      <UpdateToast />
     </div>
   )
 }

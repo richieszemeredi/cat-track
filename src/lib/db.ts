@@ -53,7 +53,11 @@ function parseDocs<T extends Record<string, unknown>>(
 ): (T & { id: string })[] {
   const out: (T & { id: string })[] = []
   for (const d of snap.docs) {
-    const parsed = schema.safeParse(d.data())
+    // 'estimate': docs with a pending serverTimestamp() (offline queue,
+    // latency compensation) surface with a local-clock Timestamp instead of
+    // null — otherwise the schema would reject every just-written doc and an
+    // offline entry would vanish from the UI until it synced.
+    const parsed = schema.safeParse(d.data({ serverTimestamps: 'estimate' }))
     if (parsed.success) {
       out.push({ ...parsed.data, id: d.id })
     } else {
@@ -93,7 +97,9 @@ export async function findMembership(uid: string): Promise<Membership | null> {
   )
   const d = snap.docs[0]
   if (!d) return null
-  const parsed = memberSchema.safeParse(d.data())
+  // 'estimate' for the same reason as parseDocs: a freshly created household's
+  // member doc may still have its joinedAt serverTimestamp pending.
+  const parsed = memberSchema.safeParse(d.data({ serverTimestamps: 'estimate' }))
   if (!parsed.success) {
     console.error(`[db] malformed member doc at ${d.ref.path}`, parsed.error)
     return null
