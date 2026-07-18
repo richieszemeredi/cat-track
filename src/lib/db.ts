@@ -12,6 +12,7 @@ import {
   orderBy,
   query,
   serverTimestamp,
+  setDoc,
   Timestamp,
   updateDoc,
   where,
@@ -107,6 +108,45 @@ export function membershipQueryOptions(uid: string) {
     queryKey: ['membership', uid] as const,
     queryFn: () => findMembership(uid),
     staleTime: 5 * 60_000,
+  })
+}
+
+// ---------- members ----------
+
+function membersRef(hid: string): CollectionReference {
+  return collection(db, 'households', hid, 'members')
+}
+
+export function membersQueryOptions(hid: string) {
+  return queryOptions({
+    queryKey: ['members', hid] as const,
+    queryFn: async () =>
+      parseDocs(memberSchema, await getDocs(query(membersRef(hid), orderBy('joinedAt', 'asc')))),
+    staleTime: Infinity,
+  })
+}
+
+export function useMembersLive(hid: string): void {
+  const qc = useQueryClient()
+  useEffect(
+    () =>
+      onSnapshot(query(membersRef(hid), orderBy('joinedAt', 'asc')), (snap) => {
+        qc.setQueryData(membersQueryOptions(hid).queryKey, parseDocs(memberSchema, snap))
+      }),
+    [hid, qc],
+  )
+}
+
+/** Owner-only (enforced by rules): add the partner's account to the household. */
+export function addMember(
+  hid: string,
+  member: { uid: string; role: 'editor' | 'viewer'; displayName: string },
+): Promise<unknown> {
+  return setDoc(doc(membersRef(hid), member.uid), {
+    uid: member.uid,
+    role: member.role,
+    joinedAt: serverTimestamp(),
+    displayName: member.displayName,
   })
 }
 
