@@ -1,0 +1,23 @@
+# deps / build
+node_modules
+dist
+dev-dist
+
+# tests
+coverage
+playwright-report
+test-results
+
+# env (real Firebase config lives in .env.local, never committed)
+.env.local
+.env.*.local
+
+# firebase
+.firebase
+firebase-debug.log
+firestore-debug.log
+ui-debug.log
+pubsub-debug.log
+
+# os / editor
+.DS_Store

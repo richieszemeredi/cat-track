@@ -1,0 +1,400 @@
+import { queryOptions, useQueryClient } from '@tanstack/react-query'
+import { type User } from 'firebase/auth'
+import {
+  addDoc,
+  collection,
+  collectionGroup,
+  deleteDoc,
+  doc,
+  getDocs,
+  limit,
+  onSnapshot,
+  orderBy,
+  query,
+  serverTimestamp,
+  Timestamp,
+  updateDoc,
+  where,
+  writeBatch,
+  type CollectionReference,
+  type QuerySnapshot,
+} from 'firebase/firestore'
+import { useEffect } from 'react'
+import { type z } from 'zod'
+import { db } from './firebase'
+import {
+  catSchema,
+  feedingSchema,
+  foodSchema,
+  memberSchema,
+  weightEntrySchema,
+  type Cat,
+  type Feeding,
+  type Food,
+  type FoodType,
+  type LifeStage,
+  type MealType,
+  type Role,
+  type Sex,
+  type WeightEntry,
+} from './schemas'
+
+// The single data-access layer. Every function takes householdId explicitly —
+// today there is exactly one household, but nothing here assumes that, which
+// keeps the future public/multiuser jump a UI problem, not a data problem
+// (plan §6).
+
+// ---------- read boundary: Zod safeParse, degrade gracefully ----------
+
+function parseDocs<T extends Record<string, unknown>>(
+  schema: z.ZodType<T>,
+  snap: QuerySnapshot,
+): (T & { id: string })[] {
+  const out: (T & { id: string })[] = []
+  for (const d of snap.docs) {
+    const parsed = schema.safeParse(d.data())
+    if (parsed.success) {
+      out.push({ ...parsed.data, id: d.id })
+    } else {
+      // Robustness net, not security: skip + log, never white-screen.
+      console.error(`[db] skipping malformed doc at ${d.ref.path}`, parsed.error)
+    }
+  }
+  return out
+}
+
+// ---------- refs ----------
+
+function catsRef(hid: string): CollectionReference {
+  return collection(db, 'households', hid, 'cats')
+}
+function weightsRef(hid: string, catId: string): CollectionReference {
+  return collection(db, 'households', hid, 'cats', catId, 'weights')
+}
+function foodsRef(hid: string, catId: string): CollectionReference {
+  return collection(db, 'households', hid, 'cats', catId, 'foods')
+}
+function feedingsRef(hid: string, catId: string): CollectionReference {
+  return collection(db, 'households', hid, 'cats', catId, 'feedings')
+}
+
+// ---------- membership discovery ----------
+
+export interface Membership {
+  householdId: string
+  role: Role
+}
+
+/** Find the signed-in user's household via a members collection-group query. */
+export async function findMembership(uid: string): Promise<Membership | null> {
+  const snap = await getDocs(
+    query(collectionGroup(db, 'members'), where('uid', '==', uid), limit(1)),
+  )
+  const d = snap.docs[0]
+  if (!d) return null
+  const parsed = memberSchema.safeParse(d.data())
+  if (!parsed.success) {
+    console.error(`[db] malformed member doc at ${d.ref.path}`, parsed.error)
+    return null
+  }
+  const householdId = d.ref.parent.parent?.id
+  if (householdId === undefined) return null
+  return { householdId, role: parsed.data.role }
+}
+
+export function membershipQueryOptions(uid: string) {
+  return queryOptions({
+    queryKey: ['membership', uid] as const,
+    queryFn: () => findMembership(uid),
+    staleTime: 5 * 60_000,
+  })
+}
+
+// ---------- queries + live subscriptions ----------
+// Pattern: the queryOptions do the one-shot fetch (route loaders can
+// ensureQueryData them); a matching use*Live hook pushes onSnapshot updates
+// into the same cache key, so data stays realtime across both phones.
+
+export function catsQueryOptions(hid: string) {
+  return queryOptions({
+    queryKey: ['cats', hid] as const,
+    queryFn: async () =>
+      parseDocs(catSchema, await getDocs(query(catsRef(hid), orderBy('createdAt', 'asc')))),
+    staleTime: Infinity,
+  })
+}
+
+export function useCatsLive(hid: string): void {
+  const qc = useQueryClient()
+  useEffect(
+    () =>
+      onSnapshot(query(catsRef(hid), orderBy('createdAt', 'asc')), (snap) => {
+        qc.setQueryData(catsQueryOptions(hid).queryKey, parseDocs(catSchema, snap))
+      }),
+    [hid, qc],
+  )
+}
+
+export function weightsQueryOptions(hid: string, catId: string) {
+  return queryOptions({
+    queryKey: ['weights', hid, catId] as const,
+    queryFn: async () =>
+      parseDocs(
+        weightEntrySchema,
+        await getDocs(query(weightsRef(hid, catId), orderBy('date', 'asc'))),
+      ),
+    staleTime: Infinity,
+  })
+}
+
+export function useWeightsLive(hid: string, catId: string): void {
+  const qc = useQueryClient()
+  useEffect(
+    () =>
+      onSnapshot(query(weightsRef(hid, catId), orderBy('date', 'asc')), (snap) => {
+        qc.setQueryData(
+          weightsQueryOptions(hid, catId).queryKey,
+          parseDocs(weightEntrySchema, snap),
+        )
+      }),
+    [hid, catId, qc],
+  )
+}
+
+export function foodsQueryOptions(hid: string, catId: string) {
+  return queryOptions({
+    queryKey: ['foods', hid, catId] as const,
+    queryFn: async () =>
+      parseDocs(foodSchema, await getDocs(query(foodsRef(hid, catId), orderBy('name', 'asc')))),
+    staleTime: Infinity,
+  })
+}
+
+export function useFoodsLive(hid: string, catId: string): void {
+  const qc = useQueryClient()
+  useEffect(
+    () =>
+      onSnapshot(query(foodsRef(hid, catId), orderBy('name', 'asc')), (snap) => {
+        qc.setQueryData(foodsQueryOptions(hid, catId).queryKey, parseDocs(foodSchema, snap))
+      }),
+    [hid, catId, qc],
+  )
+}
+
+/** Feedings within [dayStart, dayEnd) — used for "today" totals. */
+export function feedingsForDayQueryOptions(
+  hid: string,
+  catId: string,
+  dayStart: Date,
+  dayEnd: Date,
+) {
+  return queryOptions({
+    queryKey: ['feedings', hid, catId, dayStart.toISOString()] as const,
+    queryFn: async () =>
+      parseDocs(
+        feedingSchema,
+        await getDocs(
+          query(
+            feedingsRef(hid, catId),
+            where('datetime', '>=', Timestamp.fromDate(dayStart)),
+            where('datetime', '<', Timestamp.fromDate(dayEnd)),
+            orderBy('datetime', 'desc'),
+          ),
+        ),
+      ),
+    staleTime: Infinity,
+  })
+}
+
+export function useFeedingsForDayLive(
+  hid: string,
+  catId: string,
+  dayStart: Date,
+  dayEnd: Date,
+): void {
+  const qc = useQueryClient()
+  const startMs = dayStart.getTime()
+  const endMs = dayEnd.getTime()
+  useEffect(
+    () =>
+      onSnapshot(
+        query(
+          feedingsRef(hid, catId),
+          where('datetime', '>=', Timestamp.fromMillis(startMs)),
+          where('datetime', '<', Timestamp.fromMillis(endMs)),
+          orderBy('datetime', 'desc'),
+        ),
+        (snap) => {
+          qc.setQueryData(
+            feedingsForDayQueryOptions(hid, catId, new Date(startMs), new Date(endMs)).queryKey,
+            parseDocs(feedingSchema, snap),
+          )
+        },
+      ),
+    [hid, catId, startMs, endMs, qc],
+  )
+}
+
+// ---------- offline-aware write helper ----------
+
+/**
+ * Firestore write promises only resolve on server ack, so awaiting them
+ * offline hangs forever even though latency compensation already applied the
+ * write locally. Race with a short timer: 'confirmed' = server (or emulator)
+ * acked; 'queued' = accepted locally, will sync when back online. A rules
+ * rejection while online rejects fast and propagates as a normal error.
+ */
+export async function awaitOrQueued(
+  write: Promise<unknown>,
+  ms = 1500,
+): Promise<'confirmed' | 'queued'> {
+  let timer: ReturnType<typeof setTimeout> | undefined
+  const queued = new Promise<'queued'>((resolve) => {
+    timer = setTimeout(() => {
+      resolve('queued')
+    }, ms)
+  })
+  try {
+    const result = await Promise.race([write.then(() => 'confirmed' as const), queued])
+    return result
+  } finally {
+    clearTimeout(timer)
+  }
+}
+
+// ---------- mutations ----------
+
+export async function createHouseholdWithOwner(name: string, user: User): Promise<string> {
+  const householdRef = doc(collection(db, 'households'))
+  const memberRef = doc(collection(householdRef, 'members'), user.uid)
+  const batch = writeBatch(db)
+  batch.set(householdRef, { name, createdAt: serverTimestamp(), ownerUid: user.uid })
+  batch.set(memberRef, {
+    uid: user.uid,
+    role: 'owner',
+    joinedAt: serverTimestamp(),
+    displayName: user.displayName ?? user.email ?? 'Owner',
+  })
+  await batch.commit()
+  return householdRef.id
+}
+
+export interface CatInput {
+  name: string
+  birthDate: Date
+  breed: string | null
+  sex: Sex
+  neutered: boolean
+  neuterDate: Date | null
+  idealWeightKg: number | null
+  lifeStage: LifeStage | null
+  merMultiplierOverride: number | null
+}
+
+export function createCat(hid: string, uid: string, input: CatInput): Promise<unknown> {
+  return addDoc(catsRef(hid), {
+    ...input,
+    birthDate: Timestamp.fromDate(input.birthDate),
+    neuterDate: input.neuterDate ? Timestamp.fromDate(input.neuterDate) : null,
+    householdId: hid,
+    createdBy: uid,
+    createdAt: serverTimestamp(),
+    updatedAt: serverTimestamp(),
+  })
+}
+
+export function updateCat(hid: string, catId: string, patch: Partial<CatInput>): Promise<unknown> {
+  const data: Record<string, unknown> = { ...patch, updatedAt: serverTimestamp() }
+  if (patch.birthDate !== undefined) data['birthDate'] = Timestamp.fromDate(patch.birthDate)
+  if (patch.neuterDate !== undefined) {
+    data['neuterDate'] = patch.neuterDate ? Timestamp.fromDate(patch.neuterDate) : null
+  }
+  return updateDoc(doc(catsRef(hid), catId), data)
+}
+
+export interface WeightInput {
+  date: Date
+  weightKg: number
+  bodyConditionScore: number | null
+  note: string | null
+}
+
+export function addWeightEntry(
+  hid: string,
+  catId: string,
+  uid: string,
+  input: WeightInput,
+): Promise<unknown> {
+  return addDoc(weightsRef(hid, catId), {
+    ...input,
+    date: Timestamp.fromDate(input.date),
+    createdBy: uid,
+    createdAt: serverTimestamp(),
+  })
+}
+
+export function deleteWeightEntry(hid: string, catId: string, entryId: string): Promise<unknown> {
+  return deleteDoc(doc(weightsRef(hid, catId), entryId))
+}
+
+export interface FoodInput {
+  name: string
+  brand: string | null
+  type: FoodType
+  kcalPerGram: number
+  packageSizeG: number | null
+}
+
+export function addFood(
+  hid: string,
+  catId: string,
+  uid: string,
+  input: FoodInput,
+): Promise<unknown> {
+  return addDoc(foodsRef(hid, catId), {
+    ...input,
+    archived: false,
+    createdBy: uid,
+    createdAt: serverTimestamp(),
+  })
+}
+
+export function updateFood(
+  hid: string,
+  catId: string,
+  foodId: string,
+  patch: Partial<FoodInput & { archived: boolean }>,
+): Promise<unknown> {
+  return updateDoc(doc(foodsRef(hid, catId), foodId), { ...patch })
+}
+
+export interface FeedingInput {
+  datetime: Date
+  foodId: string | null
+  foodNameSnapshot: string
+  amountG: number
+  kcal: number
+  mealType: MealType | null
+  note: string | null
+}
+
+export function addFeeding(
+  hid: string,
+  catId: string,
+  uid: string,
+  input: FeedingInput,
+): Promise<unknown> {
+  return addDoc(feedingsRef(hid, catId), {
+    ...input,
+    datetime: Timestamp.fromDate(input.datetime),
+    createdBy: uid,
+    createdAt: serverTimestamp(),
+  })
+}
+
+export function deleteFeeding(hid: string, catId: string, entryId: string): Promise<unknown> {
+  return deleteDoc(doc(feedingsRef(hid, catId), entryId))
+}
+
+// Re-exported so feature code can type cache data without importing schemas.
+export type { Cat, Feeding, Food, WeightEntry }

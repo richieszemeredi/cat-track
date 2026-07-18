@@ -1,0 +1,34 @@
+import { Link } from '@tanstack/react-router'
+
+const TABS = [
+  { to: '/', label: 'Home', emoji: '🏠' },
+  { to: '/food', label: 'Food', emoji: '🍽️' },
+  { to: '/weight', label: 'Weight', emoji: '⚖️' },
+  { to: '/profile', label: 'Profile', emoji: '🐱' },
+] as const
+
+export function TabBar() {
+  return (
+    <nav
+      aria-label="Main"
+      className="fixed inset-x-0 bottom-0 border-t border-coral-soft bg-white/90 pb-[env(safe-area-inset-bottom)] backdrop-blur"
+    >
+      <div className="mx-auto flex max-w-lg items-stretch justify-around">
+        {TABS.map((tab) => (
+          <Link
+            key={tab.to}
+            to={tab.to}
+            className="flex flex-1 flex-col items-center gap-0.5 py-2 text-xs font-bold text-ink-soft"
+            activeProps={{ className: 'text-coral-deep', 'aria-current': 'page' }}
+            activeOptions={{ exact: tab.to === '/' }}
+          >
+            <span aria-hidden="true" className="text-xl leading-none">
+              {tab.emoji}
+            </span>
+            {tab.label}
+          </Link>
+        ))}
+      </div>
+    </nav>
+  )
+}

@@ -1,0 +1,39 @@
+@import '@fontsource-variable/nunito';
+@import 'tailwindcss';
+
+@theme {
+  --font-sans: 'Nunito Variable', ui-rounded, system-ui, sans-serif;
+
+  /* Playful & warm: cream canvas, coral accent, mint for "good" numbers */
+  --color-cream: #fff8f0;
+  --color-ink: #3d2c29;
+  --color-ink-soft: #8a6f68;
+  --color-coral: #ff7a59;
+  --color-coral-deep: #e85d3d;
+  --color-coral-soft: #ffe3d6;
+  --color-peach: #ffb79b;
+  --color-mint: #58c99b;
+  --color-mint-deep: #2e9e73;
+  --color-mint-soft: #dff5ea;
+  --color-butter: #ffe9a8;
+  --color-danger: #e5484d;
+
+  --radius-squishy: 1.25rem;
+  --shadow-squishy: 0 6px 20px -6px rgb(232 93 61 / 0.18);
+}
+
+@layer base {
+  html {
+    height: 100%;
+  }
+
+  body {
+    min-height: 100%;
+    background-color: var(--color-cream);
+    color: var(--color-ink);
+    font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+    /* iOS standalone: keep content out of the notch / home indicator */
+    padding-top: env(safe-area-inset-top);
+  }
+}

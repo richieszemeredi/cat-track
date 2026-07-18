@@ -1,0 +1,177 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ---------- helpers (all authorization funnels through these) ----------
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    // Membership is a single, shallow exists() — stays well under the
+    // 10-calls-per-request rules limit even on nested subcollections.
+    function isMember(hid) {
+      return isSignedIn() &&
+        exists(/databases/$(database)/documents/households/$(hid)/members/$(request.auth.uid));
+    }
+
+    function memberRole(hid) {
+      return get(/databases/$(database)/documents/households/$(hid)/members/$(request.auth.uid)).data.role;
+    }
+
+    function isEditor(hid) {
+      return isMember(hid) && memberRole(hid) in ['owner', 'editor'];
+    }
+
+    function isOwner(hid) {
+      return isMember(hid) && memberRole(hid) == 'owner';
+    }
+
+    function validString(s, maxLen) {
+      return s is string && s.size() > 0 && s.size() <= maxLen;
+    }
+
+    function optionalString(s, maxLen) {
+      return s == null || (s is string && s.size() <= maxLen);
+    }
+
+    // ---------- membership discovery ----------
+    // Lets a signed-in user run
+    //   collectionGroup('members').where('uid', '==', auth.uid)
+    // to find their household. Grants access ONLY to their own member docs.
+    match /{path=**}/members/{memberId} {
+      allow read: if isSignedIn() && resource.data.uid == request.auth.uid;
+    }
+
+    // ---------- households ----------
+    match /households/{hid} {
+      allow read: if isMember(hid);
+      allow create: if isSignedIn() &&
+        request.resource.data.keys().hasOnly(['name', 'createdAt', 'ownerUid']) &&
+        validString(request.resource.data.name, 60) &&
+        request.resource.data.createdAt is timestamp &&
+        request.resource.data.ownerUid == request.auth.uid;
+      allow update: if isOwner(hid) &&
+        request.resource.data.keys().hasOnly(['name', 'createdAt', 'ownerUid']) &&
+        validString(request.resource.data.name, 60) &&
+        request.resource.data.ownerUid == resource.data.ownerUid;
+      allow delete: if false;
+
+      // ---------- members (source of truth for access) ----------
+      match /members/{uid} {
+        allow read: if isMember(hid) || (isSignedIn() && request.auth.uid == uid);
+        // Two ways in:
+        //  1. self-bootstrap as owner while creating the household (getAfter
+        //     supports household+member written in one atomic batch)
+        //  2. the owner adds another member as editor/viewer
+        allow create: if isSignedIn() &&
+          request.resource.data.keys().hasOnly(['uid', 'role', 'joinedAt', 'displayName']) &&
+          request.resource.data.uid == uid &&
+          request.resource.data.joinedAt is timestamp &&
+          validString(request.resource.data.displayName, 60) &&
+          (
+            (request.auth.uid == uid &&
+              request.resource.data.role == 'owner' &&
+              getAfter(/databases/$(database)/documents/households/$(hid)).data.ownerUid == request.auth.uid) ||
+            (isOwner(hid) && request.resource.data.role in ['editor', 'viewer'])
+          );
+        allow update: if isOwner(hid) &&
+          request.resource.data.keys().hasOnly(['uid', 'role', 'joinedAt', 'displayName']) &&
+          request.resource.data.uid == resource.data.uid &&
+          request.resource.data.role in ['owner', 'editor', 'viewer'];
+        // Owner can remove members; anyone can leave. The owner cannot leave
+        // (households must keep their owner).
+        allow delete: if (isOwner(hid) || request.auth.uid == uid) &&
+          resource.data.role != 'owner';
+      }
+
+      // ---------- cats ----------
+      match /cats/{catId} {
+        allow read: if isMember(hid);
+        allow create, update: if isEditor(hid) &&
+          request.resource.data.keys().hasOnly([
+            'name', 'birthDate', 'breed', 'sex', 'neutered', 'neuterDate',
+            'idealWeightKg', 'lifeStage', 'merMultiplierOverride',
+            'householdId', 'createdBy', 'createdAt', 'updatedAt'
+          ]) &&
+          validString(request.resource.data.name, 50) &&
+          request.resource.data.birthDate is timestamp &&
+          request.resource.data.sex in ['male', 'female', 'unknown'] &&
+          request.resource.data.neutered is bool &&
+          request.resource.data.householdId == hid &&
+          (request.resource.data.merMultiplierOverride == null ||
+            (request.resource.data.merMultiplierOverride is number &&
+             request.resource.data.merMultiplierOverride > 0 &&
+             request.resource.data.merMultiplierOverride <= 5)) &&
+          (request.resource.data.idealWeightKg == null ||
+            (request.resource.data.idealWeightKg is number &&
+             request.resource.data.idealWeightKg > 0 &&
+             request.resource.data.idealWeightKg <= 30));
+        allow delete: if isOwner(hid);
+
+        // ---------- weights (append-only log docs) ----------
+        match /weights/{entryId} {
+          allow read: if isMember(hid);
+          allow create: if isEditor(hid) &&
+            request.resource.data.keys().hasOnly([
+              'date', 'weightKg', 'bodyConditionScore', 'note', 'createdBy', 'createdAt'
+            ]) &&
+            request.resource.data.date is timestamp &&
+            request.resource.data.weightKg is number &&
+            request.resource.data.weightKg > 0 &&
+            request.resource.data.weightKg <= 30 &&
+            (request.resource.data.bodyConditionScore == null ||
+              (request.resource.data.bodyConditionScore is int &&
+               request.resource.data.bodyConditionScore >= 1 &&
+               request.resource.data.bodyConditionScore <= 9)) &&
+            optionalString(request.resource.data.note, 500) &&
+            request.resource.data.createdBy == request.auth.uid;
+          allow update, delete: if isEditor(hid);
+        }
+
+        // ---------- foods (per-cat catalog) ----------
+        match /foods/{foodId} {
+          allow read: if isMember(hid);
+          allow create, update: if isEditor(hid) &&
+            request.resource.data.keys().hasOnly([
+              'name', 'brand', 'type', 'kcalPerGram', 'packageSizeG',
+              'archived', 'createdBy', 'createdAt'
+            ]) &&
+            validString(request.resource.data.name, 80) &&
+            optionalString(request.resource.data.brand, 80) &&
+            request.resource.data.type in ['dry', 'wet', 'treat'] &&
+            request.resource.data.kcalPerGram is number &&
+            request.resource.data.kcalPerGram > 0 &&
+            request.resource.data.kcalPerGram <= 10 &&
+            request.resource.data.archived is bool;
+          allow delete: if isEditor(hid);
+        }
+
+        // ---------- feedings (append-only log docs) ----------
+        match /feedings/{entryId} {
+          allow read: if isMember(hid);
+          allow create: if isEditor(hid) &&
+            request.resource.data.keys().hasOnly([
+              'datetime', 'foodId', 'foodNameSnapshot', 'amountG', 'kcal',
+              'mealType', 'note', 'createdBy', 'createdAt'
+            ]) &&
+            request.resource.data.datetime is timestamp &&
+            validString(request.resource.data.foodNameSnapshot, 80) &&
+            request.resource.data.amountG is number &&
+            request.resource.data.amountG > 0 &&
+            request.resource.data.amountG <= 500 &&
+            request.resource.data.kcal is number &&
+            request.resource.data.kcal >= 0 &&
+            request.resource.data.kcal <= 2000 &&
+            optionalString(request.resource.data.note, 500) &&
+            request.resource.data.createdBy == request.auth.uid;
+          allow update, delete: if isEditor(hid);
+        }
+      }
+    }
+
+    // /invites/{code} is reserved for the public launch (see plan §6).
+    // No match block -> denied by default, like everything else.
+  }
+}
