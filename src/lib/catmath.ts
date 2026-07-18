@@ -1,4 +1,4 @@
-import { differenceInCalendarMonths, differenceInDays } from 'date-fns'
+import { differenceInDays, differenceInMonths } from 'date-fns'
 
 // Pure calorie / growth math. Everything here mirrors common veterinary
 // guidance but is an ESTIMATE — the UI must keep the "consult your vet"
@@ -70,8 +70,13 @@ export function gramsForKcal(kcal: number, kcalPerGram: number): number {
   return kcal / kcalPerGram
 }
 
+/**
+ * Full months ELAPSED since birth (not calendar-month index difference —
+ * that would count a Sep 25 kitten as 4 months old on Jan 2 and flip the
+ * MER multiplier weeks early).
+ */
 export function ageInMonths(birthDate: Date, now: Date): number {
-  return Math.max(0, differenceInCalendarMonths(now, birthDate))
+  return Math.max(0, differenceInMonths(now, birthDate))
 }
 
 /** "3 wk", "5 mo", "1 yr 2 mo" — friendly age for the dashboard. */

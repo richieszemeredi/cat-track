@@ -73,7 +73,9 @@ export function WeighForm({ hid, catId, uid }: { hid: string; catId: string; uid
   }
 
   return (
-    <form onSubmit={handleSubmit} className="flex flex-col gap-3">
+    // noValidate: the component's own validation shows styled messages —
+    // matches LogMealForm/FoodForm instead of native browser bubbles.
+    <form noValidate onSubmit={handleSubmit} className="flex flex-col gap-3">
       <div className="grid grid-cols-2 gap-3">
         <label className="text-sm font-semibold">
           Weight (kg)
@@ -139,7 +141,7 @@ export function WeighForm({ hid, catId, uid }: { hid: string; catId: string; uid
         type="submit"
         data-testid="weight-save"
         disabled={busy}
-        className="rounded-full bg-coral px-6 py-3 font-extrabold text-white active:scale-95 disabled:opacity-60"
+        className="rounded-full bg-coral px-6 py-3 font-extrabold text-ink active:scale-95 disabled:opacity-60"
       >
         Save weigh-in
       </button>

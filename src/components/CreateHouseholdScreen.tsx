@@ -56,7 +56,7 @@ export function CreateHouseholdScreen({ user }: { user: User }) {
         <button
           type="submit"
           disabled={busy}
-          className="rounded-full bg-coral px-6 py-3 font-extrabold text-white shadow-squishy active:scale-95 disabled:opacity-60"
+          className="rounded-full bg-coral px-6 py-3 font-extrabold text-ink shadow-squishy active:scale-95 disabled:opacity-60"
           data-testid="household-create"
         >
           Create household

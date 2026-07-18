@@ -156,9 +156,16 @@ describe('gramsForKcal', () => {
 })
 
 describe('ageInMonths', () => {
-  it('returns whole calendar months between birth and now', () => {
+  it('returns whole elapsed months between birth and now', () => {
     expect(ageInMonths(new Date(2025, 0, 15), new Date(2026, 0, 15))).toBe(12)
     expect(ageInMonths(new Date(2025, 7, 10), new Date(2026, 0, 10))).toBe(5)
+  })
+
+  it('counts full elapsed months, not calendar-month index flips', () => {
+    // Born Sep 25, on Jan 2 the kitten is ~3.2 months old — the old
+    // differenceInCalendarMonths behavior would have said 4.
+    expect(ageInMonths(new Date(2025, 8, 25), new Date(2026, 0, 2))).toBe(3)
+    expect(ageInMonths(new Date(2025, 8, 25), new Date(2026, 0, 25))).toBe(4)
   })
 
   it('returns 0 within the birth month', () => {

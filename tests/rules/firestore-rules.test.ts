@@ -241,6 +241,14 @@ describe('members', () => {
     await assertSucceeds(updateDoc(doc(authedDb('alice'), `${H1}/members/bob`), { role: 'viewer' }))
   })
 
+  it('denies promoting a member to owner via update', async () => {
+    await assertFails(updateDoc(doc(authedDb('alice'), `${H1}/members/bob`), { role: 'owner' }))
+  })
+
+  it('denies demoting the owner via update', async () => {
+    await assertFails(updateDoc(doc(authedDb('alice'), `${H1}/members/alice`), { role: 'editor' }))
+  })
+
   it('allows a member to leave (self-delete)', async () => {
     await assertSucceeds(deleteDoc(doc(authedDb('bob'), `${H1}/members/bob`)))
   })
@@ -294,7 +302,30 @@ describe('cats', () => {
   })
 
   it('allows editors to create a fully valid cat', async () => {
-    await assertSucceeds(addDoc(collection(authedDb('bob'), `${H1}/cats`), cat()))
+    await assertSucceeds(
+      addDoc(collection(authedDb('bob'), `${H1}/cats`), { ...cat(), createdBy: 'bob' }),
+    )
+  })
+
+  it("denies creating a cat stamped with someone else's createdBy", async () => {
+    // bob is the caller but the doc claims alice created it
+    await assertFails(addDoc(collection(authedDb('bob'), `${H1}/cats`), cat()))
+  })
+
+  it('denies creating a cat with a non-string breed', async () => {
+    await assertFails(
+      addDoc(collection(authedDb('bob'), `${H1}/cats`), { ...cat(), createdBy: 'bob', breed: 7 }),
+    )
+  })
+
+  it('denies creating a cat with an invalid lifeStage', async () => {
+    await assertFails(
+      addDoc(collection(authedDb('bob'), `${H1}/cats`), {
+        ...cat(),
+        createdBy: 'bob',
+        lifeStage: 'ancient',
+      }),
+    )
   })
 
   it('denies viewers creating a cat', async () => {
@@ -388,6 +419,11 @@ describe('weights', () => {
     await seedDoc(`${weights}/w1`, weight('bob'))
     await assertSucceeds(deleteDoc(doc(authedDb('bob'), `${weights}/w1`)))
   })
+
+  it('denies edits — weight entries are append-only', async () => {
+    await seedDoc(`${weights}/w1`, weight('bob'))
+    await assertFails(updateDoc(doc(authedDb('bob'), `${weights}/w1`), { weightKg: 2.5 }))
+  })
 })
 
 // ---------- foods ----------
@@ -406,6 +442,12 @@ describe('foods', () => {
   it('denies kcalPerGram above 10', async () => {
     await assertFails(
       addDoc(collection(authedDb('bob'), foods), { ...food('bob'), kcalPerGram: 11 }),
+    )
+  })
+
+  it('denies a non-numeric packageSizeG', async () => {
+    await assertFails(
+      addDoc(collection(authedDb('bob'), foods), { ...food('bob'), packageSizeG: 'big bag' }),
     )
   })
 
@@ -486,6 +528,11 @@ describe('feedings', () => {
   it('allows editors to delete feedings', async () => {
     await seedDoc(`${feedings}/fe1`, feeding('bob'))
     await assertSucceeds(deleteDoc(doc(authedDb('bob'), `${feedings}/fe1`)))
+  })
+
+  it('denies edits — feedings are append-only', async () => {
+    await seedDoc(`${feedings}/fe1`, feeding('bob'))
+    await assertFails(updateDoc(doc(authedDb('bob'), `${feedings}/fe1`), { kcal: 999 }))
   })
 })
 

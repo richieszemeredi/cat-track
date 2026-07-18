@@ -67,6 +67,12 @@ VITE_USE_EMULATORS=true npm run dev
 2. Add a **Web app** and copy its config into `.env.local` (see Setup).
 3. **Authentication → Sign-in method**: enable the **Google** provider. Then under
    **Authentication → Settings → Authorized domains**, add your `<project-id>.web.app` domain.
+   > **Important for iPhones:** in `.env.local`, set `VITE_FIREBASE_AUTH_DOMAIN` to your
+   > **hosting** domain (`<project-id>.web.app`), _not_ the default
+   > `<project-id>.firebaseapp.com`. Sign-in uses a redirect flow, and iOS Safari's
+   > storage partitioning silently breaks it when the auth helper lives on a different
+   > site than the app. Firebase Hosting serves the `/__/auth/*` helpers on your own
+   > domain automatically, so same-domain redirects keep working.
 4. **Firestore Database**: create a database in **production mode** (the committed
    `firestore.rules` are the real access control).
 5. Sign in and point the CLI at your project:
@@ -126,6 +132,21 @@ Dependabot keeps npm dependencies (weekly, minor+patch grouped) and GitHub Actio
 - **M2** — Extra logs: water, litter and symptom tracking alongside food
 - **M3** — Photos & export: kitten photo timeline and CSV/JSON data export
 - **M4** — Push reminders: "dinner time!" nudges on both phones
+
+## Known gaps (accepted for the MVP)
+
+- **Form drafts don't survive an iOS cold start** — a half-typed entry is lost if iOS evicts
+  the backgrounded PWA. Forms are 2–4 fields, so re-typing is cheap; a draft-persistence hook
+  is the natural follow-up.
+- **The daily target is shown in kcal only** — the per-food gram portion ("≈ 62 g of Kitten
+  Chow") needs a designated primary food; planned alongside M1.
+- **Membership lookup uses a members collection-group query** — the security rule scopes it to
+  your own docs, but any future collection literally named `members` would inherit that rule;
+  rename or re-scope if one ever appears.
+- **Install tips target iPhone Safari** — iPadOS detection (it masquerades as macOS) and
+  non-Safari iOS browsers aren't special-cased.
+- **No error-reporting service** — errors log to the console only; Sentry/GlitchTip slot into
+  `react-error-boundary`'s `onError` when wanted.
 
 ---
 

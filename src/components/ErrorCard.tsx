@@ -21,7 +21,7 @@ export function ErrorCard({
         <button
           type="button"
           onClick={onRetry}
-          className="rounded-full bg-coral px-5 py-2 font-bold text-white active:scale-95"
+          className="rounded-full bg-coral px-5 py-2 font-bold text-ink active:scale-95"
         >
           Try again
         </button>

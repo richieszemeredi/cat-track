@@ -1,10 +1,21 @@
-import { useState, type SubmitEvent } from 'react'
+import { getRedirectResult } from 'firebase/auth'
+import { useEffect, useState, type SubmitEvent } from 'react'
 import { devSignIn, signInWithGoogle } from '../lib/auth'
-import { isEmulatorMode } from '../lib/firebase'
+import { auth, isEmulatorMode } from '../lib/firebase'
 
 export function SignInScreen() {
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
+
+  // Coming back from signInWithRedirect: success lands via onAuthStateChanged,
+  // but FAILURES (unauthorized domain, blocked storage, cancelled flow) only
+  // surface through getRedirectResult — without this they'd be swallowed and
+  // the user would just see the sign-in button again with no explanation.
+  useEffect(() => {
+    getRedirectResult(auth).catch((err: unknown) => {
+      setError(err instanceof Error ? err.message : 'Sign-in failed — please try again.')
+    })
+  }, [])
 
   const handleGoogle = () => {
     setBusy(true)
@@ -31,7 +42,7 @@ export function SignInScreen() {
         type="button"
         disabled={busy}
         onClick={handleGoogle}
-        className="rounded-full bg-coral px-8 py-3 text-lg font-extrabold text-white shadow-squishy active:scale-95 disabled:opacity-60"
+        className="rounded-full bg-coral px-8 py-3 text-lg font-extrabold text-ink shadow-squishy active:scale-95 disabled:opacity-60"
       >
         Sign in with Google
       </button>

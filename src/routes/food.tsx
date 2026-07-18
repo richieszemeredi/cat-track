@@ -15,7 +15,6 @@ import {
   roundKcal,
   roundKg,
 } from '../lib/catmath'
-import { dayRange } from '../lib/dates'
 import {
   awaitOrQueued,
   deleteFeeding,
@@ -33,6 +32,7 @@ import {
 import { useHousehold } from '../lib/household'
 import { type FoodType } from '../lib/schemas'
 import { dailyKcalTarget, effectiveLifeStage, sumGrams, sumKcal } from '../lib/target'
+import { useToday } from '../lib/use-today'
 
 export const Route = createFileRoute('/food')({
   component: FoodPage,
@@ -87,7 +87,7 @@ function FoodPage() {
           <p className="font-semibold">No cat here yet!</p>
           <Link
             to="/profile"
-            className="rounded-full bg-coral px-5 py-2 font-extrabold text-white active:scale-95"
+            className="rounded-full bg-coral px-5 py-2 font-extrabold text-ink active:scale-95"
           >
             Set up your cat&apos;s profile first <span aria-hidden="true">🐾</span>
           </Link>
@@ -103,7 +103,7 @@ function FoodContent({ cat }: { cat: Cat }) {
   const { householdId, canEdit } = useHousehold()
   const { user } = useAuth()
   const uid = user?.uid ?? null
-  const [day] = useState(() => dayRange(new Date()))
+  const day = useToday()
   const now = new Date()
 
   const weightsQuery = useQuery(weightsQueryOptions(householdId, cat.id))
@@ -253,7 +253,7 @@ function FoodContent({ cat }: { cat: Cat }) {
               onClick={() => {
                 setShowAddFood((v) => !v)
               }}
-              className="rounded-full bg-coral px-4 py-2 text-sm font-extrabold text-white active:scale-95"
+              className="rounded-full bg-coral px-4 py-2 text-sm font-extrabold text-ink active:scale-95"
             >
               {showAddFood ? 'Close' : 'Add food'} <span aria-hidden="true">➕</span>
             </button>
@@ -312,7 +312,7 @@ function FoodContent({ cat }: { cat: Cat }) {
                         onClick={() => {
                           void setFoodArchived(food, true)
                         }}
-                        className="rounded-full bg-coral-soft px-3 py-1.5 text-sm font-bold text-coral-deep active:scale-95"
+                        className="rounded-full bg-coral-soft px-3 py-1.5 text-sm font-bold text-coral-ink active:scale-95"
                       >
                         Archive
                       </button>
@@ -403,7 +403,7 @@ function TargetSummary({ eaten, target }: { eaten: number; target: number | null
         </p>
         <p className="text-sm text-ink-soft">
           Weigh in first to get a daily target{' '}
-          <Link to="/weight" className="font-bold text-coral-deep underline">
+          <Link to="/weight" className="font-bold text-coral-ink underline">
             Go to Weight <span aria-hidden="true">⚖️</span>
           </Link>
         </p>
@@ -412,8 +412,10 @@ function TargetSummary({ eaten, target }: { eaten: number; target: number | null
   }
 
   const targetRounded = roundKcal(target)
-  const remaining = targetRounded - eatenRounded
-  const over = remaining < 0
+  // Judge over/under on the UNROUNDED values (same rule as the dashboard's
+  // tone logic); only the displayed numbers are rounded.
+  const over = eaten > target
+  const remainingKcal = roundKcal(Math.abs(target - eaten))
   const pct = Math.min(100, Math.max(0, (eaten / target) * 100))
 
   return (
@@ -438,8 +440,10 @@ function TargetSummary({ eaten, target }: { eaten: number; target: number | null
           style={{ width: `${String(pct)}%` }}
         />
       </div>
-      <p className={`text-sm font-semibold ${over ? 'text-coral-deep' : 'text-mint-deep'}`}>
-        {over ? `Over by ${String(-remaining)} kcal today` : `${String(remaining)} kcal left today`}
+      <p className={`text-sm font-semibold ${over ? 'text-coral-ink' : 'text-mint-deep'}`}>
+        {over
+          ? `Over by ${String(remainingKcal)} kcal today`
+          : `${String(remainingKcal)} kcal left today`}
       </p>
     </div>
   )
@@ -498,7 +502,7 @@ function RerMerMath({
 const FOOD_TYPE_BADGE: Record<FoodType, string> = {
   dry: 'bg-butter text-ink',
   wet: 'bg-mint-soft text-mint-deep',
-  treat: 'bg-coral-soft text-coral-deep',
+  treat: 'bg-coral-soft text-coral-ink',
 }
 
 function TypeBadge({ type }: { type: FoodType }) {

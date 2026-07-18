@@ -179,7 +179,7 @@ export function FoodForm({
           type="submit"
           data-testid="food-save"
           disabled={saving}
-          className="flex-1 rounded-full bg-coral px-5 py-3 font-extrabold text-white active:scale-95 disabled:opacity-60"
+          className="flex-1 rounded-full bg-coral px-5 py-3 font-extrabold text-ink active:scale-95 disabled:opacity-60"
         >
           {existing ? 'Save changes' : 'Add food'} <span aria-hidden="true">🍽️</span>
         </button>

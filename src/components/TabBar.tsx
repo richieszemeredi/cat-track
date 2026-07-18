@@ -19,7 +19,7 @@ export function TabBar() {
             key={tab.to}
             to={tab.to}
             className="flex flex-1 flex-col items-center gap-0.5 py-2 text-xs font-bold text-ink-soft"
-            activeProps={{ className: 'text-coral-deep', 'aria-current': 'page' }}
+            activeProps={{ className: 'text-coral-ink', 'aria-current': 'page' }}
             activeOptions={{ exact: tab.to === '/' }}
           >
             <span aria-hidden="true" className="text-xl leading-none">

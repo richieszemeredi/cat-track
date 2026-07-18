@@ -5,7 +5,6 @@ import { type ReactNode } from 'react'
 import { ErrorCard } from '../components/ErrorCard'
 import { StatCard, type StatTone } from '../components/StatCard'
 import { ageLabel, roundGrams, roundKcal, roundKg } from '../lib/catmath'
-import { dayRange } from '../lib/dates'
 import {
   feedingsForDayQueryOptions,
   useFeedingsForDayLive,
@@ -15,6 +14,7 @@ import {
 } from '../lib/db'
 import { useHousehold } from '../lib/household'
 import { dailyKcalTarget, effectiveLifeStage, sumGrams, sumKcal } from '../lib/target'
+import { useToday } from '../lib/use-today'
 
 export const Route = createFileRoute('/')({
   component: HomePage,
@@ -51,7 +51,7 @@ function HomePage() {
           </p>
           <Link
             to="/profile"
-            className="rounded-full bg-coral px-5 py-2 font-extrabold text-white active:scale-95"
+            className="rounded-full bg-coral px-5 py-2 font-extrabold text-ink active:scale-95"
           >
             Go to profile
           </Link>
@@ -66,7 +66,7 @@ function HomePage() {
 function Dashboard({ cat }: { cat: Cat }) {
   const { householdId, canEdit } = useHousehold()
   const now = new Date()
-  const { start, end } = dayRange(now)
+  const { start, end } = useToday()
 
   const weightsQuery = useQuery(weightsQueryOptions(householdId, cat.id))
   useWeightsLive(householdId, cat.id)
@@ -196,7 +196,7 @@ function Dashboard({ cat }: { cat: Cat }) {
             {canEdit && (
               <Link
                 to="/food"
-                className="rounded-full bg-coral px-5 py-2 font-extrabold text-white active:scale-95"
+                className="rounded-full bg-coral px-5 py-2 font-extrabold text-ink active:scale-95"
               >
                 Log the first one
               </Link>
@@ -225,13 +225,13 @@ function Dashboard({ cat }: { cat: Cat }) {
         <div className="flex gap-3">
           <Link
             to="/food"
-            className="flex-1 rounded-full bg-coral px-4 py-3 text-center font-extrabold text-white active:scale-95"
+            className="flex-1 rounded-full bg-coral px-4 py-3 text-center font-extrabold text-ink active:scale-95"
           >
             <span aria-hidden="true">🍽️</span> Log a meal
           </Link>
           <Link
             to="/weight"
-            className="flex-1 rounded-full bg-mint px-4 py-3 text-center font-extrabold text-white active:scale-95"
+            className="flex-1 rounded-full bg-mint px-4 py-3 text-center font-extrabold text-ink active:scale-95"
           >
             <span aria-hidden="true">⚖️</span> Weigh in
           </Link>

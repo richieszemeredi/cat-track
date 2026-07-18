@@ -123,7 +123,10 @@ export function CatForm({
   }
 
   return (
-    <form onSubmit={handleSubmit} className="flex flex-col gap-3">
+    // noValidate: component validation shows styled messages — a native
+    // bubble on a field hidden inside the collapsed Advanced section would
+    // block submit with zero visible feedback.
+    <form noValidate onSubmit={handleSubmit} className="flex flex-col gap-3">
       <label className="font-semibold">
         Name
         <input
@@ -276,7 +279,7 @@ export function CatForm({
         type="submit"
         disabled={busy}
         data-testid="cat-save"
-        className="rounded-full bg-coral px-6 py-3 font-extrabold text-white shadow-squishy active:scale-95 disabled:opacity-60"
+        className="rounded-full bg-coral px-6 py-3 font-extrabold text-ink shadow-squishy active:scale-95 disabled:opacity-60"
       >
         Save profile <span aria-hidden="true">💾</span>
       </button>

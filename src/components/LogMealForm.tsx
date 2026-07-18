@@ -155,7 +155,7 @@ export function LogMealForm({
                 setMealType((prev) => (prev === value ? null : value))
               }}
               className={`rounded-full px-3 py-1.5 text-sm font-bold active:scale-95 ${
-                mealType === value ? 'bg-coral text-white' : 'bg-coral-soft text-coral-deep'
+                mealType === value ? 'bg-coral text-ink' : 'bg-coral-soft text-coral-ink'
               }`}
             >
               <span aria-hidden="true">{emoji}</span> {label}
@@ -187,7 +187,7 @@ export function LogMealForm({
         type="submit"
         data-testid="meal-save"
         disabled={saving}
-        className="rounded-full bg-coral px-5 py-3 font-extrabold text-white active:scale-95 disabled:opacity-60"
+        className="rounded-full bg-coral px-5 py-3 font-extrabold text-ink active:scale-95 disabled:opacity-60"
       >
         Log meal <span aria-hidden="true">🐾</span>
       </button>

@@ -26,7 +26,7 @@ const SEX_LABELS: Record<Sex, string> = {
 const ROLE_BADGE: Record<Role, string> = {
   owner: 'bg-butter text-ink',
   editor: 'bg-mint-soft text-mint-deep',
-  viewer: 'bg-coral-soft text-coral-deep',
+  viewer: 'bg-coral-soft text-coral-ink',
 }
 
 function ProfilePage() {
@@ -156,7 +156,7 @@ function CatCard({
           className={
             editing
               ? 'self-start rounded-full border border-coral-soft px-5 py-2 font-bold'
-              : 'self-start rounded-full bg-coral px-5 py-2 font-extrabold text-white active:scale-95'
+              : 'self-start rounded-full bg-coral px-5 py-2 font-extrabold text-ink active:scale-95'
           }
         >
           {editing ? (
@@ -207,7 +207,7 @@ function HouseholdCard({ hid, role }: { hid: string; role: Role }) {
             onClick={() => {
               void membersQuery.refetch()
             }}
-            className="rounded-full bg-coral px-4 py-1.5 text-sm font-extrabold text-white active:scale-95"
+            className="rounded-full bg-coral px-4 py-1.5 text-sm font-extrabold text-ink active:scale-95"
           >
             Try again
           </button>
@@ -320,7 +320,7 @@ function AddMemberForm({ hid }: { hid: string }) {
       <button
         type="submit"
         disabled={busy}
-        className="rounded-full bg-coral px-5 py-2 font-extrabold text-white active:scale-95 disabled:opacity-60"
+        className="rounded-full bg-coral px-5 py-2 font-extrabold text-ink active:scale-95 disabled:opacity-60"
       >
         Add member
       </button>

@@ -81,16 +81,14 @@ function WeightBody({
         ? 'Time for the weekly weigh-in!'
         : null
 
-  // Weekly change: delta between the last two entries, scaled to a 7-day pace
-  // using the actual gap between them.
-  let weekly: { delta: number; sinceLabel: string } | null = null
+  // Change since the previous weigh-in — shown raw, never extrapolated: with
+  // the weekly weigh-in cadence this IS the weekly change, and scaling a
+  // short gap up to 7 days would only amplify kitchen-scale noise.
+  let change: { delta: number; sinceLabel: string } | null = null
   if (latest !== undefined && previous !== undefined) {
-    const gapDays = differenceInDays(latest.date, previous.date)
-    if (gapDays > 0) {
-      weekly = {
-        delta: ((latest.weightKg - previous.weightKg) / gapDays) * 7,
-        sinceLabel: format(previous.date, 'MMM d'),
-      }
+    change = {
+      delta: latest.weightKg - previous.weightKg,
+      sinceLabel: format(previous.date, 'MMM d'),
     }
   }
 
@@ -121,15 +119,15 @@ function WeightBody({
           {...(latest !== undefined ? { sub: format(latest.date, 'MMM d') } : {})}
         />
         <StatCard
-          label="Weekly change"
+          label="Change"
           emoji="📈"
-          tone={weekly !== null && weekly.delta > 0 && isKitten ? 'mint' : 'plain'}
+          tone={change !== null && change.delta > 0 && isKitten ? 'mint' : 'plain'}
           value={
-            weekly === null
+            change === null
               ? '—'
-              : `${weekly.delta >= 0 ? '+' : ''}${roundKg(weekly.delta).toFixed(2)} kg`
+              : `${change.delta >= 0 ? '+' : ''}${roundKg(change.delta).toFixed(2)} kg`
           }
-          {...(weekly !== null ? { sub: `since ${weekly.sinceLabel}` } : {})}
+          {...(change !== null ? { sub: `since ${change.sinceLabel}` } : {})}
         />
       </div>
 
@@ -217,7 +215,7 @@ function HistoryRow({
           type="button"
           aria-label="Delete weigh-in"
           onClick={onDelete}
-          className="shrink-0 rounded-full bg-coral-soft p-2 text-coral-deep active:scale-95"
+          className="shrink-0 rounded-full bg-coral-soft p-2 text-coral-ink active:scale-95"
         >
           <span aria-hidden="true">🗑️</span>
         </button>
@@ -247,7 +245,7 @@ function NoCatCard() {
       </p>
       <Link
         to="/profile"
-        className="rounded-full bg-coral px-5 py-2 font-extrabold text-white active:scale-95"
+        className="rounded-full bg-coral px-5 py-2 font-extrabold text-ink active:scale-95"
       >
         Go to profile
       </Link>

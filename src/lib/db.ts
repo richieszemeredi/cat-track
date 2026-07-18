@@ -1,4 +1,4 @@
-import { queryOptions, useQueryClient } from '@tanstack/react-query'
+import { queryOptions, useQueryClient, type QueryClient } from '@tanstack/react-query'
 import { type User } from 'firebase/auth'
 import {
   addDoc,
@@ -66,6 +66,16 @@ function parseDocs<T extends Record<string, unknown>>(
     }
   }
   return out
+}
+
+// A snapshot listener that errors (e.g. permissions revoked) dies silently
+// and would leave the Query cache frozen at staleTime: Infinity. Log it and
+// invalidate the key so useQuery refetches and surfaces a visible error state.
+function onListenError(qc: QueryClient, key: readonly unknown[]) {
+  return (err: unknown) => {
+    console.error('[db] snapshot listener error for', key, err)
+    void qc.invalidateQueries({ queryKey: key })
+  }
 }
 
 // ---------- refs ----------
@@ -136,9 +146,13 @@ export function useMembersLive(hid: string): void {
   const qc = useQueryClient()
   useEffect(
     () =>
-      onSnapshot(query(membersRef(hid), orderBy('joinedAt', 'asc')), (snap) => {
-        qc.setQueryData(membersQueryOptions(hid).queryKey, parseDocs(memberSchema, snap))
-      }),
+      onSnapshot(
+        query(membersRef(hid), orderBy('joinedAt', 'asc')),
+        (snap) => {
+          qc.setQueryData(membersQueryOptions(hid).queryKey, parseDocs(memberSchema, snap))
+        },
+        onListenError(qc, membersQueryOptions(hid).queryKey),
+      ),
     [hid, qc],
   )
 }
@@ -174,9 +188,13 @@ export function useCatsLive(hid: string): void {
   const qc = useQueryClient()
   useEffect(
     () =>
-      onSnapshot(query(catsRef(hid), orderBy('createdAt', 'asc')), (snap) => {
-        qc.setQueryData(catsQueryOptions(hid).queryKey, parseDocs(catSchema, snap))
-      }),
+      onSnapshot(
+        query(catsRef(hid), orderBy('createdAt', 'asc')),
+        (snap) => {
+          qc.setQueryData(catsQueryOptions(hid).queryKey, parseDocs(catSchema, snap))
+        },
+        onListenError(qc, catsQueryOptions(hid).queryKey),
+      ),
     [hid, qc],
   )
 }
@@ -197,12 +215,16 @@ export function useWeightsLive(hid: string, catId: string): void {
   const qc = useQueryClient()
   useEffect(
     () =>
-      onSnapshot(query(weightsRef(hid, catId), orderBy('date', 'asc')), (snap) => {
-        qc.setQueryData(
-          weightsQueryOptions(hid, catId).queryKey,
-          parseDocs(weightEntrySchema, snap),
-        )
-      }),
+      onSnapshot(
+        query(weightsRef(hid, catId), orderBy('date', 'asc')),
+        (snap) => {
+          qc.setQueryData(
+            weightsQueryOptions(hid, catId).queryKey,
+            parseDocs(weightEntrySchema, snap),
+          )
+        },
+        onListenError(qc, weightsQueryOptions(hid, catId).queryKey),
+      ),
     [hid, catId, qc],
   )
 }
@@ -220,9 +242,13 @@ export function useFoodsLive(hid: string, catId: string): void {
   const qc = useQueryClient()
   useEffect(
     () =>
-      onSnapshot(query(foodsRef(hid, catId), orderBy('name', 'asc')), (snap) => {
-        qc.setQueryData(foodsQueryOptions(hid, catId).queryKey, parseDocs(foodSchema, snap))
-      }),
+      onSnapshot(
+        query(foodsRef(hid, catId), orderBy('name', 'asc')),
+        (snap) => {
+          qc.setQueryData(foodsQueryOptions(hid, catId).queryKey, parseDocs(foodSchema, snap))
+        },
+        onListenError(qc, foodsQueryOptions(hid, catId).queryKey),
+      ),
     [hid, catId, qc],
   )
 }
@@ -276,6 +302,10 @@ export function useFeedingsForDayLive(
             parseDocs(feedingSchema, snap),
           )
         },
+        onListenError(
+          qc,
+          feedingsForDayQueryOptions(hid, catId, new Date(startMs), new Date(endMs)).queryKey,
+        ),
       ),
     [hid, catId, startMs, endMs, qc],
   )
@@ -302,6 +332,14 @@ export async function awaitOrQueued(
   })
   try {
     const result = await Promise.race([write.then(() => 'confirmed' as const), queued])
+    if (result === 'queued') {
+      // If the queued write is later rejected on sync (rules), surface it in
+      // the console instead of an unhandled rejection. Client-side validation
+      // mirrors the rules, so this firing means a bug — worth the log.
+      write.catch((err: unknown) => {
+        console.error('[db] queued write failed after sync', err)
+      })
+    }
     return result
   } finally {
     clearTimeout(timer)

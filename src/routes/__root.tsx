@@ -14,6 +14,7 @@ import { useAuth } from '../lib/auth'
 import { membershipQueryOptions } from '../lib/db'
 import { HouseholdProvider } from '../lib/household'
 import { type RouterContext } from '../lib/router-context'
+import { useOnline } from '../lib/use-online'
 
 export const Route = createRootRouteWithContext<RouterContext>()({
   component: RootComponent,
@@ -35,7 +36,13 @@ function RootComponent() {
 }
 
 function MembershipGate({ user }: { user: User }) {
-  const membership = useQuery(membershipQueryOptions(user.uid))
+  const online = useOnline()
+  const membership = useQuery({
+    ...membershipQueryOptions(user.uid),
+    // Poll while unresolved: when the owner adds this account's UID from the
+    // other phone, the waiting partner gets in on the next tick.
+    refetchInterval: (query) => (query.state.data ? false : 15_000),
+  })
 
   if (membership.isLoading) return <Splash message="Finding your household…" />
   if (membership.isError) {
@@ -48,7 +55,12 @@ function MembershipGate({ user }: { user: User }) {
     )
   }
   const found = membership.data
-  if (found === null || found === undefined) return <CreateHouseholdScreen user={user} />
+  if (found === null || found === undefined) {
+    // Never offer "create household" on an offline cache-miss — membership
+    // may exist server-side, and creating again would split the household.
+    if (!online) return <Splash message="Reconnect to finish setting up 🐾" />
+    return <CreateHouseholdScreen user={user} />
+  }
 
   return (
     <HouseholdProvider householdId={found.householdId} role={found.role}>

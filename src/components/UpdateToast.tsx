@@ -8,14 +8,27 @@ export function UpdateToast() {
   const {
     needRefresh: [needRefresh, setNeedRefresh],
     updateServiceWorker,
-  } = useRegisterSW()
+  } = useRegisterSW({
+    // A resident iOS PWA rarely re-fetches the SW on its own — without a
+    // periodic check the update toast might never appear.
+    onRegisteredSW(_url, registration) {
+      if (registration) {
+        setInterval(
+          () => {
+            void registration.update()
+          },
+          60 * 60 * 1000,
+        )
+      }
+    },
+  })
 
   if (!needRefresh) return null
 
   return (
     <div
       role="status"
-      className="fixed inset-x-4 bottom-20 z-50 mx-auto flex max-w-md items-center justify-between gap-3 rounded-squishy border border-coral-soft bg-white p-3 shadow-squishy"
+      className="fixed inset-x-4 bottom-[calc(6rem+env(safe-area-inset-bottom))] z-50 mx-auto flex max-w-md items-center justify-between gap-3 rounded-squishy border border-coral-soft bg-white p-3 shadow-squishy"
     >
       <span className="text-sm font-semibold">
         <span aria-hidden="true">✨</span> A new version is ready
@@ -32,7 +45,7 @@ export function UpdateToast() {
         </button>
         <button
           type="button"
-          className="rounded-full bg-coral px-4 py-1.5 text-sm font-bold text-white active:scale-95"
+          className="rounded-full bg-coral px-4 py-1.5 text-sm font-bold text-ink active:scale-95"
           onClick={() => {
             void updateServiceWorker(true)
           }}

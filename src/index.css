@@ -10,10 +10,13 @@
   --color-ink-soft: #8a6f68;
   --color-coral: #ff7a59;
   --color-coral-deep: #e85d3d;
+  /* coral-ink: coral dark enough for small TEXT on white/cream (≥4.5:1) */
+  --color-coral-ink: #c2451f;
   --color-coral-soft: #ffe3d6;
   --color-peach: #ffb79b;
   --color-mint: #58c99b;
-  --color-mint-deep: #2e9e73;
+  /* dark enough for small text on white/cream (≥4.5:1) */
+  --color-mint-deep: #1f7a57;
   --color-mint-soft: #dff5ea;
   --color-butter: #ffe9a8;
   --color-danger: #e5484d;
@@ -35,5 +38,12 @@
     -webkit-font-smoothing: antialiased;
     /* iOS standalone: keep content out of the notch / home indicator */
     padding-top: env(safe-area-inset-top);
+  }
+
+  /* iOS Safari zooms the page when a focused input is under 16px. */
+  input,
+  select,
+  textarea {
+    font-size: max(1rem, 1em);
   }
 }

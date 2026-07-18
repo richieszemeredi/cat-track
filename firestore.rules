@@ -55,6 +55,7 @@ service cloud.firestore {
       allow update: if isOwner(hid) &&
         request.resource.data.keys().hasOnly(['name', 'createdAt', 'ownerUid']) &&
         validString(request.resource.data.name, 60) &&
+        request.resource.data.createdAt == resource.data.createdAt &&
         request.resource.data.ownerUid == resource.data.ownerUid;
       allow delete: if false;
 
@@ -76,10 +77,17 @@ service cloud.firestore {
               getAfter(/databases/$(database)/documents/households/$(hid)).data.ownerUid == request.auth.uid) ||
             (isOwner(hid) && request.resource.data.role in ['editor', 'viewer'])
           );
+        // Single-owner invariant: an update can never promote anyone to owner
+        // and never demote the owner (households always keep exactly one).
         allow update: if isOwner(hid) &&
           request.resource.data.keys().hasOnly(['uid', 'role', 'joinedAt', 'displayName']) &&
           request.resource.data.uid == resource.data.uid &&
-          request.resource.data.role in ['owner', 'editor', 'viewer'];
+          request.resource.data.joinedAt == resource.data.joinedAt &&
+          validString(request.resource.data.displayName, 60) &&
+          (
+            (resource.data.role == 'owner' && request.resource.data.role == 'owner') ||
+            (resource.data.role != 'owner' && request.resource.data.role in ['editor', 'viewer'])
+          );
         // Owner can remove members; anyone can leave. The owner cannot leave
         // (households must keep their owner).
         allow delete: if (isOwner(hid) || request.auth.uid == uid) &&
@@ -88,26 +96,41 @@ service cloud.firestore {
 
       // ---------- cats ----------
       match /cats/{catId} {
+        // Every field is type-checked: the client's Zod read boundary skips
+        // malformed docs, and a skipped cat doc would blank the whole app.
+        function validCatData() {
+          return request.resource.data.keys().hasOnly([
+              'name', 'birthDate', 'breed', 'sex', 'neutered', 'neuterDate',
+              'idealWeightKg', 'lifeStage', 'merMultiplierOverride',
+              'householdId', 'createdBy', 'createdAt', 'updatedAt'
+            ]) &&
+            validString(request.resource.data.name, 50) &&
+            request.resource.data.birthDate is timestamp &&
+            optionalString(request.resource.data.breed, 60) &&
+            request.resource.data.sex in ['male', 'female', 'unknown'] &&
+            request.resource.data.neutered is bool &&
+            (request.resource.data.neuterDate == null ||
+              request.resource.data.neuterDate is timestamp) &&
+            (request.resource.data.lifeStage == null ||
+              request.resource.data.lifeStage in
+                ['kitten_0_4', 'kitten_4_12', 'adult_intact', 'adult_neutered', 'weight_loss', 'senior']) &&
+            request.resource.data.householdId == hid &&
+            request.resource.data.createdAt is timestamp &&
+            request.resource.data.updatedAt is timestamp &&
+            (request.resource.data.merMultiplierOverride == null ||
+              (request.resource.data.merMultiplierOverride is number &&
+               request.resource.data.merMultiplierOverride > 0 &&
+               request.resource.data.merMultiplierOverride <= 5)) &&
+            (request.resource.data.idealWeightKg == null ||
+              (request.resource.data.idealWeightKg is number &&
+               request.resource.data.idealWeightKg > 0 &&
+               request.resource.data.idealWeightKg <= 30));
+        }
         allow read: if isMember(hid);
-        allow create, update: if isEditor(hid) &&
-          request.resource.data.keys().hasOnly([
-            'name', 'birthDate', 'breed', 'sex', 'neutered', 'neuterDate',
-            'idealWeightKg', 'lifeStage', 'merMultiplierOverride',
-            'householdId', 'createdBy', 'createdAt', 'updatedAt'
-          ]) &&
-          validString(request.resource.data.name, 50) &&
-          request.resource.data.birthDate is timestamp &&
-          request.resource.data.sex in ['male', 'female', 'unknown'] &&
-          request.resource.data.neutered is bool &&
-          request.resource.data.householdId == hid &&
-          (request.resource.data.merMultiplierOverride == null ||
-            (request.resource.data.merMultiplierOverride is number &&
-             request.resource.data.merMultiplierOverride > 0 &&
-             request.resource.data.merMultiplierOverride <= 5)) &&
-          (request.resource.data.idealWeightKg == null ||
-            (request.resource.data.idealWeightKg is number &&
-             request.resource.data.idealWeightKg > 0 &&
-             request.resource.data.idealWeightKg <= 30));
+        allow create: if isEditor(hid) && validCatData() &&
+          request.resource.data.createdBy == request.auth.uid;
+        allow update: if isEditor(hid) && validCatData() &&
+          request.resource.data.createdBy == resource.data.createdBy;
         allow delete: if isOwner(hid);
 
         // ---------- weights (append-only log docs) ----------
@@ -126,8 +149,12 @@ service cloud.firestore {
                request.resource.data.bodyConditionScore >= 1 &&
                request.resource.data.bodyConditionScore <= 9)) &&
             optionalString(request.resource.data.note, 500) &&
+            request.resource.data.createdAt is timestamp &&
             request.resource.data.createdBy == request.auth.uid;
-          allow update, delete: if isEditor(hid);
+          // Append-only log (plan §2): entries are added or deleted, never
+          // edited — so concurrent writes from two phones can't clobber.
+          allow update: if false;
+          allow delete: if isEditor(hid);
         }
 
         // ---------- foods (per-cat catalog) ----------
@@ -144,6 +171,11 @@ service cloud.firestore {
             request.resource.data.kcalPerGram is number &&
             request.resource.data.kcalPerGram > 0 &&
             request.resource.data.kcalPerGram <= 10 &&
+            (request.resource.data.packageSizeG == null ||
+              (request.resource.data.packageSizeG is number &&
+               request.resource.data.packageSizeG > 0)) &&
+            request.resource.data.createdAt is timestamp &&
+            request.resource.data.createdBy is string &&
             request.resource.data.archived is bool;
           allow delete: if isEditor(hid);
         }
@@ -164,9 +196,16 @@ service cloud.firestore {
             request.resource.data.kcal is number &&
             request.resource.data.kcal >= 0 &&
             request.resource.data.kcal <= 2000 &&
+            (request.resource.data.foodId == null ||
+              request.resource.data.foodId is string) &&
+            (request.resource.data.mealType == null ||
+              request.resource.data.mealType in ['breakfast', 'lunch', 'dinner', 'snack']) &&
             optionalString(request.resource.data.note, 500) &&
+            request.resource.data.createdAt is timestamp &&
             request.resource.data.createdBy == request.auth.uid;
-          allow update, delete: if isEditor(hid);
+          // Append-only log (plan §2) — see weights.
+          allow update: if false;
+          allow delete: if isEditor(hid);
         }
       }
     }
