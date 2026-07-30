@@ -49,6 +49,11 @@ npx firebase emulators:start --project demo-cattrack
 VITE_USE_EMULATORS=true npm run dev
 ```
 
+Running `npm run dev` against your **live** Firebase project also works (that's what
+`.env.local` is for) — in a browser tab Google sign-in opens a **popup** (allow popups for
+localhost); the redirect flow is only used inside the installed iPhone app. Make sure
+`localhost` is in **Authentication → Settings → Authorized domains** (it is by default).
+
 | Command                               | What it does                                                                                     |
 | ------------------------------------- | ------------------------------------------------------------------------------------------------ |
 | `npm run dev`                         | Dev server against your real Firebase project (`.env.local`)                                     |
@@ -69,18 +74,27 @@ VITE_USE_EMULATORS=true npm run dev
    **Authentication → Settings → Authorized domains**, add your `<project-id>.web.app` domain.
    > **Important for iPhones:** in `.env.local`, set `VITE_FIREBASE_AUTH_DOMAIN` to your
    > **hosting** domain (`<project-id>.web.app`), _not_ the default
-   > `<project-id>.firebaseapp.com`. Sign-in uses a redirect flow, and iOS Safari's
-   > storage partitioning silently breaks it when the auth helper lives on a different
-   > site than the app. Firebase Hosting serves the `/__/auth/*` helpers on your own
-   > domain automatically, so same-domain redirects keep working.
-4. **Firestore Database**: create a database in **production mode** (the committed
+   > `<project-id>.firebaseapp.com`. On the installed PWA sign-in uses a redirect flow,
+   > and iOS Safari's storage partitioning silently breaks it when the auth helper lives
+   > on a different site than the app. Firebase Hosting serves the `/__/auth/*` helpers
+   > on your own domain automatically, so same-domain redirects keep working.
+4. **Register the custom auth domain with Google's OAuth client** — skipping this causes
+   `Error 400: redirect_uri_mismatch` on every Google sign-in:
+   1. Open [Google Cloud Console → APIs & Services → Credentials](https://console.cloud.google.com/apis/credentials)
+      (same project), and edit the OAuth 2.0 client named **"Web client (auto created by
+      Google Service)"**.
+   2. Under **Authorized redirect URIs**, add `https://<project-id>.web.app/__/auth/handler`
+      (keep the existing `firebaseapp.com` one). The trailing `/__/auth/handler` is required.
+   3. Under **Authorized JavaScript origins**, add `https://<project-id>.web.app`.
+   4. Save — Google can take a few minutes to pick the change up.
+5. **Firestore Database**: create a database in **production mode** (the committed
    `firestore.rules` are the real access control).
-5. Sign in and point the CLI at your project:
+6. Sign in and point the CLI at your project:
    ```sh
    npx firebase login
    npx firebase use <project-id>
    ```
-6. Build and ship everything:
+7. Build and ship everything:
    ```sh
    npm run build
    npx firebase deploy --only firestore:rules,firestore:indexes,hosting

@@ -1,16 +1,10 @@
 import { useState } from 'react'
+import { isStandalone } from '../lib/standalone'
 
 const DISMISS_KEY = 'cattrack.installPromptDismissed'
 
 function isIos(): boolean {
   return /iphone|ipad|ipod/i.test(navigator.userAgent)
-}
-
-function isStandalone(): boolean {
-  return (
-    window.matchMedia('(display-mode: standalone)').matches ||
-    ('standalone' in navigator && navigator.standalone === true)
-  )
 }
 
 /**

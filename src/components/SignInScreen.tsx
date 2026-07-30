@@ -1,3 +1,4 @@
+import { FirebaseError } from 'firebase/app'
 import { getRedirectResult } from 'firebase/auth'
 import { useEffect, useState, type SubmitEvent } from 'react'
 import { devSignIn, signInWithGoogle } from '../lib/auth'
@@ -20,10 +21,20 @@ export function SignInScreen() {
   const handleGoogle = () => {
     setBusy(true)
     setError(null)
-    signInWithGoogle().catch((err: unknown) => {
-      setBusy(false)
-      setError(err instanceof Error ? err.message : 'Sign-in failed — please try again.')
-    })
+    signInWithGoogle()
+      .catch((err: unknown) => {
+        // Closing the popup yourself isn't an error worth shouting about.
+        if (
+          err instanceof FirebaseError &&
+          (err.code === 'auth/popup-closed-by-user' || err.code === 'auth/cancelled-popup-request')
+        ) {
+          return
+        }
+        setError(err instanceof Error ? err.message : 'Sign-in failed — please try again.')
+      })
+      .finally(() => {
+        setBusy(false)
+      })
   }
 
   return (

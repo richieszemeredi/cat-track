@@ -3,12 +3,14 @@ import {
   GoogleAuthProvider,
   onAuthStateChanged,
   signInWithEmailAndPassword,
+  signInWithPopup,
   signInWithRedirect,
   signOut,
   type User,
 } from 'firebase/auth'
 import { createContext, useContext, useEffect, useState, type ReactNode } from 'react'
 import { auth, isEmulatorMode } from './firebase'
+import { isStandalone } from './standalone'
 
 export interface AuthState {
   user: User | null
@@ -38,9 +40,20 @@ export function useAuth(): AuthState {
   return ctx
 }
 
-// Redirect, not popup: popups are unreliable in iOS standalone PWA mode.
+// Installed PWA → redirect: popups are unreliable in iOS standalone mode, and
+// with authDomain set to the hosting domain the redirect stays same-site, so
+// Safari's storage partitioning doesn't break it.
+// Browser tab (incl. localhost dev) → popup: there the redirect flow is
+// cross-origin to authDomain and browsers that partition third-party storage
+// silently fail to complete it — popup + postMessage is the flow Firebase
+// recommends for that case.
 export async function signInWithGoogle(): Promise<void> {
-  await signInWithRedirect(auth, new GoogleAuthProvider())
+  const provider = new GoogleAuthProvider()
+  if (isStandalone()) {
+    await signInWithRedirect(auth, provider)
+  } else {
+    await signInWithPopup(auth, provider)
+  }
 }
 
 export async function signOutUser(): Promise<void> {
