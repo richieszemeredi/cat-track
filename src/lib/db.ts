@@ -32,6 +32,7 @@ import {
   type Cat,
   type Feeding,
   type Food,
+  type FoodAnalysis,
   type FoodType,
   type LifeStage,
   type Role,
@@ -463,6 +464,8 @@ export interface FoodInput {
   brand: string | null
   type: FoodType
   kcalPerGram: number
+  /** The label constituents kcalPerGram was calculated from, if it was. */
+  analysis: FoodAnalysis | null
 }
 
 export function addFood(

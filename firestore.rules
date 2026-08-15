@@ -36,6 +36,22 @@ service cloud.firestore {
       return s == null || (s is string && s.size() <= maxLen);
     }
 
+    function validPct(v) {
+      return v is number && v >= 0 && v <= 100;
+    }
+
+    // A food's label constituents: either absent/null, or all five present and
+    // in range. hasAll matters as much as hasOnly — a partial map would let the
+    // calculator's kcal figure be re-derived from something it never saw.
+    function validFoodAnalysis(a) {
+      return a == null || (
+        a.keys().hasOnly(['proteinPct', 'fatPct', 'ashPct', 'fibrePct', 'moisturePct']) &&
+        a.keys().hasAll(['proteinPct', 'fatPct', 'ashPct', 'fibrePct', 'moisturePct']) &&
+        validPct(a.proteinPct) && validPct(a.fatPct) && validPct(a.ashPct) &&
+        validPct(a.fibrePct) && validPct(a.moisturePct)
+      );
+    }
+
     // ---------- membership discovery ----------
     // Lets a signed-in user run
     //   collectionGroup('members').where('uid', '==', auth.uid)
@@ -158,12 +174,15 @@ service cloud.firestore {
           allow read: if isMember(hid);
           allow create, update: if isEditor(hid) &&
             request.resource.data.keys().hasOnly([
-              'name', 'brand', 'type', 'kcalPerGram',
+              'name', 'brand', 'type', 'kcalPerGram', 'analysis',
               'archived', 'createdBy', 'createdAt'
             ]) &&
             validString(request.resource.data.name, 80) &&
             optionalString(request.resource.data.brand, 80) &&
             request.resource.data.type in ['dry', 'wet', 'treat'] &&
+            // get() with a default, because foods predating the calculator have
+            // no 'analysis' key at all and reading a missing key denies.
+            validFoodAnalysis(request.resource.data.get('analysis', null)) &&
             request.resource.data.kcalPerGram is number &&
             request.resource.data.kcalPerGram > 0 &&
             request.resource.data.kcalPerGram <= 10 &&

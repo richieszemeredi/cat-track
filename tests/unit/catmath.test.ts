@@ -4,11 +4,15 @@ import {
   ageInWeeks,
   ageLabel,
   ageLabelLong,
+  analysisSumPct,
   DEFAULT_ADULT_WEIGHT_KG,
   growthBand,
   gramsForKcal,
   kcalForGrams,
+  kcalPer100gFromAnalysis,
+  kcalPerGramFromAnalysis,
   LIFE_STAGES,
+  nfePct,
   lifeStageFromAge,
   MER_MULTIPLIERS,
   mer,
@@ -350,5 +354,66 @@ describe('rounding helpers', () => {
     expect(roundKg(4.567)).toBe(4.57)
     expect(roundKg(4.564)).toBe(4.56)
     expect(roundKg(3)).toBe(3)
+  })
+})
+
+describe('energy from label constituents (modified Atwater)', () => {
+  // Premiere Meat Menu Kitten, a Hungarian wet food that declares no kcal:
+  // 11% protein, 5.5% fat, 2.2% ash, 0.2% fibre, 78% moisture.
+  // NFE = 3.1 -> 3.5*11 + 8.5*5.5 + 3.5*3.1 = 96.1 kcal/100 g.
+  const premiereKitten = {
+    proteinPct: 11,
+    fatPct: 5.5,
+    ashPct: 2.2,
+    fibrePct: 0.2,
+    moisturePct: 78,
+  }
+
+  it('is the sanity anchor: the Premiere kitten tin works out to ~96 kcal/100 g', () => {
+    expect(nfePct(premiereKitten)).toBeCloseTo(3.1, 6)
+    expect(kcalPer100gFromAnalysis(premiereKitten)).toBeCloseTo(96.1, 6)
+    expect(kcalPerGramFromAnalysis(premiereKitten)).toBeCloseTo(0.961, 6)
+  })
+
+  it('agrees with the same label’s own gram-per-day table', () => {
+    // The tin asks for 210-245 g/day at 2-3 months. At ~0.96 kcal/g that is
+    // 202-235 kcal/day, which is 3 x RER for a 1.0-1.7 kg kitten - the growth
+    // multiplier the label is implicitly using. Two independent routes agreeing
+    // is the whole reason this calculation is trustworthy enough to ship.
+    const kcalPerGram = kcalPerGramFromAnalysis(premiereKitten)
+    expect(210 * kcalPerGram).toBeGreaterThan(3 * rer(1.0) * 0.85)
+    expect(245 * kcalPerGram).toBeLessThan(3 * rer(1.7) * 1.15)
+  })
+
+  it('lands in the normal range for a dry kibble', () => {
+    const kibble = {
+      proteinPct: 32,
+      fatPct: 16,
+      ashPct: 7,
+      fibrePct: 2.5,
+      moisturePct: 8,
+    }
+    // 34.5 NFE -> 112 + 136 + 120.75 = 368.75
+    expect(kcalPer100gFromAnalysis(kibble)).toBeCloseTo(368.75, 6)
+    expect(kcalPerGramFromAnalysis(kibble)).toBeGreaterThan(3)
+    expect(kcalPerGramFromAnalysis(kibble)).toBeLessThan(4.5)
+  })
+
+  it('clamps carbohydrate at zero when a rounded label sums past 100', () => {
+    const rounded = {
+      proteinPct: 12,
+      fatPct: 6,
+      ashPct: 3,
+      fibrePct: 0.5,
+      moisturePct: 79,
+    }
+    expect(analysisSumPct(rounded)).toBeCloseTo(100.5, 6)
+    expect(nfePct(rounded)).toBe(0)
+    // Protein and fat still count; only the leftover term goes to zero.
+    expect(kcalPer100gFromAnalysis(rounded)).toBeCloseTo(93, 6)
+  })
+
+  it('sums the declared constituents', () => {
+    expect(analysisSumPct(premiereKitten)).toBeCloseTo(96.9, 6)
   })
 })

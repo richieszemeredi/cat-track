@@ -70,6 +70,71 @@ export function gramsForKcal(kcal: number, kcalPerGram: number): number {
   return kcal / kcalPerGram
 }
 
+// ---------- energy from a label that states no kcal ----------
+
+export const FOOD_TYPES = ['dry', 'wet', 'treat'] as const
+export type FoodType = (typeof FOOD_TYPES)[number]
+
+/**
+ * The analytical constituents printed on a European pet-food label
+ * ("Analytical constituents" / "Analitikai összetevők"), as a percentage of
+ * the food as fed.
+ */
+export interface FoodAnalysis {
+  proteinPct: number
+  fatPct: number
+  ashPct: number
+  fibrePct: number
+  moisturePct: number
+}
+
+/**
+ * Modified Atwater factors, kcal per gram. Lower than the human Atwater
+ * factors because pet food is less digestible. This is the calculation FEDIAF
+ * prescribes when a label declares no energy content — which is most of the
+ * Hungarian market, where labels give constituents and a gram-per-day table
+ * instead.
+ */
+const ATWATER_PROTEIN = 3.5
+const ATWATER_FAT = 8.5
+const ATWATER_NFE = 3.5
+
+/**
+ * Crude ash and crude fibre are the two constituents most often left off a
+ * label even though the calculation needs them. These are ordinary values per
+ * category, used when the label is silent: both carry the small NFE factor, so
+ * a typical value costs far less accuracy than assuming zero would.
+ */
+export const TYPICAL_ASH_PCT: Record<FoodType, number> = { dry: 7, wet: 2.5, treat: 5 }
+export const TYPICAL_FIBRE_PCT: Record<FoodType, number> = { dry: 2.5, wet: 0.5, treat: 1 }
+
+/** What the five declared constituents add up to. Over 100 means a typo. */
+export function analysisSumPct(a: FoodAnalysis): number {
+  return a.proteinPct + a.fatPct + a.ashPct + a.fibrePct + a.moisturePct
+}
+
+/**
+ * Carbohydrate, as nitrogen-free extract: whatever the declared constituents
+ * leave over. Clamped at 0 — labels round each constituent up, so the five can
+ * legitimately sum a shade past 100.
+ */
+export function nfePct(a: FoodAnalysis): number {
+  return Math.max(0, 100 - analysisSumPct(a))
+}
+
+/**
+ * Metabolisable energy in kcal/100 g. Typically within ~10% of a measured
+ * value, erring low on high-meat foods whose real digestibility beats the
+ * fixed factors.
+ */
+export function kcalPer100gFromAnalysis(a: FoodAnalysis): number {
+  return a.proteinPct * ATWATER_PROTEIN + a.fatPct * ATWATER_FAT + nfePct(a) * ATWATER_NFE
+}
+
+export function kcalPerGramFromAnalysis(a: FoodAnalysis): number {
+  return kcalPer100gFromAnalysis(a) / 100
+}
+
 /**
  * Full months ELAPSED since birth (not calendar-month index difference —
  * that would count a Sep 25 kitten as 4 months old on Jan 2 and flip the

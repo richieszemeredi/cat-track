@@ -37,13 +37,34 @@ Cloud Functions, no SSR hosting).
 - `src/lib/catmath.ts` — pure, unit-tested RER/MER/growth-band math. Sanity anchor:
   5 kg neutered adult → RER ≈ 234, MER ≈ 281 kcal/day. Any UI showing derived calories
   needs the "Estimates only — always confirm with your vet." disclaimer.
+- `catmath.ts` also derives energy from a label that declares none, which is the norm on
+  the Hungarian market — tins give analytical constituents and a gram-per-day table
+  instead. `kcalPer100gFromAnalysis` applies the modified Atwater factors FEDIAF
+  prescribes (3.5 protein / 8.5 fat / 3.5 carbohydrate-by-subtraction, carbohydrate
+  clamped at 0 because labels round up). Sanity anchor: Premiere Meat Menu Kitten
+  (11 / 5.5 / 2.2 / 0.2 / 78) → 96 kcal/100 g, which the same tin's own 210–245 g/day
+  independently corroborates at 3 × RER for a 1–1.7 kg kitten. Crude ash and crude fibre
+  are frequently absent from a label, so `TYPICAL_ASH_PCT` / `TYPICAL_FIBRE_PCT` fill in
+  per food type — and an assumed value must never trip a "your figures are wrong" error,
+  only a hint that the food Type is probably off.
 - Data model: `households/{hid}/members/{uid}` (roles owner|editor|viewer, source of truth
   for access) and `households/{hid}/cats/{catId}/{weights|foods|feedings}` — append-only log
   docs so two phones never clobber each other. `/invites` is reserved for the public launch.
+  A food's `analysis` map (the five label percentages, nullable) is the one nested map in
+  the model: it is non-null only while `kcalPerGram` is the calculator's own output, so
+  hand-editing the kcal field clears it and a stored analysis always explains the stored
+  kcal. Rules validate it with `hasAll` as well as `hasOnly` — a half-filled map would let
+  the figure be re-derived from constituents it never saw.
 - Retiring a field: drop it from the Zod schema (z.object strips unknown keys, so old docs
   keep parsing), from the `*Input` type in `db.ts`, and from the rules' `hasOnly` list —
   that last step is what stops it coming back. Retired so far: `bodyConditionScore`
   (weights), `packageSizeG` (foods), `mealType` (feedings, replaced by an editable time).
+- Adding a field is the mirror image: give it `.default(...)` in the Zod schema, never a
+  bare `.nullable()`. Documents written before the field existed have no such key at all,
+  and a required-but-absent key fails `safeParse` — which silently drops every old doc.
+  In the rules, read it as `request.resource.data.get('field', null)`: reading a key that
+  isn't there denies the write outright, so a plain `.field` reference would lock every
+  pre-existing doc out of being updated.
 - Decimal input: iOS offers a comma on the decimal keypad and `<input type="number">`
   discards the value, so every decimal field is `{...DECIMAL_INPUT_PROPS}` (text +
   inputMode) parsed with `parseDecimal` from `src/lib/numbers.ts`. Never `type="number"`.

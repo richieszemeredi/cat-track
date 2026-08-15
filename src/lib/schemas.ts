@@ -1,6 +1,12 @@
 import { Timestamp } from 'firebase/firestore'
 import { z } from 'zod'
-import { LIFE_STAGES, type LifeStage } from './catmath'
+import {
+  FOOD_TYPES,
+  LIFE_STAGES,
+  type FoodAnalysis,
+  type FoodType,
+  type LifeStage,
+} from './catmath'
 
 // Zod schemas validate every Firestore READ at the boundary (via safeParse in
 // db.ts) so one corrupt/legacy document degrades gracefully instead of
@@ -65,14 +71,29 @@ export const weightEntrySchema = z.object({
 })
 export type WeightEntry = z.infer<typeof weightEntrySchema> & { id: string }
 
-export const foodTypeSchema = z.enum(['dry', 'wet', 'treat'])
-export type FoodType = z.infer<typeof foodTypeSchema>
+export const foodTypeSchema = z.enum(FOOD_TYPES)
+export type { FoodType }
+
+const pctSchema = z.number().min(0).max(100)
+
+/** The label's analytical constituents, kept so the calculator can be reopened. */
+export const foodAnalysisSchema = z.object({
+  proteinPct: pctSchema,
+  fatPct: pctSchema,
+  ashPct: pctSchema,
+  fibrePct: pctSchema,
+  moisturePct: pctSchema,
+})
+export type { FoodAnalysis }
 
 export const foodSchema = z.object({
   name: z.string().min(1).max(80),
   brand: z.string().max(80).nullable(),
   type: foodTypeSchema,
   kcalPerGram: z.number().positive().max(10),
+  // Absent on every food written before the label calculator existed, hence
+  // the default rather than a bare .nullable() — those docs must keep parsing.
+  analysis: foodAnalysisSchema.nullable().default(null),
   archived: z.boolean(),
   createdBy: z.string().min(1),
   createdAt: timestampToDate,

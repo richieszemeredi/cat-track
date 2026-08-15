@@ -216,6 +216,60 @@ test('the weigh-in form fields each get a full-width row', async ({ page }, test
   expect(weightBox.width).toBeGreaterThan(200)
 })
 
+// The label calculator lives inside a closed <details>, so the per-page sweep
+// above never lays its five fields out. Open it and run the same checks.
+test('the label calculator lays out inside the food form', async ({ page }, testInfo) => {
+  test.setTimeout(180_000)
+
+  await seedHousehold(page, { tag: `analysis-${testInfo.project.name}` })
+  await tabBar(page).getByRole('link', { name: 'Food' }).click()
+  await page.getByTestId('food-add-open').click()
+  await expect(page.getByTestId('food-name')).toBeVisible(WAIT)
+  await page.getByTestId('food-type').selectOption('wet')
+  await page.getByTestId('food-analysis-toggle').click()
+
+  const protein = page.getByTestId('food-analysis-protein')
+  await expect(protein).toBeVisible(WAIT)
+  await protein.fill('11')
+  await page.getByTestId('food-analysis-fat').fill('5,5')
+  await page.getByTestId('food-analysis-moisture').fill('78')
+  // The result and the apply button are both on screen for the geometry checks.
+  await expect(page.getByTestId('food-analysis-apply')).toBeVisible(WAIT)
+
+  await page.screenshot({
+    path: `test-results/screenshots/${testInfo.project.name}-food-calculator.png`,
+    fullPage: true,
+  })
+
+  expect(await overflowingElements(page), 'calculator has elements past the viewport').toEqual([])
+  expect(await documentScrollsSideways(page), 'calculator scrolls sideways').toBe(false)
+  expect(await controlsOutsideTheirCard(page), 'calculator escapes its card').toEqual([])
+  expect(await smallTouchTargets(page), 'calculator has under-sized tap targets').toEqual([])
+
+  // Every percentage field spans the same full row — the five must not collapse
+  // into a cramped grid on the 375pt phone.
+  const boxes = await Promise.all(
+    ['protein', 'fat', 'ash', 'fibre', 'moisture'].map(async (key) => {
+      const box = await page.getByTestId(`food-analysis-${key}`).boundingBox()
+      if (box === null) throw new Error(`${key} field not laid out`)
+      return box
+    }),
+  )
+  const [first] = boxes
+  if (first === undefined) throw new Error('no calculator fields')
+  for (const box of boxes) {
+    expect(Math.abs(box.width - first.width)).toBeLessThanOrEqual(1)
+    expect(box.width).toBeGreaterThan(200)
+  }
+  // Stacked in label order, each below the last.
+  for (let i = 1; i < boxes.length; i++) {
+    const prev = boxes[i - 1]
+    const current = boxes[i]
+    if (prev === undefined || current === undefined) throw new Error('missing field box')
+    expect(current.y).toBeGreaterThan(prev.y + prev.height - 1)
+  }
+})
+
 test('the repeat-a-day card offers yesterday and copies it onto today', async ({
   page,
   request,

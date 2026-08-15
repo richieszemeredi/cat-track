@@ -464,6 +464,71 @@ describe('foods', () => {
     await assertFails(addDoc(collection(authedDb('vera'), foods), food('vera')))
   })
 
+  const analysis = {
+    proteinPct: 11,
+    fatPct: 5.5,
+    ashPct: 2.2,
+    fibrePct: 0.2,
+    moisturePct: 78,
+  }
+
+  it('allows a food carrying the label constituents it was calculated from', async () => {
+    await assertSucceeds(addDoc(collection(authedDb('bob'), foods), { ...food('bob'), analysis }))
+  })
+
+  it('allows a null analysis', async () => {
+    await assertSucceeds(
+      addDoc(collection(authedDb('bob'), foods), { ...food('bob'), analysis: null }),
+    )
+  })
+
+  it('denies a partial analysis map', async () => {
+    await assertFails(
+      addDoc(collection(authedDb('bob'), foods), {
+        ...food('bob'),
+        // Missing moisturePct: a half-filled map would let the stored kcal be
+        // re-derived from constituents the calculator never used.
+        analysis: { proteinPct: 11, fatPct: 5.5, ashPct: 2.2, fibrePct: 0.2 },
+      }),
+    )
+  })
+
+  it('denies an unknown key inside analysis', async () => {
+    await assertFails(
+      addDoc(collection(authedDb('bob'), foods), {
+        ...food('bob'),
+        analysis: { ...analysis, taurineMgPerKg: 450 },
+      }),
+    )
+  })
+
+  it('denies a percentage above 100', async () => {
+    await assertFails(
+      addDoc(collection(authedDb('bob'), foods), {
+        ...food('bob'),
+        analysis: { ...analysis, moisturePct: 101 },
+      }),
+    )
+  })
+
+  it('denies a negative percentage', async () => {
+    await assertFails(
+      addDoc(collection(authedDb('bob'), foods), {
+        ...food('bob'),
+        analysis: { ...analysis, fatPct: -1 },
+      }),
+    )
+  })
+
+  it('denies a non-numeric percentage', async () => {
+    await assertFails(
+      addDoc(collection(authedDb('bob'), foods), {
+        ...food('bob'),
+        analysis: { ...analysis, proteinPct: '11' },
+      }),
+    )
+  })
+
   it('allows editors to archive a food', async () => {
     await seedDoc(`${foods}/f1`, food('alice'))
     await assertSucceeds(updateDoc(doc(authedDb('bob'), `${foods}/f1`), { archived: true }))
