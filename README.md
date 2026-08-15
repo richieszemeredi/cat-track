@@ -130,13 +130,20 @@ After a green quality job:
 
 The deploy jobs **fail until you configure the repo** (this is expected on a fresh clone):
 
-- **Secrets** — `FIREBASE_SERVICE_ACCOUNT`: easiest via `npx firebase init hosting:github`, which
-  creates the service account and uploads the secret for you; or create a service account manually
-  (Firebase Hosting Admin + API roles) and paste its JSON key. And `FIREBASE_PROJECT_ID`: your
-  Firebase project id.
+- **Secret** — `FIREBASE_SERVICE_ACCOUNT_CATTRACK_8AA49`, created and uploaded for you by
+  `npx firebase init hosting:github`. The odd name is the CLI's own convention
+  (`FIREBASE_SERVICE_ACCOUNT_<PROJECT_ID>`); `ci.yml` reads it under that name so the key the CLI
+  minted stays the only one in existence. If the service-account step 404s, it is usually
+  propagation — run the command again.
 - **Variables** — `VITE_FIREBASE_API_KEY`, `VITE_FIREBASE_AUTH_DOMAIN`, `VITE_FIREBASE_PROJECT_ID`,
   `VITE_FIREBASE_STORAGE_BUCKET`, `VITE_FIREBASE_MESSAGING_SENDER_ID`, `VITE_FIREBASE_APP_ID` — the
   same public web-app config as `.env.local`, so CI builds embed a working Firebase config.
+
+`firebase init hosting:github` also writes `firebase-hosting-merge.yml` and
+`firebase-hosting-pull-request.yml`. **Delete them.** They trigger on the same events as the jobs
+above but skip every quality gate and build without the `VITE_FIREBASE_*` variables, so they would
+ship an untested bundle with no Firebase config in it — and win the race, since they run without
+`needs: quality`.
 
 Dependabot keeps npm dependencies (weekly, minor+patch grouped) and GitHub Actions up to date.
 

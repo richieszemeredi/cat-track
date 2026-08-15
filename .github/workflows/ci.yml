@@ -1,11 +1,19 @@
 # CatTrack CI: quality gates on every push/PR, Firebase Hosting deploys after.
 #
 # Required repository configuration (see README "CI & deploys"):
-#   Secrets:   FIREBASE_SERVICE_ACCOUNT, FIREBASE_PROJECT_ID
+#   Secrets:   FIREBASE_SERVICE_ACCOUNT_CATTRACK_8AA49 — uploaded by
+#              `firebase init hosting:github`; the name is the CLI's own, kept
+#              so the key it minted is the only one that ever exists.
 #   Variables: VITE_FIREBASE_API_KEY, VITE_FIREBASE_AUTH_DOMAIN,
 #              VITE_FIREBASE_PROJECT_ID, VITE_FIREBASE_STORAGE_BUCKET,
 #              VITE_FIREBASE_MESSAGING_SENDER_ID, VITE_FIREBASE_APP_ID
 # The deploy jobs fail until those exist — that is intentional, not a flake.
+#
+# These are the ONLY workflows allowed to deploy. `firebase init hosting:github`
+# also writes firebase-hosting-{merge,pull-request}.yml, which trigger on the
+# same events but skip the quality gates AND build without the VITE_FIREBASE_*
+# config — an ungated deploy of a bundle with no Firebase config. They were
+# deleted; if the CLI regenerates them, delete them again.
 
 name: CI
 
@@ -120,9 +128,9 @@ jobs:
       - uses: FirebaseExtended/action-hosting-deploy@v0
         with:
           repoToken: ${{ secrets.GITHUB_TOKEN }}
-          firebaseServiceAccount: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+          firebaseServiceAccount: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_CATTRACK_8AA49 }}
           channelId: live
-          projectId: ${{ secrets.FIREBASE_PROJECT_ID }}
+          projectId: cattrack-8aa49
 
   # Preview channel per PR (auto channel id, 30-day expiry). The action
   # comments the preview URL on the pull request.
@@ -160,6 +168,6 @@ jobs:
       - uses: FirebaseExtended/action-hosting-deploy@v0
         with:
           repoToken: ${{ secrets.GITHUB_TOKEN }}
-          firebaseServiceAccount: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
-          projectId: ${{ secrets.FIREBASE_PROJECT_ID }}
+          firebaseServiceAccount: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_CATTRACK_8AA49 }}
+          projectId: cattrack-8aa49
           expires: 30d

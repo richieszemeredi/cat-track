@@ -19,5 +19,9 @@ firestore-debug.log
 ui-debug.log
 pubsub-debug.log
 
+# agent tooling (firebase init installs vendored skills; re-installable)
+.agents
+skills-lock.json
+
 # os / editor
 .DS_Store
