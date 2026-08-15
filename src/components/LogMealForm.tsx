@@ -1,16 +1,14 @@
+import { format, isValid, parse } from 'date-fns'
 import { useEffect, useRef, useState, type SubmitEvent } from 'react'
 import { kcalForGrams, roundKcal } from '../lib/catmath'
 import { addFeeding, awaitOrQueued, type Food } from '../lib/db'
-import { type MealType } from '../lib/schemas'
+import { DECIMAL_INPUT_PROPS, parseDecimal } from '../lib/numbers'
 
-const MEAL_TYPES: { value: MealType; label: string; emoji: string }[] = [
-  { value: 'breakfast', label: 'Breakfast', emoji: '🌅' },
-  { value: 'lunch', label: 'Lunch', emoji: '☀️' },
-  { value: 'dinner', label: 'Dinner', emoji: '🌙' },
-  { value: 'snack', label: 'Snack', emoji: '🍬' },
-]
+const INPUT_CLASS = 'field'
 
-const INPUT_CLASS = 'rounded-xl border border-coral-soft bg-white px-3 py-2 font-normal'
+function nowTimeStr(): string {
+  return format(new Date(), 'HH:mm')
+}
 
 export function LogMealForm({
   hid,
@@ -25,7 +23,9 @@ export function LogMealForm({
 }) {
   const [foodId, setFoodId] = useState(() => foods[0]?.id ?? '')
   const [grams, setGrams] = useState('')
-  const [mealType, setMealType] = useState<MealType | null>(null)
+  // Defaults to the current time and is editable — the list shows times, so
+  // "I fed her at 7 but I'm logging it now" has to be expressible.
+  const [timeStr, setTimeStr] = useState(nowTimeStr)
   const [note, setNote] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
@@ -41,9 +41,8 @@ export function LogMealForm({
   )
 
   const selectedFood = foods.find((f) => f.id === foodId) ?? foods[0]
-  const gramsNum = Number(grams)
-  const gramsValid =
-    grams.trim() !== '' && Number.isFinite(gramsNum) && gramsNum >= 1 && gramsNum <= 500
+  const gramsNum = parseDecimal(grams)
+  const gramsValid = gramsNum !== null && gramsNum >= 1 && gramsNum <= 500
   const previewKcal =
     gramsValid && selectedFood !== undefined
       ? roundKcal(kcalForGrams(gramsNum, selectedFood.kcalPerGram))
@@ -54,8 +53,13 @@ export function LogMealForm({
       setError('Pick a food first.')
       return
     }
-    if (!gramsValid) {
+    if (gramsNum === null || !gramsValid) {
       setError('Amount must be between 1 and 500 grams.')
+      return
+    }
+    const datetime = parse(timeStr, 'HH:mm', new Date())
+    if (!isValid(datetime)) {
+      setError('Pick a valid time.')
       return
     }
     const kcal = kcalForGrams(gramsNum, selectedFood.kcalPerGram)
@@ -69,19 +73,18 @@ export function LogMealForm({
       const trimmedNote = note.trim()
       await awaitOrQueued(
         addFeeding(hid, catId, uid, {
-          datetime: new Date(),
+          datetime,
           foodId: selectedFood.id,
           foodNameSnapshot: selectedFood.name,
           amountG: gramsNum,
           kcal,
-          mealType,
           note: trimmedNote === '' ? null : trimmedNote,
         }),
       )
       // 'confirmed' and 'queued' both count as success (offline-first).
       setGrams('')
       setNote('')
-      setMealType(null)
+      setTimeStr(nowTimeStr())
       setJustLogged(true)
       if (loggedTimerId.current !== null) clearTimeout(loggedTimerId.current)
       loggedTimerId.current = setTimeout(() => {
@@ -125,13 +128,10 @@ export function LogMealForm({
         <label className="flex flex-1 flex-col gap-1 text-sm font-semibold">
           Amount (g)
           <input
+            {...DECIMAL_INPUT_PROPS}
             data-testid="meal-grams"
-            type="number"
-            inputMode="decimal"
-            min={1}
-            max={500}
-            step="1"
             value={grams}
+            placeholder="e.g. 40"
             onChange={(e) => {
               setGrams(e.target.value)
             }}
@@ -143,26 +143,19 @@ export function LogMealForm({
         </p>
       </div>
 
-      <fieldset className="flex flex-col gap-1">
-        <legend className="text-sm font-semibold">Meal (optional)</legend>
-        <div className="flex flex-wrap gap-2">
-          {MEAL_TYPES.map(({ value, label, emoji }) => (
-            <button
-              key={value}
-              type="button"
-              aria-pressed={mealType === value}
-              onClick={() => {
-                setMealType((prev) => (prev === value ? null : value))
-              }}
-              className={`rounded-full px-3 py-1.5 text-sm font-bold active:scale-95 ${
-                mealType === value ? 'bg-coral text-ink' : 'bg-coral-soft text-coral-ink'
-              }`}
-            >
-              <span aria-hidden="true">{emoji}</span> {label}
-            </button>
-          ))}
-        </div>
-      </fieldset>
+      <label className="flex flex-col gap-1 text-sm font-semibold">
+        Time
+        <input
+          data-testid="meal-time"
+          type="time"
+          required
+          value={timeStr}
+          onChange={(e) => {
+            setTimeStr(e.target.value)
+          }}
+          className={INPUT_CLASS}
+        />
+      </label>
 
       <label className="flex flex-col gap-1 text-sm font-semibold">
         Note (optional)
@@ -183,18 +176,13 @@ export function LogMealForm({
         </p>
       )}
 
-      <button
-        type="submit"
-        data-testid="meal-save"
-        disabled={saving}
-        className="rounded-full bg-coral px-5 py-3 font-extrabold text-ink active:scale-95 disabled:opacity-60"
-      >
-        Log meal <span aria-hidden="true">🐾</span>
+      <button type="submit" data-testid="meal-save" disabled={saving} className="btn-primary">
+        Log meal
       </button>
 
       {justLogged ? (
-        <p role="status" className="text-center text-sm font-bold text-mint-deep">
-          Logged! <span aria-hidden="true">✨</span>
+        <p role="status" className="text-center text-sm font-semibold text-positive">
+          Logged!
         </p>
       ) : null}
     </form>

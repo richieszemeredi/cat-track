@@ -4,25 +4,28 @@
 @theme {
   --font-sans: 'Nunito Variable', ui-rounded, system-ui, sans-serif;
 
-  /* Playful & warm: cream canvas, coral accent, mint for "good" numbers */
-  --color-cream: #fff8f0;
-  --color-ink: #3d2c29;
-  --color-ink-soft: #8a6f68;
-  --color-coral: #ff7a59;
-  --color-coral-deep: #e85d3d;
-  /* coral-ink: coral dark enough for small TEXT on white/cream (≥4.5:1) */
-  --color-coral-ink: #c2451f;
-  --color-coral-soft: #ffe3d6;
-  --color-peach: #ffb79b;
-  --color-mint: #58c99b;
-  /* dark enough for small text on white/cream (≥4.5:1) */
-  --color-mint-deep: #1f7a57;
-  --color-mint-soft: #dff5ea;
-  --color-butter: #ffe9a8;
-  --color-danger: #e5484d;
+  /* One accent, one canvas. Coral is the only chromatic colour that carries
+     meaning; everything else is ink on cream with sand hairlines. Green and
+     red exist as TEXT-only signals — never as surfaces — so that when
+     something is coloured in, it is because it matters. */
+  --color-cream: #fdf6ef;
+  --color-surface: #ffffff;
+  --color-sand: #f4e9e0;
+  --color-sand-deep: #e3d3c6;
+  --color-ink: #2f2320;
+  --color-ink-soft: #8a7168;
 
-  --radius-squishy: 1.25rem;
-  --shadow-squishy: 0 6px 20px -6px rgb(232 93 61 / 0.18);
+  --color-coral: #ff7a59;
+  --color-coral-deep: #e0522f;
+  /* coral dark enough for small TEXT on white/cream (>= 4.5:1) */
+  --color-coral-ink: #b8401c;
+  --color-coral-soft: #ffe7dc;
+
+  --color-positive: #1f7a57;
+  --color-danger: #b3261e;
+
+  --radius-squishy: 1rem;
+  --shadow-squishy: 0 1px 2px rgb(47 35 32 / 0.04), 0 10px 24px -14px rgb(47 35 32 / 0.16);
 }
 
 @layer base {
@@ -45,5 +48,47 @@
   select,
   textarea {
     font-size: max(1rem, 1em);
+  }
+}
+
+/* The whole visual language is these seven classes. Keeping them here rather
+   than repeating class strings per component is what stops the UI drifting
+   into a different shade of white card on every screen. */
+@layer components {
+  .page-title {
+    @apply text-3xl font-bold tracking-tight;
+  }
+
+  /* Section headings are quiet labels, not competing bold statements — the
+     one big number on each screen is what should carry the weight. */
+  .section-label {
+    @apply text-xs font-semibold tracking-[0.09em] text-ink-soft uppercase;
+  }
+
+  /* A raised panel. Used for things that are genuinely objects (a form, a
+     grouped list) — not for every paragraph on the page. */
+  .surface {
+    @apply rounded-squishy border border-sand bg-surface;
+  }
+
+  .field {
+    @apply w-full rounded-xl border border-sand-deep bg-surface px-3 py-2 font-normal text-ink;
+    @apply focus:border-coral focus:ring-2 focus:ring-coral/25 focus:outline-none;
+  }
+
+  .btn-primary {
+    @apply rounded-full bg-coral px-5 py-3 text-center font-semibold text-ink;
+    @apply active:scale-[0.98] disabled:opacity-60;
+  }
+
+  .btn-secondary {
+    @apply rounded-full border border-sand-deep bg-surface px-5 py-3 text-center font-semibold text-ink;
+    @apply active:scale-[0.98] disabled:opacity-60;
+  }
+
+  /* Small inline action inside a list row. */
+  .btn-chip {
+    @apply rounded-full border border-sand-deep bg-surface px-3 py-1.5 text-sm font-semibold text-ink;
+    @apply active:scale-[0.98] disabled:opacity-60;
   }
 }

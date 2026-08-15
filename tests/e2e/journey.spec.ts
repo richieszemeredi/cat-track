@@ -1,4 +1,5 @@
-import { expect, test, type Locator, type Page } from '@playwright/test'
+import { expect, test } from '@playwright/test'
+import { daysAgoISO, tabBar, WAIT } from './seed'
 
 /**
  * Full household journey against the Firebase emulators (fresh state per
@@ -13,17 +14,9 @@ const RUN_ID = String(Date.now())
 const EMAIL = `journey-${RUN_ID}@example.com`
 const PASSWORD = 'password123'
 
-// ~3 months ago, computed with plain millisecond arithmetic so it is always a
-// valid past date (kitten life stage) regardless of month boundaries.
-const NINETY_DAYS_MS = 90 * 24 * 60 * 60 * 1000
-const CAT_BIRTH_DATE = new Date(Date.now() - NINETY_DAYS_MS).toISOString().slice(0, 10)
-
-// Firestore emulator + webkit can be slow on first paint / first connection.
-const WAIT = { timeout: 15_000 } as const
-
-function tabBar(page: Page): Locator {
-  return page.getByRole('navigation', { name: 'Main' })
-}
+// ~3 months ago — always a valid past date (kitten life stage) regardless of
+// month boundaries.
+const CAT_BIRTH_DATE = daysAgoISO(90)
 
 test('full household journey', async ({ page, context }) => {
   // Sign-in, household, cat, food, meals, weight and the offline round-trip

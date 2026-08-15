@@ -175,9 +175,10 @@ describe('CatForm', () => {
     expect(screen.getByTestId('cat-sex')).toHaveValue('female')
     expect(screen.getByTestId('cat-neutered')).toBeChecked()
     expect(screen.getByLabelText(/neuter date/i)).toHaveValue('2024-01-15')
-    expect(screen.getByLabelText(/ideal weight/i)).toHaveValue(4.5)
+    // Decimal fields are type="text" so the iOS keypad's comma survives.
+    expect(screen.getByLabelText(/ideal weight/i)).toHaveValue('4.5')
     expect(screen.getByLabelText(/life stage/i)).toHaveValue('adult_neutered')
-    expect(screen.getByLabelText(/mer multiplier override/i)).toHaveValue(1.1)
+    expect(screen.getByLabelText(/mer multiplier override/i)).toHaveValue('1.1')
 
     const nameInput = screen.getByTestId('cat-name')
     await user.clear(nameInput)

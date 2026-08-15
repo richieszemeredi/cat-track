@@ -1,4 +1,4 @@
-import { render, screen, within } from '@testing-library/react'
+import { fireEvent, render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { LogMealForm } from '../../src/components/LogMealForm'
@@ -27,6 +27,11 @@ function firstFeedingCall() {
   return call
 }
 
+function setTime(value: string): void {
+  // userEvent cannot type into <input type="time">.
+  fireEvent.change(screen.getByTestId('meal-time'), { target: { value } })
+}
+
 beforeEach(() => {
   addFeedingMock.mockReset().mockResolvedValue(undefined)
   awaitOrQueuedMock.mockReset().mockResolvedValue('confirmed')
@@ -40,6 +45,21 @@ describe('LogMealForm', () => {
     const options = within(select).getAllByRole('option')
     expect(options.map((o) => o.textContent)).toEqual(['Crunchy Kibble', 'Wet Tuna'])
     expect(select).toHaveValue('food-1')
+  })
+
+  it('defaults the time field to the current time', () => {
+    renderForm()
+
+    const now = new Date()
+    const expected = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`
+    expect(screen.getByTestId('meal-time')).toHaveValue(expected)
+  })
+
+  it('no longer offers meal-type chips', () => {
+    renderForm()
+
+    expect(screen.queryByRole('button', { name: 'Breakfast' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Snack' })).not.toBeInTheDocument()
   })
 
   it('updates the live kcal preview as grams are typed and food changes', async () => {
@@ -61,11 +81,26 @@ describe('LogMealForm', () => {
     expect(preview).toHaveTextContent('— kcal')
   })
 
-  it('submits a minimal meal with null mealType and null note, then resets grams', async () => {
+  it('reads a comma decimal from the iOS keypad', async () => {
+    const user = userEvent.setup()
+    renderForm()
+
+    await user.type(screen.getByTestId('meal-grams'), '12,5')
+    expect(screen.getByTestId('meal-kcal-preview')).toHaveTextContent('≈ 44 kcal')
+
+    await user.click(screen.getByTestId('meal-save'))
+    await screen.findByRole('status')
+
+    const [, , , input] = firstFeedingCall()
+    expect(input.amountG).toBe(12.5)
+  })
+
+  it('submits a minimal meal with a null note and the chosen time, then resets grams', async () => {
     const user = userEvent.setup()
     renderForm()
 
     await user.type(screen.getByTestId('meal-grams'), '50')
+    setTime('07:30')
     await user.click(screen.getByTestId('meal-save'))
 
     const status = await screen.findByRole('status')
@@ -77,26 +112,25 @@ describe('LogMealForm', () => {
     expect(hid).toBe('hh-1')
     expect(catId).toBe('cat-9')
     expect(uid).toBe('user-1')
-    expect(input.datetime).toBeInstanceOf(Date)
     expect(input.foodId).toBe('food-1')
     expect(input.foodNameSnapshot).toBe('Crunchy Kibble')
     expect(input.amountG).toBe(50)
     expect(input.kcal).toBe(175)
-    expect(input.mealType).toBeNull()
     expect(input.note).toBeNull()
+    // The typed time lands on today's date.
+    expect(input.datetime.getHours()).toBe(7)
+    expect(input.datetime.getMinutes()).toBe(30)
+    expect(input.datetime.toDateString()).toBe(new Date().toDateString())
 
-    expect(screen.getByTestId('meal-grams')).toHaveValue(null)
+    expect(screen.getByTestId('meal-grams')).toHaveValue('')
   })
 
-  it('submits the selected meal chip and trimmed note, then resets both', async () => {
+  it('submits a trimmed note and resets it', async () => {
     const user = userEvent.setup()
     renderForm()
 
     await user.selectOptions(screen.getByTestId('meal-food-select'), 'food-2')
     await user.type(screen.getByTestId('meal-grams'), '10')
-    const lunchChip = screen.getByRole('button', { name: 'Lunch' })
-    await user.click(lunchChip)
-    expect(lunchChip).toHaveAttribute('aria-pressed', 'true')
     await user.type(screen.getByLabelText('Note (optional)'), '  yum  ')
 
     await user.click(screen.getByTestId('meal-save'))
@@ -107,23 +141,9 @@ describe('LogMealForm', () => {
     expect(input.foodNameSnapshot).toBe('Wet Tuna')
     expect(input.amountG).toBe(10)
     expect(input.kcal).toBe(7.5)
-    expect(input.mealType).toBe('lunch')
     expect(input.note).toBe('yum')
 
-    // Successful save resets the chip and the note.
-    expect(lunchChip).toHaveAttribute('aria-pressed', 'false')
     expect(screen.getByLabelText('Note (optional)')).toHaveValue('')
-  })
-
-  it('toggles a meal chip off when clicked again', async () => {
-    const user = userEvent.setup()
-    renderForm()
-
-    const chip = screen.getByRole('button', { name: 'Breakfast' })
-    await user.click(chip)
-    expect(chip).toHaveAttribute('aria-pressed', 'true')
-    await user.click(chip)
-    expect(chip).toHaveAttribute('aria-pressed', 'false')
   })
 
   it('blocks submit with a message when grams is empty', async () => {
@@ -138,7 +158,7 @@ describe('LogMealForm', () => {
     expect(awaitOrQueuedMock).not.toHaveBeenCalled()
   })
 
-  it.each(['0', '501'])('blocks submit with a message when grams is %s', async (grams) => {
+  it.each(['0', '501', 'lots'])('blocks submit with a message when grams is %s', async (grams) => {
     const user = userEvent.setup()
     renderForm()
 
@@ -150,6 +170,19 @@ describe('LogMealForm', () => {
     expect(alert).toHaveTextContent('Amount must be between 1 and 500 grams.')
     expect(addFeedingMock).not.toHaveBeenCalled()
     expect(awaitOrQueuedMock).not.toHaveBeenCalled()
+  })
+
+  it('blocks submit when the time was cleared', async () => {
+    const user = userEvent.setup()
+    renderForm()
+
+    await user.type(screen.getByTestId('meal-grams'), '50')
+    setTime('')
+    await user.click(screen.getByTestId('meal-save'))
+
+    const alert = await screen.findByRole('alert')
+    expect(alert).toHaveTextContent('Pick a valid time.')
+    expect(addFeedingMock).not.toHaveBeenCalled()
   })
 
   it('blocks a meal over 2000 kcal', async () => {
@@ -187,7 +220,7 @@ describe('LogMealForm', () => {
     expect(alert).toHaveTextContent('The litter gods say no')
     expect(screen.getByTestId('meal-save')).toBeEnabled()
     // The form keeps the typed grams so the user can retry.
-    expect(screen.getByTestId('meal-grams')).toHaveValue(50)
+    expect(screen.getByTestId('meal-grams')).toHaveValue('50')
     expect(screen.queryByRole('status')).not.toBeInTheDocument()
   })
 })

@@ -58,7 +58,7 @@ function MembershipGate({ user }: { user: User }) {
   if (found === null || found === undefined) {
     // Never offer "create household" on an offline cache-miss — membership
     // may exist server-side, and creating again would split the household.
-    if (!online) return <Splash message="Reconnect to finish setting up 🐾" />
+    if (!online) return <Splash message="Reconnect to finish setting up" />
     return <CreateHouseholdScreen user={user} />
   }
 

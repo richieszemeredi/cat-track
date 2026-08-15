@@ -1,10 +1,10 @@
 import { useQuery } from '@tanstack/react-query'
 import { createFileRoute } from '@tanstack/react-router'
-import { useState, type SubmitEvent } from 'react'
+import { useState, type ReactNode, type SubmitEvent } from 'react'
 import { CatForm } from '../components/CatForm'
 import { ErrorCard } from '../components/ErrorCard'
 import { signOutUser, useAuth } from '../lib/auth'
-import { ageLabel, LIFE_STAGE_LABELS, MER_MULTIPLIERS } from '../lib/catmath'
+import { ageLabelLong, LIFE_STAGE_LABELS, MER_MULTIPLIERS } from '../lib/catmath'
 import { addMember, awaitOrQueued, membersQueryOptions, useMembersLive, type Cat } from '../lib/db'
 import { useHousehold } from '../lib/household'
 import { type Role, type Sex } from '../lib/schemas'
@@ -15,7 +15,7 @@ export const Route = createFileRoute('/profile')({
   errorComponent: ({ error, reset }) => <ErrorCard error={error} onRetry={reset} />,
 })
 
-const FIELD = 'mt-1 w-full rounded-xl border border-coral-soft bg-white px-3 py-2'
+const FIELD = 'field mt-1'
 
 const SEX_LABELS: Record<Sex, string> = {
   male: 'Male',
@@ -23,11 +23,9 @@ const SEX_LABELS: Record<Sex, string> = {
   unknown: 'Sex unknown',
 }
 
-const ROLE_BADGE: Record<Role, string> = {
-  owner: 'bg-butter text-ink',
-  editor: 'bg-mint-soft text-mint-deep',
-  viewer: 'bg-coral-soft text-coral-ink',
-}
+// Roles are metadata, not status — one quiet outlined tag for all three.
+const ROLE_BADGE =
+  'rounded-full border border-sand-deep px-2 py-0.5 text-xs font-medium text-ink-soft'
 
 function ProfilePage() {
   const { user } = useAuth()
@@ -37,10 +35,8 @@ function ProfilePage() {
   if (user === null) return null
 
   return (
-    <main className="flex flex-col gap-4 p-4">
-      <h1 className="text-2xl font-extrabold">
-        Profile <span aria-hidden="true">🐱</span>
-      </h1>
+    <main className="flex flex-col gap-7 p-4">
+      <h1 className="page-title">Profile</h1>
 
       {catsLoading ? (
         <CatSkeleton />
@@ -52,19 +48,17 @@ function ProfilePage() {
 
       <HouseholdCard hid={householdId} role={role} />
 
-      <div className="flex flex-col items-center gap-3 pt-2">
+      <div className="flex flex-col items-start gap-4">
         <button
           type="button"
           onClick={() => {
             void signOutUser()
           }}
-          className="rounded-full border border-coral-soft px-5 py-2 font-bold"
+          className="btn-secondary"
         >
           Sign out
         </button>
-        <p className="text-xs font-semibold text-ink-soft">
-          CatTrack · made with <span aria-hidden="true">🧡</span> for the kitten
-        </p>
+        <p className="text-xs text-ink-soft">CatTrack</p>
       </div>
     </main>
   )
@@ -72,33 +66,30 @@ function ProfilePage() {
 
 function CatSkeleton() {
   return (
-    <div
-      role="status"
-      aria-label="Loading cat profile"
-      className="flex flex-col gap-3 rounded-squishy bg-white p-4 shadow-squishy"
-    >
-      <div aria-hidden="true" className="h-8 w-2/5 animate-pulse rounded-full bg-coral-soft" />
-      <div aria-hidden="true" className="h-4 w-3/5 animate-pulse rounded-full bg-coral-soft" />
-      <div aria-hidden="true" className="h-4 w-1/2 animate-pulse rounded-full bg-coral-soft" />
+    <div role="status" aria-label="Loading cat profile" className="flex flex-col gap-3">
+      <div aria-hidden="true" className="h-8 w-2/5 animate-pulse rounded-full bg-sand" />
+      <div aria-hidden="true" className="h-4 w-3/5 animate-pulse rounded-full bg-sand" />
+      <div aria-hidden="true" className="h-4 w-1/2 animate-pulse rounded-full bg-sand" />
     </div>
   )
 }
 
 function NoCatCard({ canEdit, hid, uid }: { canEdit: boolean; hid: string; uid: string }) {
   return (
-    <section className="flex flex-col gap-4 rounded-squishy bg-white p-4 shadow-squishy">
-      <div className="flex flex-col items-center gap-1 text-center">
-        <span aria-hidden="true" className="text-5xl">
-          🎉
-        </span>
-        <h2 className="text-lg font-extrabold">Tell us about your kitten!</h2>
-        <p className="text-sm font-semibold text-ink-soft">
+    <section className="flex flex-col gap-4">
+      <div className="flex flex-col gap-1">
+        <h2 className="section-label">Your cat</h2>
+        <p className="text-sm text-ink-soft">
           {canEdit
-            ? 'Fill this in once and CatTrack does the calorie math for you.'
+            ? 'Fill this in once and the calorie math takes care of itself.'
             : 'Ask the owner to set up the cat profile.'}
         </p>
       </div>
-      {canEdit ? <CatForm hid={hid} uid={uid} /> : null}
+      {canEdit ? (
+        <div className="surface p-4">
+          <CatForm hid={hid} uid={uid} />
+        </div>
+      ) : null}
     </section>
   )
 }
@@ -120,30 +111,30 @@ function CatCard({
   const multiplier = cat.merMultiplierOverride ?? MER_MULTIPLIERS[stage]
 
   return (
-    <section className="flex flex-col gap-3 rounded-squishy bg-white p-4 shadow-squishy">
+    <section className="flex flex-col gap-4">
       <div>
-        <h2 className="text-3xl font-extrabold">
-          <span aria-hidden="true">🐾</span> {cat.name}
-        </h2>
-        <p className="text-sm font-semibold text-ink-soft">{ageLabel(cat.birthDate, now)} old</p>
+        <h2 className="text-2xl font-bold">{cat.name}</h2>
+        <p className="text-sm text-ink-soft">{ageLabelLong(cat.birthDate, now)}</p>
       </div>
 
-      <div className="flex flex-col gap-1 text-sm font-semibold">
-        <p>
+      {/* Facts as a definition list: the label carries the structure, so the
+          values do not all have to shout in bold. */}
+      <dl className="surface divide-y divide-sand text-sm">
+        <Fact label="Sex">
           {SEX_LABELS[cat.sex]} · {cat.neutered ? 'neutered' : 'not neutered'}
-        </p>
-        {cat.breed === null ? null : <p>Breed: {cat.breed}</p>}
-        <p>
-          Life stage: {LIFE_STAGE_LABELS[stage]}
+        </Fact>
+        {cat.breed === null ? null : <Fact label="Breed">{cat.breed}</Fact>}
+        <Fact label="Life stage">
+          {LIFE_STAGE_LABELS[stage]}
           {cat.lifeStage === null ? <span className="text-ink-soft"> (auto)</span> : null}
-        </p>
-        <p>
-          MER multiplier: {String(multiplier)} × RER
+        </Fact>
+        <Fact label="MER multiplier">
+          {String(multiplier)} × RER
           {cat.merMultiplierOverride === null ? null : (
             <span className="text-ink-soft"> (vet override)</span>
           )}
-        </p>
-      </div>
+        </Fact>
+      </dl>
 
       <p className="text-xs text-ink-soft">Estimates only — always confirm with your vet.</p>
 
@@ -153,31 +144,23 @@ function CatCard({
           onClick={() => {
             setEditing((open) => !open)
           }}
-          className={
-            editing
-              ? 'self-start rounded-full border border-coral-soft px-5 py-2 font-bold'
-              : 'self-start rounded-full bg-coral px-5 py-2 font-extrabold text-ink active:scale-95'
-          }
+          className={editing ? 'btn-secondary self-start' : 'btn-primary self-start'}
         >
-          {editing ? (
-            'Close editor'
-          ) : (
-            <>
-              Edit profile <span aria-hidden="true">✏️</span>
-            </>
-          )}
+          {editing ? 'Close editor' : 'Edit profile'}
         </button>
       ) : null}
 
       {editing ? (
-        <CatForm
-          hid={hid}
-          uid={uid}
-          existing={cat}
-          onDone={() => {
-            setEditing(false)
-          }}
-        />
+        <div className="surface p-4">
+          <CatForm
+            hid={hid}
+            uid={uid}
+            existing={cat}
+            onDone={() => {
+              setEditing(false)
+            }}
+          />
+        </div>
       ) : null}
     </section>
   )
@@ -190,13 +173,11 @@ function HouseholdCard({ hid, role }: { hid: string; role: Role }) {
   const members = membersQuery.data
 
   return (
-    <section className="flex flex-col gap-3 rounded-squishy bg-white p-4 shadow-squishy">
-      <h2 className="text-lg font-extrabold">
-        <span aria-hidden="true">🏡</span> Household
-      </h2>
+    <section className="flex flex-col gap-3">
+      <h2 className="section-label">Household</h2>
 
       {membersQuery.isLoading ? (
-        <p className="text-sm font-semibold text-ink-soft">Loading members…</p>
+        <p className="text-sm text-ink-soft">Loading…</p>
       ) : membersQuery.isError ? (
         <div className="flex flex-col items-start gap-2">
           <p role="alert" className="text-sm font-semibold text-danger">
@@ -207,23 +188,21 @@ function HouseholdCard({ hid, role }: { hid: string; role: Role }) {
             onClick={() => {
               void membersQuery.refetch()
             }}
-            className="rounded-full bg-coral px-4 py-1.5 text-sm font-extrabold text-ink active:scale-95"
+            className="btn-chip"
           >
             Try again
           </button>
         </div>
       ) : members === undefined || members.length === 0 ? (
-        <p className="text-sm font-semibold text-ink-soft">No members found yet.</p>
+        <p className="text-sm text-ink-soft">No members found yet.</p>
       ) : (
-        <ul className="flex flex-col gap-2">
+        <ul className="surface divide-y divide-sand">
           {members.map((member) => (
-            <li key={member.id} className="flex items-center justify-between gap-2">
-              <span className="font-semibold">{member.displayName}</span>
-              <span
-                className={`rounded-full px-3 py-0.5 text-xs font-extrabold ${ROLE_BADGE[member.role]}`}
-              >
-                {member.role}
-              </span>
+            <li key={member.id} className="flex items-center justify-between gap-3 px-4 py-3">
+              {/* Display names are often long emails — truncate, never push
+                  the role badge off the row. */}
+              <span className="min-w-0 truncate font-medium">{member.displayName}</span>
+              <span className={ROLE_BADGE}>{member.role}</span>
             </li>
           ))}
         </ul>
@@ -271,10 +250,8 @@ function AddMemberForm({ hid }: { hid: string }) {
   }
 
   return (
-    <form onSubmit={handleSubmit} className="flex flex-col gap-3 rounded-xl bg-cream p-3">
-      <h3 className="font-extrabold">
-        Add a member <span aria-hidden="true">➕</span>
-      </h3>
+    <form onSubmit={handleSubmit} className="surface flex flex-col gap-3 p-4">
+      <h3 className="section-label">Add a member</h3>
 
       <label className="text-sm font-semibold">
         User ID
@@ -317,11 +294,7 @@ function AddMemberForm({ hid }: { hid: string }) {
         </select>
       </label>
 
-      <button
-        type="submit"
-        disabled={busy}
-        className="rounded-full bg-coral px-5 py-2 font-extrabold text-ink active:scale-95 disabled:opacity-60"
-      >
+      <button type="submit" disabled={busy} className="btn-primary">
         Add member
       </button>
 
@@ -330,12 +303,21 @@ function AddMemberForm({ hid }: { hid: string }) {
         come later.)
       </p>
 
-      {flash === null ? null : <p className="text-sm font-semibold text-mint-deep">{flash}</p>}
+      {flash === null ? null : <p className="text-sm font-semibold text-positive">{flash}</p>}
       {error === null ? null : (
         <p role="alert" className="text-sm font-semibold text-danger">
           {error}
         </p>
       )}
     </form>
+  )
+}
+
+function Fact({ label, children }: { label: string; children: ReactNode }) {
+  return (
+    <div className="flex items-baseline justify-between gap-3 px-4 py-2.5">
+      <dt className="shrink-0 text-ink-soft">{label}</dt>
+      <dd className="text-right font-medium">{children}</dd>
+    </div>
   )
 }

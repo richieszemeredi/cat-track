@@ -8,8 +8,8 @@ function isIos(): boolean {
 }
 
 /**
- * iOS never auto-prompts for PWA install, so show a friendly card with the
- * Add-to-Home-Screen steps when running in Safari (not yet installed).
+ * iOS never auto-prompts for PWA install, so show the Add-to-Home-Screen
+ * steps when running in Safari (not yet installed).
  */
 export function InstallPrompt() {
   const [dismissed, setDismissed] = useState(() => localStorage.getItem(DISMISS_KEY) === 'true')
@@ -17,15 +17,13 @@ export function InstallPrompt() {
   if (dismissed || !isIos() || isStandalone()) return null
 
   return (
-    <div className="mx-4 mb-4 rounded-squishy border border-coral-soft bg-white p-4 shadow-squishy">
+    <div className="surface mx-4 mb-4 p-4">
       <div className="flex items-start justify-between gap-2">
-        <h2 className="font-extrabold">
-          <span aria-hidden="true">📲</span> Put CatTrack on your Home Screen
-        </h2>
+        <h2 className="font-semibold">Put CatTrack on your Home Screen</h2>
         <button
           type="button"
           aria-label="Dismiss install tip"
-          className="px-1 text-lg leading-none text-ink-soft"
+          className="-mt-1 px-1 text-lg leading-none text-ink-soft"
           onClick={() => {
             localStorage.setItem(DISMISS_KEY, 'true')
             setDismissed(true)
@@ -36,13 +34,13 @@ export function InstallPrompt() {
       </div>
       <ol className="mt-2 list-inside list-decimal space-y-1 text-sm text-ink-soft">
         <li>
-          Tap the <span className="font-semibold">Share</span> button in Safari
+          Tap the <span className="font-medium text-ink">Share</span> button in Safari
         </li>
         <li>
-          Choose <span className="font-semibold">Add to Home Screen</span>
+          Choose <span className="font-medium text-ink">Add to Home Screen</span>
         </li>
         <li>
-          Tap <span className="font-semibold">Add</span> — done!
+          Tap <span className="font-medium text-ink">Add</span>
         </li>
       </ol>
     </div>

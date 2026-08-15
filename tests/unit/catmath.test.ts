@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import {
   ageInMonths,
+  ageInWeeks,
   ageLabel,
+  ageLabelLong,
   DEFAULT_ADULT_WEIGHT_KG,
   growthBand,
   gramsForKcal,
@@ -177,8 +179,19 @@ describe('ageInMonths', () => {
   })
 })
 
+describe('ageInWeeks', () => {
+  it('counts whole weeks since birth', () => {
+    expect(ageInWeeks(new Date(2026, 0, 1), new Date(2026, 0, 22))).toBe(3)
+    expect(ageInWeeks(new Date(2026, 0, 1), new Date(2026, 0, 27))).toBe(3)
+  })
+
+  it('clamps a future birth date to 0', () => {
+    expect(ageInWeeks(new Date(2026, 5, 1), new Date(2026, 0, 15))).toBe(0)
+  })
+})
+
 describe('ageLabel', () => {
-  it('renders weeks under 56 days', () => {
+  it('renders weeks for a young kitten', () => {
     expect(ageLabel(new Date(2026, 0, 1), new Date(2026, 0, 22))).toBe('3 wk')
   })
 
@@ -190,18 +203,20 @@ describe('ageLabel', () => {
     expect(ageLabel(new Date(2026, 5, 1), new Date(2026, 0, 15))).toBe('0 wk')
   })
 
-  it('still renders weeks at 55 days', () => {
-    // Jan 1 -> Feb 25 is 55 days.
-    expect(ageLabel(new Date(2026, 0, 1), new Date(2026, 1, 25))).toBe('7 wk')
+  // Weeks stay useful far longer than 8 weeks — "3 mo" hides the difference
+  // between a 13- and a 17-week kitten, which is exactly when it matters.
+  it('still renders weeks at 25 weeks', () => {
+    // Jan 1 -> Jun 24 is 174 days = 24 weeks and 6 days.
+    expect(ageLabel(new Date(2026, 0, 1), new Date(2026, 5, 24))).toBe('24 wk')
   })
 
-  it('switches to months at exactly 56 days', () => {
-    // Jan 1 -> Feb 26 is 56 days and 1 calendar month.
-    expect(ageLabel(new Date(2026, 0, 1), new Date(2026, 1, 26))).toBe('1 mo')
+  it('switches to months at 26 weeks', () => {
+    // Jan 1 -> Jul 2 is 182 days = exactly 26 weeks.
+    expect(ageLabel(new Date(2026, 0, 1), new Date(2026, 6, 2))).toBe('6 mo')
   })
 
   it('renders months under a year', () => {
-    expect(ageLabel(new Date(2025, 7, 10), new Date(2026, 0, 10))).toBe('5 mo')
+    expect(ageLabel(new Date(2025, 2, 10), new Date(2026, 0, 10))).toBe('10 mo')
   })
 
   it('renders whole years without a month remainder', () => {
@@ -210,6 +225,22 @@ describe('ageLabel', () => {
 
   it('renders years with a month remainder', () => {
     expect(ageLabel(new Date(2024, 10, 15), new Date(2026, 0, 15))).toBe('1 yr 2 mo')
+  })
+})
+
+describe('ageLabelLong', () => {
+  it('spells out weeks for a kitten, singular at one week', () => {
+    expect(ageLabelLong(new Date(2026, 0, 1), new Date(2026, 0, 22))).toBe('3 weeks old')
+    expect(ageLabelLong(new Date(2026, 0, 1), new Date(2026, 0, 8))).toBe('1 week old')
+  })
+
+  it('spells out months past the weeks cutoff', () => {
+    expect(ageLabelLong(new Date(2026, 0, 1), new Date(2026, 6, 2))).toBe('6 months old')
+  })
+
+  it('spells out years, with and without a month remainder', () => {
+    expect(ageLabelLong(new Date(2025, 0, 15), new Date(2026, 0, 15))).toBe('1 year old')
+    expect(ageLabelLong(new Date(2024, 10, 15), new Date(2026, 0, 15))).toBe('1 year 2 months old')
   })
 })
 

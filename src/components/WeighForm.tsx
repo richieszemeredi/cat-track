@@ -1,8 +1,9 @@
 import { format, isValid, parse } from 'date-fns'
 import { useEffect, useState, type SubmitEvent } from 'react'
 import { addWeightEntry, awaitOrQueued, type WeightInput } from '../lib/db'
+import { DECIMAL_INPUT_PROPS, parseDecimal } from '../lib/numbers'
 
-const BCS_VALUES = [1, 2, 3, 4, 5, 6, 7, 8, 9]
+const FIELD_CLASS = 'field mt-1'
 
 function todayStr(): string {
   return format(new Date(), 'yyyy-MM-dd')
@@ -12,7 +13,6 @@ function todayStr(): string {
 export function WeighForm({ hid, catId, uid }: { hid: string; catId: string; uid: string }) {
   const [weightStr, setWeightStr] = useState('')
   const [dateStr, setDateStr] = useState(todayStr)
-  const [bcsStr, setBcsStr] = useState('')
   const [note, setNote] = useState('')
   const [busy, setBusy] = useState(false)
   const [saved, setSaved] = useState(false)
@@ -33,8 +33,9 @@ export function WeighForm({ hid, catId, uid }: { hid: string; catId: string; uid
     setError(null)
     setSaved(false)
 
-    const weightKg = Number(weightStr)
-    if (weightStr.trim() === '' || !Number.isFinite(weightKg) || weightKg < 0.05 || weightKg > 30) {
+    // parseDecimal so "4,25" from the iOS keypad is a weight, not a typo.
+    const weightKg = parseDecimal(weightStr)
+    if (weightKg === null || weightKg < 0.05 || weightKg > 30) {
       setError('Weight must be between 0.05 and 30 kg.')
       return
     }
@@ -45,12 +46,10 @@ export function WeighForm({ hid, catId, uid }: { hid: string; catId: string; uid
       setError('Pick a valid date.')
       return
     }
-    const bcs = bcsStr === '' ? null : Number(bcsStr)
     const trimmedNote = note.trim()
     const input: WeightInput = {
       date,
       weightKg,
-      bodyConditionScore: bcs,
       note: trimmedNote === '' ? null : trimmedNote,
     }
 
@@ -59,7 +58,6 @@ export function WeighForm({ hid, catId, uid }: { hid: string; catId: string; uid
       .then(() => {
         // Both 'confirmed' and 'queued' mean the entry is on its way.
         setWeightStr('')
-        setBcsStr('')
         setNote('')
         setDateStr(todayStr())
         setSaved(true)
@@ -75,54 +73,35 @@ export function WeighForm({ hid, catId, uid }: { hid: string; catId: string; uid
   return (
     // noValidate: the component's own validation shows styled messages —
     // matches LogMealForm/FoodForm instead of native browser bubbles.
+    // Fields are stacked, never side by side: a native date picker has a wide
+    // minimum width and blew out of a half-width column on a 393pt iPhone.
     <form noValidate onSubmit={handleSubmit} className="flex flex-col gap-3">
-      <div className="grid grid-cols-2 gap-3">
-        <label className="text-sm font-semibold">
-          Weight (kg)
-          <input
-            data-testid="weight-kg"
-            type="number"
-            inputMode="decimal"
-            step="0.01"
-            min="0.05"
-            max="30"
-            required
-            value={weightStr}
-            onChange={(event) => {
-              setWeightStr(event.target.value)
-            }}
-            className="mt-1 w-full rounded-xl border border-coral-soft bg-white px-3 py-2 text-base"
-          />
-        </label>
-        <label className="text-sm font-semibold">
-          Date
-          <input
-            type="date"
-            required
-            value={dateStr}
-            onChange={(event) => {
-              setDateStr(event.target.value)
-            }}
-            className="mt-1 w-full rounded-xl border border-coral-soft bg-white px-3 py-2 text-base"
-          />
-        </label>
-      </div>
       <label className="text-sm font-semibold">
-        Body condition score (optional)
-        <select
-          value={bcsStr}
+        Weight (kg)
+        <input
+          {...DECIMAL_INPUT_PROPS}
+          data-testid="weight-kg"
+          required
+          value={weightStr}
+          placeholder="e.g. 2,4"
           onChange={(event) => {
-            setBcsStr(event.target.value)
+            setWeightStr(event.target.value)
           }}
-          className="mt-1 w-full rounded-xl border border-coral-soft bg-white px-3 py-2 text-base"
-        >
-          <option value="">—</option>
-          {BCS_VALUES.map((n) => (
-            <option key={n} value={String(n)}>
-              {n}/9
-            </option>
-          ))}
-        </select>
+          className={FIELD_CLASS}
+        />
+      </label>
+      <label className="text-sm font-semibold">
+        Date
+        <input
+          type="date"
+          required
+          value={dateStr}
+          max={todayStr()}
+          onChange={(event) => {
+            setDateStr(event.target.value)
+          }}
+          className={FIELD_CLASS}
+        />
       </label>
       <label className="text-sm font-semibold">
         Note (optional)
@@ -134,22 +113,13 @@ export function WeighForm({ hid, catId, uid }: { hid: string; catId: string; uid
           onChange={(event) => {
             setNote(event.target.value)
           }}
-          className="mt-1 w-full rounded-xl border border-coral-soft bg-white px-3 py-2 text-base"
+          className={FIELD_CLASS}
         />
       </label>
-      <button
-        type="submit"
-        data-testid="weight-save"
-        disabled={busy}
-        className="rounded-full bg-coral px-6 py-3 font-extrabold text-ink active:scale-95 disabled:opacity-60"
-      >
+      <button type="submit" data-testid="weight-save" disabled={busy} className="btn-primary">
         Save weigh-in
       </button>
-      {saved ? (
-        <p className="text-sm font-semibold text-mint-deep">
-          Saved! <span aria-hidden="true">✨</span>
-        </p>
-      ) : null}
+      {saved ? <p className="text-sm font-semibold text-positive">Saved!</p> : null}
       {error === null ? null : (
         <p role="alert" className="text-sm font-semibold text-danger">
           {error}

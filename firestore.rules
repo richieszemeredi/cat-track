@@ -138,16 +138,12 @@ service cloud.firestore {
           allow read: if isMember(hid);
           allow create: if isEditor(hid) &&
             request.resource.data.keys().hasOnly([
-              'date', 'weightKg', 'bodyConditionScore', 'note', 'createdBy', 'createdAt'
+              'date', 'weightKg', 'note', 'createdBy', 'createdAt'
             ]) &&
             request.resource.data.date is timestamp &&
             request.resource.data.weightKg is number &&
             request.resource.data.weightKg > 0 &&
             request.resource.data.weightKg <= 30 &&
-            (request.resource.data.bodyConditionScore == null ||
-              (request.resource.data.bodyConditionScore is int &&
-               request.resource.data.bodyConditionScore >= 1 &&
-               request.resource.data.bodyConditionScore <= 9)) &&
             optionalString(request.resource.data.note, 500) &&
             request.resource.data.createdAt is timestamp &&
             request.resource.data.createdBy == request.auth.uid;
@@ -162,7 +158,7 @@ service cloud.firestore {
           allow read: if isMember(hid);
           allow create, update: if isEditor(hid) &&
             request.resource.data.keys().hasOnly([
-              'name', 'brand', 'type', 'kcalPerGram', 'packageSizeG',
+              'name', 'brand', 'type', 'kcalPerGram',
               'archived', 'createdBy', 'createdAt'
             ]) &&
             validString(request.resource.data.name, 80) &&
@@ -171,9 +167,6 @@ service cloud.firestore {
             request.resource.data.kcalPerGram is number &&
             request.resource.data.kcalPerGram > 0 &&
             request.resource.data.kcalPerGram <= 10 &&
-            (request.resource.data.packageSizeG == null ||
-              (request.resource.data.packageSizeG is number &&
-               request.resource.data.packageSizeG > 0)) &&
             request.resource.data.createdAt is timestamp &&
             request.resource.data.createdBy is string &&
             request.resource.data.archived is bool;
@@ -186,7 +179,7 @@ service cloud.firestore {
           allow create: if isEditor(hid) &&
             request.resource.data.keys().hasOnly([
               'datetime', 'foodId', 'foodNameSnapshot', 'amountG', 'kcal',
-              'mealType', 'note', 'createdBy', 'createdAt'
+              'note', 'createdBy', 'createdAt'
             ]) &&
             request.resource.data.datetime is timestamp &&
             validString(request.resource.data.foodNameSnapshot, 80) &&
@@ -198,8 +191,6 @@ service cloud.firestore {
             request.resource.data.kcal <= 2000 &&
             (request.resource.data.foodId == null ||
               request.resource.data.foodId is string) &&
-            (request.resource.data.mealType == null ||
-              request.resource.data.mealType in ['breakfast', 'lunch', 'dinner', 'snack']) &&
             optionalString(request.resource.data.note, 500) &&
             request.resource.data.createdAt is timestamp &&
             request.resource.data.createdBy == request.auth.uid;

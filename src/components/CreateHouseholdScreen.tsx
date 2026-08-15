@@ -27,15 +27,10 @@ export function CreateHouseholdScreen({ user }: { user: User }) {
   }
 
   return (
-    <main className="mx-auto flex min-h-dvh max-w-lg flex-col items-center justify-center gap-6 p-6">
-      <div className="flex flex-col items-center gap-2 text-center">
-        <span aria-hidden="true" className="text-5xl">
-          🏡
-        </span>
-        <h1 className="text-2xl font-extrabold">Set up your household</h1>
-        <p className="text-sm font-semibold text-ink-soft">
-          Everyone in the household shares the same cat log.
-        </p>
+    <main className="mx-auto flex min-h-dvh max-w-lg flex-col justify-center gap-6 p-6">
+      <div className="flex flex-col gap-2">
+        <h1 className="page-title">Set up your household</h1>
+        <p className="text-sm text-ink-soft">Everyone in it shares the same cat log.</p>
       </div>
 
       <form onSubmit={handleSubmit} className="flex w-full flex-col gap-3">
@@ -49,14 +44,14 @@ export function CreateHouseholdScreen({ user }: { user: User }) {
             onChange={(event) => {
               setName(event.target.value)
             }}
-            className="mt-1 w-full rounded-xl border border-coral-soft bg-white px-3 py-2"
+            className="field mt-1"
             data-testid="household-name"
           />
         </label>
         <button
           type="submit"
           disabled={busy}
-          className="rounded-full bg-coral px-6 py-3 font-extrabold text-ink shadow-squishy active:scale-95 disabled:opacity-60"
+          className="btn-primary"
           data-testid="household-create"
         >
           Create household

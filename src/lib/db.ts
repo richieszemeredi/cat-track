@@ -34,7 +34,6 @@ import {
   type Food,
   type FoodType,
   type LifeStage,
-  type MealType,
   type Role,
   type Sex,
   type WeightEntry,
@@ -311,6 +310,45 @@ export function useFeedingsForDayLive(
   )
 }
 
+/**
+ * The most recent feedings across all days, newest first — powers the
+ * "repeat a previous day" shortcut. Capped: we only ever need the last day or
+ * two that actually had meals, and a cat eats a handful of times a day.
+ */
+const RECENT_FEEDINGS_LIMIT = 40
+
+export function recentFeedingsQueryOptions(hid: string, catId: string) {
+  return queryOptions({
+    queryKey: ['feedings-recent', hid, catId] as const,
+    queryFn: async () =>
+      parseDocs(
+        feedingSchema,
+        await getDocs(
+          query(feedingsRef(hid, catId), orderBy('datetime', 'desc'), limit(RECENT_FEEDINGS_LIMIT)),
+        ),
+      ),
+    staleTime: Infinity,
+  })
+}
+
+export function useRecentFeedingsLive(hid: string, catId: string): void {
+  const qc = useQueryClient()
+  useEffect(
+    () =>
+      onSnapshot(
+        query(feedingsRef(hid, catId), orderBy('datetime', 'desc'), limit(RECENT_FEEDINGS_LIMIT)),
+        (snap) => {
+          qc.setQueryData(
+            recentFeedingsQueryOptions(hid, catId).queryKey,
+            parseDocs(feedingSchema, snap),
+          )
+        },
+        onListenError(qc, recentFeedingsQueryOptions(hid, catId).queryKey),
+      ),
+    [hid, catId, qc],
+  )
+}
+
 // ---------- offline-aware write helper ----------
 
 /**
@@ -399,7 +437,6 @@ export function updateCat(hid: string, catId: string, patch: Partial<CatInput>):
 export interface WeightInput {
   date: Date
   weightKg: number
-  bodyConditionScore: number | null
   note: string | null
 }
 
@@ -426,7 +463,6 @@ export interface FoodInput {
   brand: string | null
   type: FoodType
   kcalPerGram: number
-  packageSizeG: number | null
 }
 
 export function addFood(
@@ -458,7 +494,6 @@ export interface FeedingInput {
   foodNameSnapshot: string
   amountG: number
   kcal: number
-  mealType: MealType | null
   note: string | null
 }
 
@@ -474,6 +509,28 @@ export function addFeeding(
     createdBy: uid,
     createdAt: serverTimestamp(),
   })
+}
+
+/**
+ * Log several meals at once ("repeat a previous day"). One batch so the day
+ * either lands whole or not at all — a half-copied day is worse than none.
+ */
+export function addFeedings(
+  hid: string,
+  catId: string,
+  uid: string,
+  inputs: readonly FeedingInput[],
+): Promise<unknown> {
+  const batch = writeBatch(db)
+  for (const input of inputs) {
+    batch.set(doc(feedingsRef(hid, catId)), {
+      ...input,
+      datetime: Timestamp.fromDate(input.datetime),
+      createdBy: uid,
+      createdAt: serverTimestamp(),
+    })
+  }
+  return batch.commit()
 }
 
 export function deleteFeeding(hid: string, catId: string, entryId: string): Promise<unknown> {

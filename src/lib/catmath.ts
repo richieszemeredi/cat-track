@@ -79,15 +79,42 @@ export function ageInMonths(birthDate: Date, now: Date): number {
   return Math.max(0, differenceInMonths(now, birthDate))
 }
 
-/** "3 wk", "5 mo", "1 yr 2 mo" — friendly age for the dashboard. */
+/**
+ * Weeks are the unit that matters for a kitten — growth, vaccination and
+ * feeding advice are all quoted in weeks well past the point where "3 mo"
+ * stops distinguishing anything. Stay in weeks until 6 months (26 weeks),
+ * then switch to months and years.
+ */
+export const WEEKS_LABEL_CUTOFF = 26
+
+/** Whole weeks elapsed since birth. */
+export function ageInWeeks(birthDate: Date, now: Date): number {
+  return Math.floor(Math.max(0, differenceInDays(now, birthDate)) / 7)
+}
+
+/** "3 wk", "8 mo", "1 yr 2 mo" — friendly age for the dashboard. */
 export function ageLabel(birthDate: Date, now: Date): string {
-  const days = Math.max(0, differenceInDays(now, birthDate))
-  if (days < 56) return `${String(Math.floor(days / 7))} wk`
+  const weeks = ageInWeeks(birthDate, now)
+  if (weeks < WEEKS_LABEL_CUTOFF) return `${String(weeks)} wk`
   const months = ageInMonths(birthDate, now)
   if (months < 12) return `${String(months)} mo`
   const years = Math.floor(months / 12)
   const rest = months % 12
   return rest === 0 ? `${String(years)} yr` : `${String(years)} yr ${String(rest)} mo`
+}
+
+/** "3 weeks old", "8 months old", "1 year 2 months old" — for page subtitles. */
+export function ageLabelLong(birthDate: Date, now: Date): string {
+  const plural = (n: number, unit: string) => `${String(n)} ${unit}${n === 1 ? '' : 's'}`
+  const weeks = ageInWeeks(birthDate, now)
+  if (weeks < WEEKS_LABEL_CUTOFF) return `${plural(weeks, 'week')} old`
+  const months = ageInMonths(birthDate, now)
+  if (months < 12) return `${plural(months, 'month')} old`
+  const years = Math.floor(months / 12)
+  const rest = months % 12
+  return rest === 0
+    ? `${plural(years, 'year')} old`
+    : `${plural(years, 'year')} ${plural(rest, 'month')} old`
 }
 
 /** Life stage derived from age + neuter status (weight_loss/senior are manual). */

@@ -53,10 +53,12 @@ export const catSchema = z.object({
 })
 export type Cat = z.infer<typeof catSchema> & { id: string }
 
+// Retired fields (bodyConditionScore on weights, packageSizeG on foods,
+// mealType on feedings) are simply absent here: z.object strips unknown keys,
+// so documents written before they were dropped still parse cleanly.
 export const weightEntrySchema = z.object({
   date: timestampToDate,
   weightKg: z.number().positive().max(30),
-  bodyConditionScore: z.number().int().min(1).max(9).nullable(),
   note: z.string().max(500).nullable(),
   createdBy: z.string().min(1),
   createdAt: timestampToDate,
@@ -71,15 +73,11 @@ export const foodSchema = z.object({
   brand: z.string().max(80).nullable(),
   type: foodTypeSchema,
   kcalPerGram: z.number().positive().max(10),
-  packageSizeG: z.number().positive().nullable(),
   archived: z.boolean(),
   createdBy: z.string().min(1),
   createdAt: timestampToDate,
 })
 export type Food = z.infer<typeof foodSchema> & { id: string }
-
-export const mealTypeSchema = z.enum(['breakfast', 'lunch', 'dinner', 'snack'])
-export type MealType = z.infer<typeof mealTypeSchema>
 
 export const feedingSchema = z.object({
   datetime: timestampToDate,
@@ -87,7 +85,6 @@ export const feedingSchema = z.object({
   foodNameSnapshot: z.string().min(1).max(80),
   amountG: z.number().positive().max(500),
   kcal: z.number().min(0).max(2000),
-  mealType: mealTypeSchema.nullable(),
   note: z.string().max(500).nullable(),
   createdBy: z.string().min(1),
   createdAt: timestampToDate,

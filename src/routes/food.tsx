@@ -5,6 +5,7 @@ import { useState } from 'react'
 import { ErrorCard } from '../components/ErrorCard'
 import { FoodForm } from '../components/FoodForm'
 import { LogMealForm } from '../components/LogMealForm'
+import { RepeatDayCard } from '../components/RepeatDayCard'
 import { useAuth } from '../lib/auth'
 import {
   LIFE_STAGE_LABELS,
@@ -39,19 +40,10 @@ export const Route = createFileRoute('/food')({
   errorComponent: ({ error, reset }) => <ErrorCard error={error} onRetry={reset} />,
 })
 
-const CARD_CLASS = 'flex flex-col gap-3 rounded-squishy bg-white p-4 shadow-squishy'
 const DISCLAIMER = 'Estimates only — always confirm with your vet.'
 
-function PageTitle() {
-  return (
-    <h1 className="text-2xl font-extrabold">
-      Food <span aria-hidden="true">🍽️</span>
-    </h1>
-  )
-}
-
-function LoadingHint({ label }: { label: string }) {
-  return <p className="animate-pulse text-sm text-ink-soft">{label}</p>
+function Skeleton() {
+  return <div className="h-16 animate-pulse rounded-squishy bg-sand" />
 }
 
 function SectionError({ label }: { label: string }) {
@@ -67,29 +59,21 @@ function FoodPage() {
 
   if (catsLoading) {
     return (
-      <main className="flex flex-col gap-4 p-4">
-        <PageTitle />
-        <div className={CARD_CLASS}>
-          <LoadingHint label="Fetching kitty data…" />
-        </div>
+      <main className="flex flex-col gap-6 p-4">
+        <h1 className="page-title">Food</h1>
+        <Skeleton />
       </main>
     )
   }
 
   if (activeCat === null) {
     return (
-      <main className="flex flex-col gap-4 p-4">
-        <PageTitle />
-        <div className="flex flex-col items-center gap-3 rounded-squishy bg-white p-6 text-center shadow-squishy">
-          <span aria-hidden="true" className="text-4xl">
-            🐱
-          </span>
-          <p className="font-semibold">No cat here yet!</p>
-          <Link
-            to="/profile"
-            className="rounded-full bg-coral px-5 py-2 font-extrabold text-ink active:scale-95"
-          >
-            Set up your cat&apos;s profile first <span aria-hidden="true">🐾</span>
+      <main className="flex flex-col gap-6 p-4">
+        <h1 className="page-title">Food</h1>
+        <div className="surface flex flex-col items-start gap-3 p-5">
+          <p className="font-semibold">No cat set up yet.</p>
+          <Link to="/profile" className="btn-primary">
+            Add your cat
           </Link>
         </div>
       </main>
@@ -150,73 +134,67 @@ function FoodContent({ cat }: { cat: Cat }) {
   }
 
   return (
-    <main className="flex flex-col gap-4 p-4">
-      <PageTitle />
+    <main className="flex flex-col gap-7 p-4">
+      <h1 className="page-title">Food</h1>
 
-      {/* 1. Today's target */}
-      <section className={CARD_CLASS}>
-        <h2 className="text-lg font-extrabold">
-          Today&apos;s calories <span aria-hidden="true">🔥</span>
-        </h2>
+      {/* 1. Today's target — the one figure this screen leads with */}
+      <section className="flex flex-col gap-3">
+        <h2 className="section-label">Today&apos;s calories</h2>
         {weightsQuery.isLoading || feedingsQuery.isLoading ? (
-          <LoadingHint label="Counting kibbles…" />
+          <Skeleton />
         ) : weightsQuery.isError || feedingsQuery.isError ? (
           <SectionError label="Couldn't load today's calories — please try again." />
         ) : (
           <TargetSummary eaten={sumKcal(feedings)} target={target} />
         )}
-        <p className="text-xs text-ink-soft">{DISCLAIMER}</p>
       </section>
 
       {/* 2. Log a meal (editors only) */}
       {canEdit && uid !== null ? (
-        <section className={CARD_CLASS}>
-          <h2 className="text-lg font-extrabold">
-            Log a meal <span aria-hidden="true">🥣</span>
-          </h2>
+        <section className="flex flex-col gap-3">
+          <h2 className="section-label">Log a meal</h2>
           {foodsQuery.isLoading ? (
-            <LoadingHint label="Opening the pantry…" />
+            <Skeleton />
           ) : foodsQuery.isError ? (
             <SectionError label="Couldn't load your foods — please try again." />
           ) : activeFoods.length === 0 ? (
-            <p className="text-sm text-ink-soft">
-              Add a food first <span aria-hidden="true">👇</span>
-            </p>
+            <p className="text-sm text-ink-soft">Add a food below to start logging meals.</p>
           ) : (
-            <LogMealForm hid={householdId} catId={cat.id} uid={uid} foods={activeFoods} />
+            <div className="surface p-4">
+              <LogMealForm hid={householdId} catId={cat.id} uid={uid} foods={activeFoods} />
+            </div>
           )}
         </section>
       ) : null}
 
+      {/* 2b. Repeat the last logged day (most days are the same day) */}
+      {canEdit && uid !== null ? (
+        <RepeatDayCard hid={householdId} catId={cat.id} uid={uid} todayStart={day.start} />
+      ) : null}
+
       {/* 3. Today's meals */}
-      <section className={CARD_CLASS}>
-        <h2 className="text-lg font-extrabold">
-          Today&apos;s meals <span aria-hidden="true">🕒</span>
-        </h2>
+      <section className="flex flex-col gap-3">
+        <h2 className="section-label">Today&apos;s meals</h2>
         {feedingsQuery.isLoading ? (
-          <LoadingHint label="Sniffing out today's meals…" />
+          <Skeleton />
         ) : feedingsQuery.isError ? (
           <SectionError label="Couldn't load today's meals — please try again." />
         ) : feedings.length === 0 ? (
-          <p className="text-sm text-ink-soft">
-            No meals logged yet today — kitty is waiting <span aria-hidden="true">🐾</span>
-          </p>
+          <p className="text-sm text-ink-soft">Nothing logged yet today.</p>
         ) : (
           <>
-            <ul className="flex flex-col divide-y divide-coral-soft">
+            <ul className="surface divide-y divide-sand">
               {feedings.map((entry) => (
-                <li key={entry.id} className="flex items-center gap-3 py-2">
-                  <span className="text-sm font-bold text-ink-soft tabular-nums">
+                <li key={entry.id} className="flex items-center gap-3 px-4 py-3">
+                  <span className="text-sm text-ink-soft tabular-nums">
                     {format(entry.datetime, 'HH:mm')}
                   </span>
-                  <span className="min-w-0 flex-1">
-                    <span className="font-semibold">{entry.foodNameSnapshot}</span>
-                    {entry.mealType === null ? null : (
-                      <span className="text-xs text-ink-soft capitalize"> · {entry.mealType}</span>
-                    )}
+                  <span className="min-w-0 flex-1 truncate font-medium">
+                    {entry.foodNameSnapshot}
                   </span>
-                  <span className="text-sm text-ink-soft">{roundGrams(entry.amountG)} g</span>
-                  <span className="text-sm font-extrabold">{roundKcal(entry.kcal)} kcal</span>
+                  <span className="shrink-0 text-sm text-ink-soft tabular-nums">
+                    {roundGrams(entry.amountG)} g · {roundKcal(entry.kcal)} kcal
+                  </span>
                   {canEdit ? (
                     <button
                       type="button"
@@ -224,15 +202,15 @@ function FoodContent({ cat }: { cat: Cat }) {
                       onClick={() => {
                         void removeFeeding(entry)
                       }}
-                      className="rounded-full bg-coral-soft px-2 py-1 text-sm active:scale-95"
+                      className="-mr-1 shrink-0 px-1 text-lg leading-none text-ink-soft active:scale-95"
                     >
-                      <span aria-hidden="true">🗑️</span>
+                      ×
                     </button>
                   ) : null}
                 </li>
               ))}
             </ul>
-            <p className="text-sm font-semibold text-ink-soft">
+            <p className="text-sm text-ink-soft tabular-nums">
               Total: {roundGrams(sumGrams(feedings))} g · {roundKcal(sumKcal(feedings))} kcal
             </p>
           </>
@@ -241,11 +219,9 @@ function FoodContent({ cat }: { cat: Cat }) {
       </section>
 
       {/* 4. Food catalog */}
-      <section className={CARD_CLASS}>
+      <section className="flex flex-col gap-3">
         <div className="flex items-center justify-between gap-2">
-          <h2 className="text-lg font-extrabold">
-            Food catalog <span aria-hidden="true">🥫</span>
-          </h2>
+          <h2 className="section-label">Food catalog</h2>
           {canEdit && uid !== null ? (
             <button
               type="button"
@@ -253,9 +229,9 @@ function FoodContent({ cat }: { cat: Cat }) {
               onClick={() => {
                 setShowAddFood((v) => !v)
               }}
-              className="rounded-full bg-coral px-4 py-2 text-sm font-extrabold text-ink active:scale-95"
+              className="btn-chip"
             >
-              {showAddFood ? 'Close' : 'Add food'} <span aria-hidden="true">➕</span>
+              {showAddFood ? 'Close' : 'Add food'}
             </button>
           ) : null}
         </div>
@@ -272,28 +248,30 @@ function FoodContent({ cat }: { cat: Cat }) {
         ) : null}
 
         {foodsQuery.isLoading ? (
-          <LoadingHint label="Opening the pantry…" />
+          <Skeleton />
         ) : foodsQuery.isError ? (
           <SectionError label="Couldn't load your foods — please try again." />
         ) : activeFoods.length === 0 ? (
-          <p className="text-sm text-ink-soft">
-            No foods yet — add your kitten&apos;s first food to start logging meals{' '}
-            <span aria-hidden="true">🍚</span>
-          </p>
+          <p className="text-sm text-ink-soft">No foods yet — add one to start logging meals.</p>
         ) : (
-          <ul className="flex flex-col divide-y divide-coral-soft">
+          <ul className="surface divide-y divide-sand">
             {activeFoods.map((food) => (
-              <li key={food.id} className="flex flex-col gap-2 py-3">
-                <div className="flex items-start gap-2">
+              <li key={food.id} className="flex flex-col gap-3 p-4">
+                <div className="flex items-start gap-3">
                   <div className="min-w-0 flex-1">
-                    <p className="font-bold">
+                    <p className="font-semibold">
                       {food.name} <TypeBadge type={food.type} />
                     </p>
                     {food.brand === null || food.brand === '' ? null : (
-                      <p className="text-xs text-ink-soft">{food.brand}</p>
+                      <p className="text-sm text-ink-soft">{food.brand}</p>
                     )}
-                    <p className="text-sm text-ink-soft">
-                      {food.kcalPerGram} kcal/g · {roundKcal(food.kcalPerGram * 100)} kcal / 100 g
+                    {/* Each figure stays whole: "100 g" wrapped mid-unit on a
+                        375pt screen. */}
+                    <p className="text-sm text-ink-soft tabular-nums">
+                      <span className="whitespace-nowrap">{food.kcalPerGram} kcal/g</span> ·{' '}
+                      <span className="whitespace-nowrap">
+                        {roundKcal(food.kcalPerGram * 100)} kcal / 100 g
+                      </span>
                     </p>
                   </div>
                   {canEdit && uid !== null ? (
@@ -303,7 +281,7 @@ function FoodContent({ cat }: { cat: Cat }) {
                         onClick={() => {
                           setEditingFoodId((prev) => (prev === food.id ? null : food.id))
                         }}
-                        className="rounded-full bg-mint-soft px-3 py-1.5 text-sm font-bold text-mint-deep active:scale-95"
+                        className="btn-chip"
                       >
                         Edit
                       </button>
@@ -312,7 +290,7 @@ function FoodContent({ cat }: { cat: Cat }) {
                         onClick={() => {
                           void setFoodArchived(food, true)
                         }}
-                        className="rounded-full bg-coral-soft px-3 py-1.5 text-sm font-bold text-coral-ink active:scale-95"
+                        className="btn-chip"
                       >
                         Archive
                       </button>
@@ -342,15 +320,14 @@ function FoodContent({ cat }: { cat: Cat }) {
               onClick={() => {
                 setShowArchived((v) => !v)
               }}
-              className="self-start text-sm font-bold text-ink-soft underline active:scale-95"
+              className="self-start text-sm font-semibold text-coral-ink underline underline-offset-2"
             >
-              {showArchived ? 'Hide archived' : `Show archived (${String(archivedFoods.length)})`}{' '}
-              <span aria-hidden="true">📦</span>
+              {showArchived ? 'Hide archived' : `Show archived (${String(archivedFoods.length)})`}
             </button>
             {showArchived ? (
-              <ul className="flex flex-col divide-y divide-coral-soft">
+              <ul className="surface divide-y divide-sand">
                 {archivedFoods.map((food) => (
-                  <li key={food.id} className="flex items-center gap-2 py-2">
+                  <li key={food.id} className="flex items-center gap-3 px-4 py-3">
                     <span className="min-w-0 flex-1 text-sm text-ink-soft">
                       {food.name} <TypeBadge type={food.type} />
                     </span>
@@ -360,7 +337,7 @@ function FoodContent({ cat }: { cat: Cat }) {
                         onClick={() => {
                           void setFoodArchived(food, false)
                         }}
-                        className="rounded-full bg-mint-soft px-3 py-1.5 text-sm font-bold text-mint-deep active:scale-95"
+                        className="btn-chip"
                       >
                         Unarchive
                       </button>
@@ -375,18 +352,18 @@ function FoodContent({ cat }: { cat: Cat }) {
         {catalogError === null ? null : <SectionError label={catalogError} />}
       </section>
 
-      {/* 5. RER / MER explainer */}
-      <section className={CARD_CLASS}>
-        <h2 className="text-lg font-extrabold">
-          How the target works <span aria-hidden="true">🧮</span>
-        </h2>
-        {weightsQuery.isLoading ? (
-          <LoadingHint label="Doing cat math…" />
-        ) : (
-          <RerMerMath cat={cat} latestWeightKg={latestWeightKg} now={now} />
-        )}
-        <p className="text-xs text-ink-soft">{DISCLAIMER}</p>
-      </section>
+      {/* 5. RER / MER explainer — reference material, folded away by default */}
+      <details className="surface px-4 py-3">
+        <summary className="cursor-pointer text-sm font-semibold">How the target works</summary>
+        <div className="mt-3 flex flex-col gap-2">
+          {weightsQuery.isLoading ? (
+            <Skeleton />
+          ) : (
+            <RerMerMath cat={cat} latestWeightKg={latestWeightKg} now={now} />
+          )}
+          <p className="text-xs text-ink-soft">{DISCLAIMER}</p>
+        </div>
+      </details>
     </main>
   )
 }
@@ -397,14 +374,16 @@ function TargetSummary({ eaten, target }: { eaten: number; target: number | null
   if (target === null) {
     return (
       <div className="flex flex-col gap-2">
-        <p className="text-3xl font-extrabold">
-          <span data-testid="today-kcal">{eatenRounded}</span>{' '}
-          <span className="text-base font-semibold text-ink-soft">kcal eaten</span>
+        <p className="flex items-baseline gap-2">
+          <span data-testid="today-kcal" className="text-5xl font-bold tracking-tight tabular-nums">
+            {eatenRounded}
+          </span>
+          <span className="text-lg text-ink-soft">kcal</span>
         </p>
         <p className="text-sm text-ink-soft">
-          Weigh in first to get a daily target{' '}
-          <Link to="/weight" className="font-bold text-coral-ink underline">
-            Go to Weight <span aria-hidden="true">⚖️</span>
+          Log a weigh-in to get a daily target.{' '}
+          <Link to="/weight" className="font-semibold text-coral-ink underline underline-offset-2">
+            Go to Weight
           </Link>
         </p>
       </div>
@@ -419,12 +398,13 @@ function TargetSummary({ eaten, target }: { eaten: number; target: number | null
   const pct = Math.min(100, Math.max(0, (eaten / target) * 100))
 
   return (
-    <div className="flex flex-col gap-2">
-      <p className="text-3xl font-extrabold">
-        <span data-testid="today-kcal">{eatenRounded}</span>
-        <span className="text-base font-semibold text-ink-soft">
-          {' '}
-          / <span data-testid="today-target">{targetRounded}</span> kcal
+    <div className="flex flex-col gap-3">
+      <p className="flex items-baseline gap-2">
+        <span data-testid="today-kcal" className="text-5xl font-bold tracking-tight tabular-nums">
+          {eatenRounded}
+        </span>
+        <span className="text-lg text-ink-soft">
+          of <span data-testid="today-target">{targetRounded}</span> kcal
         </span>
       </p>
       <div
@@ -433,16 +413,16 @@ function TargetSummary({ eaten, target }: { eaten: number; target: number | null
         aria-valuemin={0}
         aria-valuemax={targetRounded}
         aria-valuenow={Math.min(eatenRounded, targetRounded)}
-        className="h-3 w-full overflow-hidden rounded-full bg-coral-soft"
+        className="h-2 w-full overflow-hidden rounded-full bg-sand"
       >
         <div
-          className={`h-full rounded-full ${over ? 'bg-coral-deep' : 'bg-mint'}`}
+          className={`h-full rounded-full ${over ? 'bg-coral-deep' : 'bg-coral'}`}
           style={{ width: `${String(pct)}%` }}
         />
       </div>
-      <p className={`text-sm font-semibold ${over ? 'text-coral-ink' : 'text-mint-deep'}`}>
+      <p className={`text-sm ${over ? 'font-semibold text-coral-ink' : 'text-ink-soft'}`}>
         {over
-          ? `Over by ${String(remainingKcal)} kcal today`
+          ? `${String(remainingKcal)} kcal over today`
           : `${String(remainingKcal)} kcal left today`}
       </p>
     </div>
@@ -464,8 +444,7 @@ function RerMerMath({
   if (latestWeightKg === null) {
     return (
       <p className="text-sm text-ink-soft">
-        Once you log a weight we&apos;ll show the resting (RER) and daily (MER) calorie math here{' '}
-        <span aria-hidden="true">✨</span>
+        Once you log a weight, the resting (RER) and daily (MER) calorie math shows up here.
       </p>
     )
   }
@@ -480,14 +459,14 @@ function RerMerMath({
   return (
     <div className="flex flex-col gap-1">
       <p className="text-sm">
-        <span className="font-bold">RER</span> (resting) = 70 × kg
+        <span className="font-semibold">RER</span> (resting) = 70 × kg
         <sup aria-hidden="true">0.75</sup> ≈{' '}
-        <span className="font-extrabold">{roundKcal(rer(latestWeightKg))} kcal/day</span> at{' '}
+        <span className="font-semibold">{roundKcal(rer(latestWeightKg))} kcal/day</span> at{' '}
         {roundKg(latestWeightKg)} kg
       </p>
       <p className="text-sm">
-        <span className="font-bold">MER</span> (daily target) = {multiplier} × RER ≈{' '}
-        <span className="font-extrabold">{roundKcal(merValue)} kcal/day</span> —{' '}
+        <span className="font-semibold">MER</span> (daily target) = {multiplier} × RER ≈{' '}
+        <span className="font-semibold">{roundKcal(merValue)} kcal/day</span> —{' '}
         {LIFE_STAGE_LABELS[stage]}
       </p>
       {stage === 'weight_loss' && cat.idealWeightKg !== null ? (
@@ -499,18 +478,17 @@ function RerMerMath({
   )
 }
 
-const FOOD_TYPE_BADGE: Record<FoodType, string> = {
-  dry: 'bg-butter text-ink',
-  wet: 'bg-mint-soft text-mint-deep',
-  treat: 'bg-coral-soft text-coral-ink',
+const FOOD_TYPE_LABEL: Record<FoodType, string> = {
+  dry: 'Dry',
+  wet: 'Wet',
+  treat: 'Treat',
 }
 
+/** Food type reads as a quiet outlined tag — colour is reserved for meaning. */
 function TypeBadge({ type }: { type: FoodType }) {
   return (
-    <span
-      className={`rounded-full px-2 py-0.5 text-xs font-bold capitalize ${FOOD_TYPE_BADGE[type]}`}
-    >
-      {type}
+    <span className="ml-1 rounded-full border border-sand-deep px-2 py-0.5 align-middle text-xs font-medium text-ink-soft">
+      {FOOD_TYPE_LABEL[type]}
     </span>
   )
 }

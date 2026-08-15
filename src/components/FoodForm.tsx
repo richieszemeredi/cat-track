@@ -1,9 +1,10 @@
 import { useState, type SubmitEvent } from 'react'
 import { roundKcal } from '../lib/catmath'
 import { addFood, awaitOrQueued, updateFood, type Food } from '../lib/db'
+import { DECIMAL_INPUT_PROPS, parseDecimal } from '../lib/numbers'
 import { type FoodType } from '../lib/schemas'
 
-const INPUT_CLASS = 'rounded-xl border border-coral-soft bg-white px-3 py-2 font-normal'
+const INPUT_CLASS = 'field'
 
 export function FoodForm({
   hid,
@@ -22,15 +23,11 @@ export function FoodForm({
   const [brand, setBrand] = useState(existing?.brand ?? '')
   const [type, setType] = useState<FoodType>(existing?.type ?? 'dry')
   const [kcalPerGram, setKcalPerGram] = useState(existing ? String(existing.kcalPerGram) : '')
-  const [packageSize, setPackageSize] = useState(
-    existing?.packageSizeG != null ? String(existing.packageSizeG) : '',
-  )
   const [error, setError] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
 
-  const kcalNum = Number(kcalPerGram)
-  const kcalValid =
-    kcalPerGram.trim() !== '' && Number.isFinite(kcalNum) && kcalNum >= 0.01 && kcalNum <= 10
+  const kcalNum = parseDecimal(kcalPerGram)
+  const kcalValid = kcalNum !== null && kcalNum >= 0.01 && kcalNum <= 10
 
   async function submit(): Promise<void> {
     const trimmedName = name.trim()
@@ -38,19 +35,9 @@ export function FoodForm({
       setError('Give the food a name.')
       return
     }
-    if (!kcalValid) {
+    if (kcalNum === null || !kcalValid) {
       setError('kcal per gram must be between 0.01 and 10.')
       return
-    }
-    let packageSizeG: number | null = null
-    const packageText = packageSize.trim()
-    if (packageText !== '') {
-      const packageNum = Number(packageText)
-      if (!Number.isFinite(packageNum) || packageNum <= 0) {
-        setError('Package size must be a positive number of grams.')
-        return
-      }
-      packageSizeG = packageNum
     }
     setError(null)
     setSaving(true)
@@ -60,7 +47,6 @@ export function FoodForm({
       brand: trimmedBrand === '' ? null : trimmedBrand,
       type,
       kcalPerGram: kcalNum,
-      packageSizeG,
     }
     try {
       // 'confirmed' and 'queued' both count as success (offline-first).
@@ -82,7 +68,7 @@ export function FoodForm({
         e.preventDefault()
         void submit()
       }}
-      className="flex flex-col gap-3 rounded-squishy bg-coral-soft/40 p-3"
+      className="flex flex-col gap-3 rounded-xl border border-sand bg-cream p-3"
     >
       <label className="flex flex-col gap-1 text-sm font-semibold">
         Name
@@ -131,13 +117,10 @@ export function FoodForm({
       <label className="flex flex-col gap-1 text-sm font-semibold">
         kcal per gram
         <input
+          {...DECIMAL_INPUT_PROPS}
           data-testid="food-kcal-per-gram"
-          type="number"
-          inputMode="decimal"
-          step="0.01"
-          min={0.01}
-          max={10}
           value={kcalPerGram}
+          placeholder="e.g. 3,5"
           onChange={(e) => {
             setKcalPerGram(e.target.value)
           }}
@@ -147,25 +130,10 @@ export function FoodForm({
           Tip: labels often state kcal per 100 g — divide by 100
         </span>
         {kcalValid ? (
-          <span className="text-xs font-bold text-mint-deep">
+          <span className="text-xs font-semibold text-positive">
             ≈ {String(roundKcal(kcalNum * 100))} kcal per 100 g
           </span>
         ) : null}
-      </label>
-
-      <label className="flex flex-col gap-1 text-sm font-semibold">
-        Package size (g, optional)
-        <input
-          type="number"
-          inputMode="decimal"
-          min={1}
-          step="1"
-          value={packageSize}
-          onChange={(e) => {
-            setPackageSize(e.target.value)
-          }}
-          className={INPUT_CLASS}
-        />
       </label>
 
       {error === null ? null : (
@@ -179,15 +147,11 @@ export function FoodForm({
           type="submit"
           data-testid="food-save"
           disabled={saving}
-          className="flex-1 rounded-full bg-coral px-5 py-3 font-extrabold text-ink active:scale-95 disabled:opacity-60"
+          className="btn-primary flex-1"
         >
-          {existing ? 'Save changes' : 'Add food'} <span aria-hidden="true">🍽️</span>
+          {existing ? 'Save changes' : 'Add food'}
         </button>
-        <button
-          type="button"
-          onClick={onDone}
-          className="rounded-full bg-white px-5 py-3 font-bold text-ink-soft active:scale-95"
-        >
+        <button type="button" onClick={onDone} className="btn-secondary">
           Cancel
         </button>
       </div>

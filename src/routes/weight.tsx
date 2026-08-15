@@ -4,7 +4,6 @@ import { differenceInDays, format } from 'date-fns'
 import { useState } from 'react'
 import { ErrorCard } from '../components/ErrorCard'
 import { GrowthChart } from '../components/GrowthChart'
-import { StatCard } from '../components/StatCard'
 import { WeighForm } from '../components/WeighForm'
 import { useAuth } from '../lib/auth'
 import { roundKg } from '../lib/catmath'
@@ -23,12 +22,10 @@ function WeightPage() {
   const { user } = useAuth()
 
   return (
-    <main className="flex flex-col gap-4 p-4">
-      <h1 className="text-2xl font-extrabold">
-        Weight <span aria-hidden="true">⚖️</span>
-      </h1>
+    <main className="flex flex-col gap-7 p-4">
+      <h1 className="page-title">Weight</h1>
       {catsLoading ? (
-        <LoadingCard label="Fetching your cat…" />
+        <div className="h-24 animate-pulse rounded-squishy bg-sand" />
       ) : activeCat === null ? (
         <NoCatCard />
       ) : (
@@ -53,7 +50,7 @@ function WeightBody({
   useWeightsLive(hid, cat.id)
   const [deleteError, setDeleteError] = useState<string | null>(null)
 
-  if (weightsQuery.isLoading) return <LoadingCard label="Fetching weigh-ins…" />
+  if (weightsQuery.isLoading) return <div className="h-24 animate-pulse rounded-squishy bg-sand" />
   if (weightsQuery.isError) {
     return (
       <ErrorCard
@@ -76,9 +73,9 @@ function WeightBody({
 
   const nudge =
     latest === undefined
-      ? 'First weigh-in! Kittens should be weighed weekly.'
+      ? 'First weigh-in — kittens should be weighed weekly.'
       : differenceInDays(now, latest.date) > 7
-        ? 'Time for the weekly weigh-in!'
+        ? 'Time for the weekly weigh-in.'
         : null
 
   // Change since the previous weigh-in — shown raw, never extrapolated: with
@@ -101,73 +98,66 @@ function WeightBody({
 
   return (
     <>
-      {nudge === null ? null : (
-        <p className="rounded-squishy bg-butter p-3 text-sm font-semibold">
-          {nudge} <span aria-hidden="true">🐾</span>
+      {/* The one number this screen leads with. */}
+      <section className="flex flex-col gap-2">
+        <h2 className="section-label">Latest</h2>
+        <p className="flex items-baseline gap-2">
+          <span
+            data-testid="weight-latest"
+            className="text-5xl font-bold tracking-tight tabular-nums"
+          >
+            {latest === undefined ? '—' : `${roundKg(latest.weightKg).toFixed(2)} kg`}
+          </span>
         </p>
-      )}
+        <p className="text-sm text-ink-soft">
+          {latest === undefined ? (
+            'No weigh-ins yet'
+          ) : change === null ? (
+            format(latest.date, 'MMM d')
+          ) : (
+            <>
+              {format(latest.date, 'MMM d')} ·{' '}
+              <span
+                className={change.delta > 0 && isKitten ? 'font-semibold text-positive' : undefined}
+              >
+                {change.delta >= 0 ? '+' : ''}
+                {roundKg(change.delta).toFixed(2)} kg
+              </span>{' '}
+              since {change.sinceLabel}
+            </>
+          )}
+        </p>
+        {nudge === null ? null : <p className="text-sm text-coral-ink">{nudge}</p>}
+      </section>
 
-      <div className="grid grid-cols-2 gap-4">
-        <StatCard
-          label="Latest"
-          emoji="⚖️"
-          value={
-            <span data-testid="weight-latest">
-              {latest === undefined ? '—' : `${roundKg(latest.weightKg).toFixed(2)} kg`}
-            </span>
-          }
-          {...(latest !== undefined ? { sub: format(latest.date, 'MMM d') } : {})}
-        />
-        <StatCard
-          label="Change"
-          emoji="📈"
-          tone={change !== null && change.delta > 0 && isKitten ? 'mint' : 'plain'}
-          value={
-            change === null
-              ? '—'
-              : `${change.delta >= 0 ? '+' : ''}${roundKg(change.delta).toFixed(2)} kg`
-          }
-          {...(change !== null ? { sub: `since ${change.sinceLabel}` } : {})}
-        />
-      </div>
-
-      <section
-        data-testid="weight-chart"
-        className="flex flex-col gap-2 rounded-squishy bg-white p-4 shadow-squishy"
-      >
-        <h2 className="text-lg font-extrabold">
-          Growth <span aria-hidden="true">🌱</span>
-        </h2>
-        <GrowthChart cat={cat} entries={entries} />
+      <section data-testid="weight-chart" className="flex flex-col gap-3">
+        <h2 className="section-label">Growth</h2>
+        <div className="surface p-4">
+          <GrowthChart cat={cat} entries={entries} />
+        </div>
         <p className="text-xs text-ink-soft">Estimates only — always confirm with your vet.</p>
       </section>
 
       {canEdit && uid !== null ? (
-        <section className="flex flex-col gap-3 rounded-squishy bg-white p-4 shadow-squishy">
-          <h2 className="text-lg font-extrabold">
-            Add weigh-in <span aria-hidden="true">📝</span>
-          </h2>
-          <WeighForm hid={hid} catId={cat.id} uid={uid} />
+        <section className="flex flex-col gap-3">
+          <h2 className="section-label">Add weigh-in</h2>
+          <div className="surface p-4">
+            <WeighForm hid={hid} catId={cat.id} uid={uid} />
+          </div>
         </section>
       ) : null}
 
-      <section className="flex flex-col gap-2">
-        <h2 className="text-lg font-extrabold">
-          History <span aria-hidden="true">📜</span>
-        </h2>
+      <section className="flex flex-col gap-3">
+        <h2 className="section-label">History</h2>
         {deleteError === null ? null : (
           <p role="alert" className="text-sm font-semibold text-danger">
             {deleteError}
           </p>
         )}
         {entries.length === 0 ? (
-          <div className="rounded-squishy bg-white p-6 text-center shadow-squishy">
-            <p className="text-sm font-semibold text-ink-soft">
-              No weigh-ins yet — grab the kitchen scale! <span aria-hidden="true">🐾</span>
-            </p>
-          </div>
+          <p className="text-sm text-ink-soft">No weigh-ins yet.</p>
         ) : (
-          <ul className="flex flex-col gap-2">
+          <ul className="surface divide-y divide-sand">
             {[...entries].reverse().map((entry) => (
               <HistoryRow
                 key={entry.id}
@@ -197,57 +187,36 @@ function HistoryRow({
   onDelete: () => void
 }) {
   return (
-    <li className="flex items-center justify-between gap-3 rounded-squishy bg-white p-4 shadow-squishy">
-      <div className="flex min-w-0 flex-col gap-0.5">
-        <div className="flex flex-wrap items-baseline gap-2">
-          <span className="text-lg font-extrabold">{roundKg(entry.weightKg).toFixed(2)} kg</span>
-          {entry.bodyConditionScore === null ? null : (
-            <span className="rounded-full bg-peach px-2 py-0.5 text-xs font-bold text-ink">
-              BCS {entry.bodyConditionScore}/9
-            </span>
-          )}
-        </div>
+    <li className="flex items-center gap-3 px-4 py-3">
+      <span className="w-20 shrink-0 font-semibold tabular-nums">
+        {roundKg(entry.weightKg).toFixed(2)} kg
+      </span>
+      <span className="min-w-0 flex-1">
         <span className="text-sm text-ink-soft">{format(entry.date, 'MMM d, yyyy')}</span>
-        {entry.note === null ? null : <p className="text-sm break-words">{entry.note}</p>}
-      </div>
+        {entry.note === null ? null : (
+          <span className="block text-sm break-words text-ink-soft">{entry.note}</span>
+        )}
+      </span>
       {canEdit ? (
         <button
           type="button"
           aria-label="Delete weigh-in"
           onClick={onDelete}
-          className="shrink-0 rounded-full bg-coral-soft p-2 text-coral-ink active:scale-95"
+          className="-mr-1 shrink-0 px-1 text-lg leading-none text-ink-soft active:scale-95"
         >
-          <span aria-hidden="true">🗑️</span>
+          ×
         </button>
       ) : null}
     </li>
   )
 }
 
-function LoadingCard({ label }: { label: string }) {
-  return (
-    <div className="flex flex-col gap-3 rounded-squishy bg-white p-4 shadow-squishy">
-      <p className="text-sm font-semibold text-ink-soft">{label}</p>
-      <div className="h-4 w-2/3 animate-pulse rounded-full bg-coral-soft" />
-      <div className="h-4 w-1/2 animate-pulse rounded-full bg-coral-soft" />
-    </div>
-  )
-}
-
 function NoCatCard() {
   return (
-    <div className="flex flex-col items-center gap-3 rounded-squishy bg-white p-6 text-center shadow-squishy">
-      <span aria-hidden="true" className="text-4xl">
-        🐱
-      </span>
-      <p className="font-semibold">
-        Set up your cat’s profile first <span aria-hidden="true">🐾</span>
-      </p>
-      <Link
-        to="/profile"
-        className="rounded-full bg-coral px-5 py-2 font-extrabold text-ink active:scale-95"
-      >
-        Go to profile
+    <div className="surface flex flex-col items-start gap-3 p-5">
+      <p className="font-semibold">No cat set up yet.</p>
+      <Link to="/profile" className="btn-primary">
+        Add your cat
       </Link>
     </div>
   )

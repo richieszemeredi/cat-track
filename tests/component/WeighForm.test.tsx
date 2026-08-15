@@ -41,13 +41,12 @@ beforeEach(() => {
 })
 
 describe('WeighForm', () => {
-  it('saves a weigh-in with parsed kg, local date, BCS and note, then resets', async () => {
+  it('saves a weigh-in with parsed kg, local date and note, then resets', async () => {
     const user = userEvent.setup()
     renderForm()
 
     await user.type(screen.getByTestId('weight-kg'), '4.25')
     setDate('2026-02-14')
-    await user.selectOptions(screen.getByLabelText(/body condition score/i), '7')
     await user.type(screen.getByLabelText('Note (optional)'), 'after breakfast')
     await user.click(screen.getByTestId('weight-save'))
 
@@ -60,17 +59,34 @@ describe('WeighForm', () => {
     expect(catId).toBe('cat-9')
     expect(uid).toBe('user-1')
     expect(input.weightKg).toBe(4.25)
-    expect(input.bodyConditionScore).toBe(7)
     expect(input.note).toBe('after breakfast')
     // Must be the LOCAL Feb 14, not UTC midnight drifting a day.
     expectLocalDate(input.date, 2026, 1, 14)
 
-    expect(screen.getByTestId('weight-kg')).toHaveValue(null)
+    expect(screen.getByTestId('weight-kg')).toHaveValue('')
     expect(screen.getByLabelText('Note (optional)')).toHaveValue('')
-    expect(screen.getByLabelText(/body condition score/i)).toHaveValue('')
   })
 
-  it('sends null bodyConditionScore and null note when left empty', async () => {
+  // The whole reason the field is type="text": an <input type="number"> hands
+  // back an empty string for "4,25", so the iOS keypad's comma silently ate
+  // every decimal weight.
+  it.each([
+    ['4,25', 4.25],
+    ['4.25', 4.25],
+    [' 2,4 ', 2.4],
+  ])('accepts %s as %s kg', async (typed, expected) => {
+    const user = userEvent.setup()
+    renderForm()
+
+    await user.type(screen.getByTestId('weight-kg'), typed)
+    await user.click(screen.getByTestId('weight-save'))
+
+    await screen.findByText(/saved!/i)
+    const [, , , input] = firstWeightCall()
+    expect(input.weightKg).toBe(expected)
+  })
+
+  it('sends a null note when left empty', async () => {
     const user = userEvent.setup()
     renderForm()
 
@@ -82,12 +98,17 @@ describe('WeighForm', () => {
 
     const [, , , input] = firstWeightCall()
     expect(input.weightKg).toBe(3.75)
-    expect(input.bodyConditionScore).toBeNull()
     expect(input.note).toBeNull()
     expectLocalDate(input.date, 2026, 5, 30)
   })
 
-  it.each(['45', '0.01'])('blocks an out-of-range weight of %s kg', (weight) => {
+  it('no longer offers a body condition score', () => {
+    renderForm()
+
+    expect(screen.queryByLabelText(/body condition/i)).not.toBeInTheDocument()
+  })
+
+  it.each(['45', '0.01', 'heavy', '1,2,3'])('blocks an invalid weight of %s', (weight) => {
     const { container } = renderForm()
 
     fireEvent.change(screen.getByTestId('weight-kg'), { target: { value: weight } })
@@ -121,6 +142,6 @@ describe('WeighForm', () => {
     expect(alert).toHaveTextContent('paws offline')
     expect(screen.queryByText(/saved!/i)).not.toBeInTheDocument()
     expect(screen.getByTestId('weight-save')).toBeEnabled()
-    expect(screen.getByTestId('weight-kg')).toHaveValue(4.2)
+    expect(screen.getByTestId('weight-kg')).toHaveValue('4.2')
   })
 })

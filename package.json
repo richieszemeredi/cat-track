@@ -14,6 +14,7 @@
     "test:watch": "vitest",
     "test:rules": "firebase emulators:exec --only firestore --project demo-cattrack \"vitest run --config vitest.rules.config.ts\"",
     "test:e2e": "firebase emulators:exec --only auth,firestore --project demo-cattrack \"playwright test\"",
+    "test:visual": "firebase emulators:exec --only auth,firestore --project demo-cattrack \"playwright test layout.spec.ts\"",
     "prepare": "husky",
     "build:emu": "VITE_USE_EMULATORS=true vite build"
   },

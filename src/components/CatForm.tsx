@@ -2,9 +2,10 @@ import { format, isValid, parse } from 'date-fns'
 import { useState, type SubmitEvent } from 'react'
 import { LIFE_STAGE_LABELS, LIFE_STAGES } from '../lib/catmath'
 import { awaitOrQueued, createCat, updateCat, type Cat, type CatInput } from '../lib/db'
+import { DECIMAL_INPUT_PROPS, parseDecimal } from '../lib/numbers'
 import { lifeStageSchema, sexSchema, type LifeStage, type Sex } from '../lib/schemas'
 
-const FIELD = 'mt-1 w-full rounded-xl border border-coral-soft bg-white px-3 py-2'
+const FIELD = 'field mt-1'
 
 /**
  * Create/edit form for the cat profile. Create mode when `existing` is
@@ -73,13 +74,14 @@ export function CatForm({
       }
       parsedNeuter = candidate
     }
-    const ideal = idealWeight.trim() === '' ? null : Number.parseFloat(idealWeight)
-    if (ideal !== null && (!Number.isFinite(ideal) || ideal < 0.1 || ideal > 30)) {
+    // parseDecimal: the iOS keypad offers a comma, which parseFloat truncates.
+    const ideal = idealWeight.trim() === '' ? null : parseDecimal(idealWeight)
+    if (idealWeight.trim() !== '' && (ideal === null || ideal < 0.1 || ideal > 30)) {
       setError('Ideal weight should be between 0.1 and 30 kg.')
       return
     }
-    const merValue = merOverride.trim() === '' ? null : Number.parseFloat(merOverride)
-    if (merValue !== null && (!Number.isFinite(merValue) || merValue < 0.1 || merValue > 5)) {
+    const merValue = merOverride.trim() === '' ? null : parseDecimal(merOverride)
+    if (merOverride.trim() !== '' && (merValue === null || merValue < 0.1 || merValue > 5)) {
       setError('The MER multiplier should be between 0.1 and 5.')
       return
     }
@@ -215,20 +217,16 @@ export function CatForm({
         </label>
       ) : null}
 
-      <details className="rounded-xl border border-coral-soft bg-white p-3">
-        <summary className="cursor-pointer font-semibold text-ink-soft">
+      <details className="rounded-xl border border-sand bg-cream p-3">
+        <summary className="cursor-pointer text-sm font-semibold text-ink-soft">
           Advanced (vet settings)
         </summary>
         <div className="mt-3 flex flex-col gap-3">
           <label className="font-semibold">
             Ideal weight (kg) <span className="font-normal text-ink-soft">(optional)</span>
             <input
-              type="number"
+              {...DECIMAL_INPUT_PROPS}
               value={idealWeight}
-              min={0.1}
-              max={30}
-              step={0.1}
-              inputMode="decimal"
               onChange={(event) => {
                 setIdealWeight(event.target.value)
               }}
@@ -258,12 +256,8 @@ export function CatForm({
           <label className="font-semibold">
             MER multiplier override <span className="font-normal text-ink-soft">(optional)</span>
             <input
-              type="number"
+              {...DECIMAL_INPUT_PROPS}
               value={merOverride}
-              min={0.1}
-              max={5}
-              step={0.1}
-              inputMode="decimal"
               onChange={(event) => {
                 setMerOverride(event.target.value)
               }}
@@ -275,16 +269,11 @@ export function CatForm({
         </div>
       </details>
 
-      <button
-        type="submit"
-        disabled={busy}
-        data-testid="cat-save"
-        className="rounded-full bg-coral px-6 py-3 font-extrabold text-ink shadow-squishy active:scale-95 disabled:opacity-60"
-      >
-        Save profile <span aria-hidden="true">💾</span>
+      <button type="submit" disabled={busy} data-testid="cat-save" className="btn-primary">
+        Save profile
       </button>
 
-      {flash === null ? null : <p className="text-sm font-semibold text-mint-deep">{flash}</p>}
+      {flash === null ? null : <p className="text-sm font-semibold text-positive">{flash}</p>}
       {error === null ? null : (
         <p role="alert" className="text-sm font-semibold text-danger">
           {error}

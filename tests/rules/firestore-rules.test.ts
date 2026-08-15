@@ -88,7 +88,6 @@ function weight(createdBy: string) {
   return {
     date: ENTRY_DATE,
     weightKg: 1.2,
-    bodyConditionScore: null,
     note: null,
     createdBy,
     createdAt: CREATED_AT,
@@ -101,7 +100,6 @@ function food(createdBy: string) {
     brand: null,
     type: 'dry',
     kcalPerGram: 3.8,
-    packageSizeG: null,
     archived: false,
     createdBy,
     createdAt: CREATED_AT,
@@ -115,7 +113,6 @@ function feeding(createdBy: string) {
     foodNameSnapshot: 'Dry chow',
     amountG: 40,
     kcal: 152,
-    mealType: null,
     note: null,
     createdBy,
     createdAt: CREATED_AT,
@@ -396,9 +393,9 @@ describe('weights', () => {
     )
   })
 
-  it('denies bodyConditionScore outside 1-9', async () => {
+  it('denies a retired bodyConditionScore field', async () => {
     await assertFails(
-      addDoc(collection(authedDb('bob'), weights), { ...weight('bob'), bodyConditionScore: 10 }),
+      addDoc(collection(authedDb('bob'), weights), { ...weight('bob'), bodyConditionScore: 5 }),
     )
   })
 
@@ -445,9 +442,9 @@ describe('foods', () => {
     )
   })
 
-  it('denies a non-numeric packageSizeG', async () => {
+  it('denies a retired packageSizeG field', async () => {
     await assertFails(
-      addDoc(collection(authedDb('bob'), foods), { ...food('bob'), packageSizeG: 'big bag' }),
+      addDoc(collection(authedDb('bob'), foods), { ...food('bob'), packageSizeG: 2000 }),
     )
   })
 
@@ -510,6 +507,29 @@ describe('feedings', () => {
     await assertFails(
       addDoc(collection(authedDb('bob'), feedings), { ...feeding('bob'), foodNameSnapshot: '' }),
     )
+  })
+
+  it('denies a retired mealType field', async () => {
+    await assertFails(
+      addDoc(collection(authedDb('bob'), feedings), { ...feeding('bob'), mealType: 'breakfast' }),
+    )
+  })
+
+  it('allows a batch of feedings (repeat a previous day)', async () => {
+    // One instance: writeBatch rejects refs from a different Firestore.
+    const bobDb = authedDb('bob')
+    const batch = writeBatch(bobDb)
+    batch.set(doc(collection(bobDb, feedings)), feeding('bob'))
+    batch.set(doc(collection(bobDb, feedings)), feeding('bob'))
+    await assertSucceeds(batch.commit())
+  })
+
+  it('denies a batch where one feeding is invalid', async () => {
+    const bobDb = authedDb('bob')
+    const batch = writeBatch(bobDb)
+    batch.set(doc(collection(bobDb, feedings)), feeding('bob'))
+    batch.set(doc(collection(bobDb, feedings)), { ...feeding('bob'), amountG: 900 })
+    await assertFails(batch.commit())
   })
 
   it('denies createdBy that is not the caller', async () => {

@@ -58,7 +58,6 @@ describe('FoodForm', () => {
     await user.type(screen.getByLabelText('Brand (optional)'), '  Purina  ')
     await user.selectOptions(screen.getByTestId('food-type'), 'wet')
     await user.type(screen.getByTestId('food-kcal-per-gram'), '1.25')
-    await user.type(screen.getByLabelText('Package size (g, optional)'), '85')
     await user.click(screen.getByTestId('food-save'))
 
     await waitFor(() => {
@@ -77,11 +76,32 @@ describe('FoodForm', () => {
       brand: 'Purina',
       type: 'wet',
       kcalPerGram: 1.25,
-      packageSizeG: 85,
     })
   })
 
-  it('sends null brand and null package size when left empty', async () => {
+  it('reads a comma decimal from the iOS keypad', async () => {
+    const user = userEvent.setup()
+    renderForm()
+
+    await user.type(screen.getByTestId('food-name'), 'Comma Chow')
+    await user.type(screen.getByTestId('food-kcal-per-gram'), '3,87')
+    expect(screen.getByText('≈ 387 kcal per 100 g')).toBeInTheDocument()
+    await user.click(screen.getByTestId('food-save'))
+
+    await waitFor(() => {
+      expect(addFoodMock).toHaveBeenCalledTimes(1)
+    })
+    const [, , , input] = firstAddFoodCall()
+    expect(input.kcalPerGram).toBe(3.87)
+  })
+
+  it('no longer asks for a package size', () => {
+    renderForm()
+
+    expect(screen.queryByLabelText(/package size/i)).not.toBeInTheDocument()
+  })
+
+  it('sends a null brand when left empty', async () => {
     const user = userEvent.setup()
     renderForm()
 
@@ -94,7 +114,6 @@ describe('FoodForm', () => {
     })
     const [, , , input] = firstAddFoodCall()
     expect(input.brand).toBeNull()
-    expect(input.packageSizeG).toBeNull()
     expect(input.type).toBe('dry')
   })
 
@@ -141,21 +160,6 @@ describe('FoodForm', () => {
     expect(addFoodMock).not.toHaveBeenCalled()
   })
 
-  it('rejects a non-positive package size', async () => {
-    const user = userEvent.setup()
-    renderForm()
-
-    await user.type(screen.getByTestId('food-name'), 'Odd Bag')
-    await user.type(screen.getByTestId('food-kcal-per-gram'), '3.5')
-    await user.type(screen.getByLabelText('Package size (g, optional)'), '-5')
-    await user.click(screen.getByTestId('food-save'))
-
-    expect(await screen.findByRole('alert')).toHaveTextContent(
-      'Package size must be a positive number of grams.',
-    )
-    expect(addFoodMock).not.toHaveBeenCalled()
-  })
-
   it('prefills from the existing food and updates it in edit mode', async () => {
     const user = userEvent.setup()
     const existing = makeFood({
@@ -164,15 +168,13 @@ describe('FoodForm', () => {
       brand: 'Acme',
       type: 'dry',
       kcalPerGram: 3.5,
-      packageSizeG: 2000,
     })
     const { onDone } = renderForm({ existing })
 
     expect(screen.getByTestId('food-name')).toHaveValue('Old Kibble')
     expect(screen.getByLabelText('Brand (optional)')).toHaveValue('Acme')
     expect(screen.getByTestId('food-type')).toHaveValue('dry')
-    expect(screen.getByTestId('food-kcal-per-gram')).toHaveValue(3.5)
-    expect(screen.getByLabelText('Package size (g, optional)')).toHaveValue(2000)
+    expect(screen.getByTestId('food-kcal-per-gram')).toHaveValue('3.5')
 
     const kcalInput = screen.getByTestId('food-kcal-per-gram')
     await user.clear(kcalInput)
@@ -193,7 +195,6 @@ describe('FoodForm', () => {
       brand: 'Acme',
       type: 'dry',
       kcalPerGram: 4.1,
-      packageSizeG: 2000,
     })
   })
 

@@ -1,34 +1,34 @@
 import { type ReactNode } from 'react'
 
-const TONES = {
-  plain: 'bg-white',
-  coral: 'bg-coral-soft',
-  mint: 'bg-mint-soft',
-  butter: 'bg-butter/60',
-} as const
-
-export type StatTone = keyof typeof TONES
+/**
+ * A labelled figure. Deliberately NOT a card: stats sit side by side inside
+ * one surface, separated by a hairline, so a screen reads as a page rather
+ * than a stack of identical tiles.
+ *
+ * `tone` colours the value text only — the palette keeps green and red for
+ * meaning, never for decoration.
+ */
+export type StatTone = 'plain' | 'positive'
 
 export function StatCard({
   label,
   value,
   sub,
-  emoji,
   tone = 'plain',
 }: {
   label: string
   value: ReactNode
   sub?: ReactNode
-  emoji?: string
   tone?: StatTone
 }) {
   return (
-    <div className={`flex flex-col gap-1 rounded-squishy p-4 shadow-squishy ${TONES[tone]}`}>
-      <div className="flex items-center gap-1.5 text-sm font-semibold text-ink-soft">
-        {emoji === undefined ? null : <span aria-hidden="true">{emoji}</span>}
-        {label}
+    <div className="flex flex-col gap-0.5">
+      <div className="section-label">{label}</div>
+      <div
+        className={`text-2xl font-bold tabular-nums ${tone === 'positive' ? 'text-positive' : 'text-ink'}`}
+      >
+        {value}
       </div>
-      <div className="text-3xl font-extrabold text-ink">{value}</div>
       {sub === undefined ? null : <div className="text-sm text-ink-soft">{sub}</div>}
     </div>
   )
