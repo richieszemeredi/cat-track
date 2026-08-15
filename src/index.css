@@ -49,12 +49,42 @@
   textarea {
     font-size: max(1rem, 1em);
   }
+
+  /* iOS Safari sizes date/time inputs from their native picker content and
+     ignores width:100%, so on a real iPhone they punched out through the
+     right edge of their card (Playwright's WebKit sizes them correctly, so
+     the layout suite cannot see this one — verify on a phone). Dropping the
+     native appearance makes them size and align like every other field. */
+  input[type='date'],
+  input[type='time'] {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 100%;
+    min-width: 0;
+    max-width: 100%;
+    text-align: left;
+  }
+
+  /* Same family of bug: a select's intrinsic width is its widest option, and
+     food names are long. */
+  select {
+    min-width: 0;
+    max-width: 100%;
+  }
 }
 
-/* The whole visual language is these seven classes. Keeping them here rather
-   than repeating class strings per component is what stops the UI drifting
-   into a different shade of white card on every screen. */
+/* The whole visual language is these classes. Keeping them here rather than
+   repeating class strings per component is what stops the UI drifting into a
+   different shade of white card on every screen. */
 @layer components {
+  /* Text sits one card-padding further in than the cards do, so labels and
+     loose copy line up with the text INSIDE cards (page edge -> 16px card
+     inset -> 16px card padding -> 32px text). Without it the page has a
+     ragged left edge: every label at 16px, every card's text at 32px. */
+  .gutter {
+    @apply px-4;
+  }
+
   .page-title {
     @apply text-3xl font-bold tracking-tight;
   }
@@ -86,9 +116,23 @@
     @apply active:scale-[0.98] disabled:opacity-60;
   }
 
-  /* Small inline action inside a list row. */
+  /* Small inline action inside a list row. min-h keeps it a thumb-sized
+     target rather than a 32px sliver. */
   .btn-chip {
-    @apply rounded-full border border-sand-deep bg-surface px-3 py-1.5 text-sm font-semibold text-ink;
-    @apply active:scale-[0.98] disabled:opacity-60;
+    @apply flex min-h-10 items-center rounded-full border border-sand-deep bg-surface px-3 py-2;
+    @apply text-sm font-semibold text-ink active:scale-[0.98] disabled:opacity-60;
+  }
+
+  /* A <details> header. Padded so the whole row is a thumb target rather
+     than a 20px line of text. */
+  .disclosure {
+    @apply flex min-h-12 cursor-pointer items-center text-sm font-semibold;
+  }
+
+  /* Destructive row action (the x). The negative margin keeps a 44px touch
+     target from inflating the row it lives in. */
+  .btn-icon {
+    @apply -my-2 -mr-2 flex h-11 w-11 shrink-0 items-center justify-center rounded-full;
+    @apply text-xl leading-none text-ink-soft active:scale-95;
   }
 }

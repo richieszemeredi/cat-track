@@ -124,24 +124,27 @@ export function LogMealForm({
         </select>
       </label>
 
-      <div className="flex items-end gap-3">
-        <label className="flex flex-1 flex-col gap-1 text-sm font-semibold">
-          Amount (g)
-          <input
-            {...DECIMAL_INPUT_PROPS}
-            data-testid="meal-grams"
-            value={grams}
-            placeholder="e.g. 40"
-            onChange={(e) => {
-              setGrams(e.target.value)
-            }}
-            className={INPUT_CLASS}
-          />
-        </label>
-        <p data-testid="meal-kcal-preview" className="pb-2 text-sm font-bold text-ink-soft">
+      {/* The preview sits under the field as helper text. Beside it, the
+          amount input was the one control on the page at a different width. */}
+      <label className="flex flex-col gap-1 text-sm font-semibold">
+        Amount (g)
+        <input
+          {...DECIMAL_INPUT_PROPS}
+          data-testid="meal-grams"
+          value={grams}
+          placeholder="e.g. 40"
+          onChange={(e) => {
+            setGrams(e.target.value)
+          }}
+          className={INPUT_CLASS}
+        />
+        <span
+          data-testid="meal-kcal-preview"
+          className={`text-xs font-normal ${previewKcal === null ? 'text-ink-soft' : 'font-semibold text-positive'}`}
+        >
           {previewKcal === null ? '— kcal' : `≈ ${String(previewKcal)} kcal`}
-        </p>
-      </div>
+        </span>
+      </label>
 
       <label className="flex flex-col gap-1 text-sm font-semibold">
         Time

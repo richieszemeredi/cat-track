@@ -27,7 +27,7 @@ function HomePage() {
   if (catsLoading) {
     return (
       <main className="flex flex-col gap-6 p-4">
-        <h1 className="page-title">Home</h1>
+        <h1 className="page-title gutter">Home</h1>
         <div className="h-24 animate-pulse rounded-squishy bg-sand" />
       </main>
     )
@@ -36,7 +36,7 @@ function HomePage() {
   if (activeCat === null) {
     return (
       <main className="flex flex-col gap-6 p-4">
-        <h1 className="page-title">Home</h1>
+        <h1 className="page-title gutter">Home</h1>
         <div className="surface flex flex-col items-start gap-3 p-5">
           <p className="font-semibold">No cat set up yet.</p>
           <Link to="/profile" className="btn-primary">
@@ -89,7 +89,7 @@ function Dashboard({ cat }: { cat: Cat }) {
 
   return (
     <main className="flex flex-col gap-7 p-4">
-      <header>
+      <header className="gutter">
         <h1 className="page-title">{cat.name}</h1>
         <p className="text-sm text-ink-soft">{ageLabelLong(cat.birthDate, now)}</p>
       </header>
@@ -97,13 +97,13 @@ function Dashboard({ cat }: { cat: Cat }) {
       {statsLoading ? (
         <div className="h-24 animate-pulse rounded-squishy bg-sand" />
       ) : statsError !== null ? (
-        <p role="alert" className="text-sm font-semibold text-danger">
+        <p role="alert" className="gutter text-sm font-semibold text-danger">
           Couldn&apos;t load today&apos;s numbers. {statsError.message}
         </p>
       ) : (
         <>
           {/* The one number this screen exists to show. */}
-          <section className="flex flex-col gap-3">
+          <section className="gutter flex flex-col gap-3">
             <h2 className="section-label">Eaten today</h2>
             <p className="flex items-baseline gap-2">
               <span
@@ -161,15 +161,15 @@ function Dashboard({ cat }: { cat: Cat }) {
       )}
 
       <section className="flex flex-col gap-3">
-        <h2 className="section-label">Today&apos;s meals</h2>
+        <h2 className="section-label gutter">Today&apos;s meals</h2>
         {feedingsQuery.isLoading ? (
           <div className="h-16 animate-pulse rounded-squishy bg-sand" />
         ) : feedingsQuery.error !== null ? (
-          <p role="alert" className="text-sm font-semibold text-danger">
+          <p role="alert" className="gutter text-sm font-semibold text-danger">
             Couldn&apos;t load today&apos;s meals. {feedingsQuery.error.message}
           </p>
         ) : feedings.length === 0 ? (
-          <p className="text-sm text-ink-soft">Nothing logged yet today.</p>
+          <p className="gutter text-sm text-ink-soft">Nothing logged yet today.</p>
         ) : (
           <ul className="surface divide-y divide-sand">
             {feedings.map((feeding) => (
@@ -200,7 +200,7 @@ function Dashboard({ cat }: { cat: Cat }) {
         </div>
       )}
 
-      <p className="text-xs text-ink-soft">Estimates only — always confirm with your vet.</p>
+      <p className="gutter text-xs text-ink-soft">Estimates only — always confirm with your vet.</p>
     </main>
   )
 }

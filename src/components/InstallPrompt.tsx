@@ -23,7 +23,7 @@ export function InstallPrompt() {
         <button
           type="button"
           aria-label="Dismiss install tip"
-          className="-mt-1 px-1 text-lg leading-none text-ink-soft"
+          className="btn-icon -mt-1"
           onClick={() => {
             localStorage.setItem(DISMISS_KEY, 'true')
             setDismissed(true)

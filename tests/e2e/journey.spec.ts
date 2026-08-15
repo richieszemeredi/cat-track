@@ -10,15 +10,17 @@ import { daysAgoISO, tabBar, WAIT } from './seed'
  * emulator never collide with an earlier user.
  */
 
-const RUN_ID = String(Date.now())
-const EMAIL = `journey-${RUN_ID}@example.com`
 const PASSWORD = 'password123'
 
 // ~3 months ago — always a valid past date (kitten life stage) regardless of
 // month boundaries.
 const CAT_BIRTH_DATE = daysAgoISO(90)
 
-test('full household journey', async ({ page, context }) => {
+test('full household journey', async ({ page, context }, testInfo) => {
+  // Unique per project as well as per run: the journey runs on both the
+  // WebKit and the Chromium project, in parallel, against one emulator.
+  const EMAIL = `journey-${testInfo.project.name}-${String(Date.now())}@example.com`
+
   // Sign-in, household, cat, food, meals, weight and the offline round-trip
   // all run in one flow; give it room beyond the 60s default.
   test.setTimeout(240_000)
@@ -44,7 +46,7 @@ test('full household journey', async ({ page, context }) => {
   await page.getByTestId('cat-sex').selectOption('female')
   // neutered stays unchecked
   await page.getByTestId('cat-save').click()
-  // The saved cat renders as the profile card heading ("🐾 Mochi").
+  // The saved cat renders as the profile card heading.
   await expect(page.getByRole('heading', { name: 'Mochi' })).toBeVisible(WAIT)
 
   // ---- d. add a food, log a meal ----
@@ -56,7 +58,7 @@ test('full household journey', async ({ page, context }) => {
   await page.getByTestId('food-kcal-per-gram').fill('3.5')
   await page.getByTestId('food-save').click()
 
-  // Catalog row: "{name} {badge}" plus the energy line "3.5 kcal/g · 350 kcal / 100 g".
+  // Catalog row: the name, then the energy line "3.5 kcal/g · 350 kcal / 100 g".
   // Scoped to the list item: a bare getByText would also match the meal form's
   // <option>, which Playwright treats as hidden.
   await expect(page.getByRole('listitem').filter({ hasText: 'Test Kibble' })).toBeVisible(WAIT)

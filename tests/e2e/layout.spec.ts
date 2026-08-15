@@ -26,6 +26,9 @@ interface DomRect {
 interface DomElement {
   tagName: string
   className: unknown
+  textContent: string | null
+  getAttribute: (name: string) => string | null
+  closest: (selector: string) => DomElement | null
   getBoundingClientRect: () => DomRect
 }
 
@@ -51,6 +54,99 @@ async function overflowingElements(page: Page): Promise<string[]> {
     }
     // Nested offenders repeat the same root cause; the first few are enough.
     return offenders.slice(0, 5)
+  })
+}
+
+/**
+ * Controls that escape the card they sit in. The viewport check alone missed
+ * this: a time input punched through the right edge of its card on a real
+ * iPhone while still being well inside the screen.
+ */
+async function controlsOutsideTheirCard(page: Page): Promise<string[]> {
+  return page.evaluate(() => {
+    const g = globalThis as unknown as {
+      document: { querySelectorAll: (selector: string) => Iterable<DomElement> }
+    }
+    const out: string[] = []
+    for (const el of g.document.querySelectorAll('input, select, textarea, button')) {
+      const card = el.closest('.surface')
+      if (card === null) continue
+      const r = el.getBoundingClientRect()
+      if (r.width === 0 && r.height === 0) continue
+      const c = card.getBoundingClientRect()
+      if (r.right > c.right + 1 || r.left < c.left - 1) {
+        out.push(
+          `${el.tagName.toLowerCase()}[${el.getAttribute('type') ?? '-'}] ` +
+            `${String(Math.round(r.left))}..${String(Math.round(r.right))} ` +
+            `escapes card ${String(Math.round(c.left))}..${String(Math.round(c.right))}`,
+        )
+      }
+    }
+    return out.slice(0, 5)
+  })
+}
+
+/** Interactive elements too small to hit reliably with a thumb. */
+async function smallTouchTargets(page: Page): Promise<string[]> {
+  return page.evaluate(() => {
+    const MIN = 36
+    const g = globalThis as unknown as {
+      document: { querySelectorAll: (selector: string) => Iterable<DomElement> }
+    }
+    const out: string[] = []
+    for (const el of g.document.querySelectorAll('button, a[href], summary')) {
+      const r = el.getBoundingClientRect()
+      if (r.width === 0 && r.height === 0) continue
+      if (r.height < MIN || r.width < MIN) {
+        out.push(
+          `${el.tagName.toLowerCase()} "${(el.textContent ?? '').trim().slice(0, 24)}" ` +
+            `${String(Math.round(r.width))}x${String(Math.round(r.height))}`,
+        )
+      }
+    }
+    return out.slice(0, 6)
+  })
+}
+
+/**
+ * One text column. `.gutter` elements sit exactly one card-padding inside the
+ * cards, so page labels line up with the text inside cards instead of leaving
+ * a ragged left edge down the screen.
+ */
+async function textColumnMisalignments(page: Page): Promise<string[]> {
+  return page.evaluate(() => {
+    const CARD_PADDING = 16
+    const g = globalThis as unknown as {
+      document: { querySelectorAll: (selector: string) => Iterable<DomElement> }
+    }
+    // getBoundingClientRect().left is the BORDER edge; the gutter's indent is
+    // padding, which lives inside it. Measure where the text actually starts.
+    const gg = globalThis as unknown as {
+      getComputedStyle: (el: DomElement) => { paddingLeft: string }
+    }
+    const lefts = (selector: string, withPadding: boolean) => {
+      const values = new Set<number>()
+      for (const el of g.document.querySelectorAll(selector)) {
+        const r = el.getBoundingClientRect()
+        if (r.width === 0 && r.height === 0) continue
+        const pad = withPadding ? parseFloat(gg.getComputedStyle(el).paddingLeft) : 0
+        values.add(Math.round(r.left + pad))
+      }
+      return [...values]
+    }
+    const gutters = lefts('.gutter', true)
+    const cards = lefts('.surface', false)
+    const out: string[] = []
+    if (gutters.length > 1) out.push(`.gutter text at several x: ${gutters.join(', ')}`)
+    if (cards.length > 1) out.push(`.surface elements at several x: ${cards.join(', ')}`)
+    const gutter = gutters[0]
+    const card = cards[0]
+    if (gutter !== undefined && card !== undefined && gutter - card !== CARD_PADDING) {
+      out.push(
+        `gutter x=${String(gutter)} is not ${String(CARD_PADDING)}px inside card x=${String(card)}`,
+      )
+    }
+    return out
   })
 }
 
@@ -92,6 +188,9 @@ test('every screen fits the viewport without sideways scroll', async ({
 
     expect(await overflowingElements(page), `${name} has elements past the viewport`).toEqual([])
     expect(await documentScrollsSideways(page), `${name} scrolls sideways`).toBe(false)
+    expect(await controlsOutsideTheirCard(page), `${name} has controls escaping a card`).toEqual([])
+    expect(await smallTouchTargets(page), `${name} has under-sized tap targets`).toEqual([])
+    expect(await textColumnMisalignments(page), `${name} has a ragged text column`).toEqual([])
   }
 })
 
@@ -111,10 +210,10 @@ test('the weigh-in form fields each get a full-width row', async ({ page }, test
 
   // Stacked, not side by side: the date row starts below the weight row.
   expect(dateBox.y).toBeGreaterThan(weightBox.y + weightBox.height - 1)
-  // Neither field is squeezed into an unusable sliver.
-  const viewport = page.viewportSize()
-  expect(weightBox.width).toBeGreaterThan((viewport?.width ?? 0) * 0.6)
-  expect(dateBox.width).toBeGreaterThan((viewport?.width ?? 0) * 0.6)
+  // Both fields span the same full row. Compared to each other rather than to
+  // the viewport: on the desktop the app is a fixed-width column.
+  expect(Math.abs(weightBox.width - dateBox.width)).toBeLessThanOrEqual(1)
+  expect(weightBox.width).toBeGreaterThan(200)
 })
 
 test('the repeat-a-day card offers yesterday and copies it onto today', async ({

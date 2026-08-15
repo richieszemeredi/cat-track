@@ -217,11 +217,9 @@ export function CatForm({
         </label>
       ) : null}
 
-      <details className="rounded-xl border border-sand bg-cream p-3">
-        <summary className="cursor-pointer text-sm font-semibold text-ink-soft">
-          Advanced (vet settings)
-        </summary>
-        <div className="mt-3 flex flex-col gap-3">
+      <details className="rounded-xl border border-sand bg-cream px-3">
+        <summary className="disclosure text-ink-soft">Advanced (vet settings)</summary>
+        <div className="flex flex-col gap-3 pb-3">
           <label className="font-semibold">
             Ideal weight (kg) <span className="font-normal text-ink-soft">(optional)</span>
             <input

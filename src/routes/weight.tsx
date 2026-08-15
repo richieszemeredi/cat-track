@@ -23,7 +23,7 @@ function WeightPage() {
 
   return (
     <main className="flex flex-col gap-7 p-4">
-      <h1 className="page-title">Weight</h1>
+      <h1 className="page-title gutter">Weight</h1>
       {catsLoading ? (
         <div className="h-24 animate-pulse rounded-squishy bg-sand" />
       ) : activeCat === null ? (
@@ -99,7 +99,7 @@ function WeightBody({
   return (
     <>
       {/* The one number this screen leads with. */}
-      <section className="flex flex-col gap-2">
+      <section className="gutter flex flex-col gap-2">
         <h2 className="section-label">Latest</h2>
         <p className="flex items-baseline gap-2">
           <span
@@ -131,16 +131,18 @@ function WeightBody({
       </section>
 
       <section data-testid="weight-chart" className="flex flex-col gap-3">
-        <h2 className="section-label">Growth</h2>
+        <h2 className="section-label gutter">Growth</h2>
         <div className="surface p-4">
           <GrowthChart cat={cat} entries={entries} />
         </div>
-        <p className="text-xs text-ink-soft">Estimates only — always confirm with your vet.</p>
+        <p className="gutter text-xs text-ink-soft">
+          Estimates only — always confirm with your vet.
+        </p>
       </section>
 
       {canEdit && uid !== null ? (
         <section className="flex flex-col gap-3">
-          <h2 className="section-label">Add weigh-in</h2>
+          <h2 className="section-label gutter">Add weigh-in</h2>
           <div className="surface p-4">
             <WeighForm hid={hid} catId={cat.id} uid={uid} />
           </div>
@@ -148,14 +150,14 @@ function WeightBody({
       ) : null}
 
       <section className="flex flex-col gap-3">
-        <h2 className="section-label">History</h2>
+        <h2 className="section-label gutter">History</h2>
         {deleteError === null ? null : (
-          <p role="alert" className="text-sm font-semibold text-danger">
+          <p role="alert" className="gutter text-sm font-semibold text-danger">
             {deleteError}
           </p>
         )}
         {entries.length === 0 ? (
-          <p className="text-sm text-ink-soft">No weigh-ins yet.</p>
+          <p className="gutter text-sm text-ink-soft">No weigh-ins yet.</p>
         ) : (
           <ul className="surface divide-y divide-sand">
             {[...entries].reverse().map((entry) => (
@@ -198,12 +200,7 @@ function HistoryRow({
         )}
       </span>
       {canEdit ? (
-        <button
-          type="button"
-          aria-label="Delete weigh-in"
-          onClick={onDelete}
-          className="-mr-1 shrink-0 px-1 text-lg leading-none text-ink-soft active:scale-95"
-        >
+        <button type="button" aria-label="Delete weigh-in" onClick={onDelete} className="btn-icon">
           ×
         </button>
       ) : null}

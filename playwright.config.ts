@@ -1,8 +1,18 @@
 import { defineConfig, devices } from '@playwright/test'
 
-// E2E + visual flows on the two phones this household actually uses. Run only
-// via `npm run test:e2e` (everything) or `npm run test:visual` (layout only),
-// both of which wrap this in `firebase emulators:exec`.
+// The app is opened in two places: Safari on the household's iPhones, and
+// Chrome on a desktop. Both engines are covered here — Playwright's `iPhone`
+// devices are WebKit, `Desktop Chrome`/`Pixel 7` are Chromium.
+//
+// Caveat worth knowing: Playwright's WebKit is NOT iOS Safari. It sizes
+// `input[type=date|time]` correctly where a real iPhone does not, so form
+// controls that fit here can still punch out of their card on the phone.
+// Layout findings from a real device belong in tests/e2e/layout.spec.ts as
+// explicit assertions, not as trust in the emulated engine.
+//
+// Run everything: `npm run test:e2e`. Layout pass only: `npm run test:visual`.
+const LAYOUT_ONLY = /layout\.spec\.ts/
+
 export default defineConfig({
   testDir: 'tests/e2e',
   timeout: 60_000,
@@ -13,17 +23,28 @@ export default defineConfig({
     trace: 'on-first-retry',
   },
   projects: [
-    // The bigger phone runs the full suite: journey, PWA plumbing and layout.
+    // The phone the household actually uses: full suite.
     {
-      name: 'iphone-14-pro',
+      name: 'safari-iphone-14-pro',
       use: { ...devices['iPhone 14 Pro'] },
     },
-    // The smaller phone runs the layout pass only — it is the width things
-    // break at, and re-running the 4-minute journey on it buys nothing.
+    // The narrower phone. Layout only — it is the width things break at, and
+    // re-running the whole journey on it buys nothing.
     {
-      name: 'iphone-12-mini',
+      name: 'safari-iphone-12-mini',
       use: { ...devices['iPhone 12 Mini'] },
-      testMatch: /layout\.spec\.ts/,
+      testMatch: LAYOUT_ONLY,
+    },
+    // Chrome, at a phone width and on the desktop. Full suite on the phone
+    // width so Chromium sees the real flows too.
+    {
+      name: 'chrome-phone',
+      use: { ...devices['Pixel 7'] },
+    },
+    {
+      name: 'chrome-desktop',
+      use: { ...devices['Desktop Chrome'] },
+      testMatch: LAYOUT_ONLY,
     },
   ],
   webServer: {

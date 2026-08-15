@@ -36,7 +36,7 @@ function ProfilePage() {
 
   return (
     <main className="flex flex-col gap-7 p-4">
-      <h1 className="page-title">Profile</h1>
+      <h1 className="page-title gutter">Profile</h1>
 
       {catsLoading ? (
         <CatSkeleton />
@@ -48,18 +48,20 @@ function ProfilePage() {
 
       <HouseholdCard hid={householdId} role={role} />
 
-      <div className="flex flex-col items-start gap-4">
+      {/* A real footer rather than a stray word: the page ends on a full-width
+          action and a version line, so it reads as finished. */}
+      <footer className="flex flex-col items-center gap-3 border-t border-sand pt-6">
         <button
           type="button"
           onClick={() => {
             void signOutUser()
           }}
-          className="btn-secondary"
+          className="btn-secondary w-full"
         >
           Sign out
         </button>
-        <p className="text-xs text-ink-soft">CatTrack</p>
-      </div>
+        <p className="text-xs text-ink-soft">CatTrack v{__APP_VERSION__}</p>
+      </footer>
     </main>
   )
 }
@@ -77,7 +79,7 @@ function CatSkeleton() {
 function NoCatCard({ canEdit, hid, uid }: { canEdit: boolean; hid: string; uid: string }) {
   return (
     <section className="flex flex-col gap-4">
-      <div className="flex flex-col gap-1">
+      <div className="gutter flex flex-col gap-1">
         <h2 className="section-label">Your cat</h2>
         <p className="text-sm text-ink-soft">
           {canEdit
@@ -112,7 +114,7 @@ function CatCard({
 
   return (
     <section className="flex flex-col gap-4">
-      <div>
+      <div className="gutter">
         <h2 className="text-2xl font-bold">{cat.name}</h2>
         <p className="text-sm text-ink-soft">{ageLabelLong(cat.birthDate, now)}</p>
       </div>
@@ -136,7 +138,7 @@ function CatCard({
         </Fact>
       </dl>
 
-      <p className="text-xs text-ink-soft">Estimates only — always confirm with your vet.</p>
+      <p className="gutter text-xs text-ink-soft">Estimates only — always confirm with your vet.</p>
 
       {canEdit ? (
         <button
@@ -174,12 +176,12 @@ function HouseholdCard({ hid, role }: { hid: string; role: Role }) {
 
   return (
     <section className="flex flex-col gap-3">
-      <h2 className="section-label">Household</h2>
+      <h2 className="section-label gutter">Household</h2>
 
       {membersQuery.isLoading ? (
-        <p className="text-sm text-ink-soft">Loading…</p>
+        <p className="gutter text-sm text-ink-soft">Loading…</p>
       ) : membersQuery.isError ? (
-        <div className="flex flex-col items-start gap-2">
+        <div className="gutter flex flex-col items-start gap-2">
           <p role="alert" className="text-sm font-semibold text-danger">
             Couldn’t load the member list.
           </p>
@@ -194,7 +196,7 @@ function HouseholdCard({ hid, role }: { hid: string; role: Role }) {
           </button>
         </div>
       ) : members === undefined || members.length === 0 ? (
-        <p className="text-sm text-ink-soft">No members found yet.</p>
+        <p className="gutter text-sm text-ink-soft">No members found yet.</p>
       ) : (
         <ul className="surface divide-y divide-sand">
           {members.map((member) => (
@@ -250,66 +252,67 @@ function AddMemberForm({ hid }: { hid: string }) {
   }
 
   return (
-    <form onSubmit={handleSubmit} className="surface flex flex-col gap-3 p-4">
-      <h3 className="section-label">Add a member</h3>
+    <details className="surface px-4">
+      <summary className="disclosure">Add a member</summary>
+      <form onSubmit={handleSubmit} className="flex flex-col gap-3 pb-4">
+        <label className="text-sm font-semibold">
+          User ID
+          <input
+            type="text"
+            value={memberUid}
+            required
+            onChange={(event) => {
+              setMemberUid(event.target.value)
+            }}
+            className={FIELD}
+          />
+        </label>
 
-      <label className="text-sm font-semibold">
-        User ID
-        <input
-          type="text"
-          value={memberUid}
-          required
-          onChange={(event) => {
-            setMemberUid(event.target.value)
-          }}
-          className={FIELD}
-        />
-      </label>
+        <label className="text-sm font-semibold">
+          Display name
+          <input
+            type="text"
+            value={displayName}
+            required
+            maxLength={60}
+            onChange={(event) => {
+              setDisplayName(event.target.value)
+            }}
+            className={FIELD}
+          />
+        </label>
 
-      <label className="text-sm font-semibold">
-        Display name
-        <input
-          type="text"
-          value={displayName}
-          required
-          maxLength={60}
-          onChange={(event) => {
-            setDisplayName(event.target.value)
-          }}
-          className={FIELD}
-        />
-      </label>
+        <label className="text-sm font-semibold">
+          Role
+          <select
+            value={memberRole}
+            onChange={(event) => {
+              setMemberRole(event.target.value === 'viewer' ? 'viewer' : 'editor')
+            }}
+            className={FIELD}
+          >
+            <option value="editor">Editor — can log food & weights</option>
+            <option value="viewer">Viewer — can only look</option>
+          </select>
+        </label>
 
-      <label className="text-sm font-semibold">
-        Role
-        <select
-          value={memberRole}
-          onChange={(event) => {
-            setMemberRole(event.target.value === 'viewer' ? 'viewer' : 'editor')
-          }}
-          className={FIELD}
-        >
-          <option value="editor">Editor — can log food & weights</option>
-          <option value="viewer">Viewer — can only look</option>
-        </select>
-      </label>
+        <button type="submit" disabled={busy} className="btn-primary">
+          Add member
+        </button>
 
-      <button type="submit" disabled={busy} className="btn-primary">
-        Add member
-      </button>
-
-      <p className="text-xs text-ink-soft">
-        Your partner signs in with Google once, then you paste their user ID here. (Invite links
-        come later.)
-      </p>
-
-      {flash === null ? null : <p className="text-sm font-semibold text-positive">{flash}</p>}
-      {error === null ? null : (
-        <p role="alert" className="text-sm font-semibold text-danger">
-          {error}
+        <p className="text-xs text-ink-soft">
+          Your partner signs in with Google once, then you paste their user ID here. (Invite links
+          come later.)
         </p>
-      )}
-    </form>
+
+        {flash === null ? null : <p className="text-sm font-semibold text-positive">{flash}</p>}
+        {error === null ? null : (
+          <p role="alert" className="text-sm font-semibold text-danger">
+            {error}
+          </p>
+        )}
+      </form>
+    </details>
   )
 }
 
