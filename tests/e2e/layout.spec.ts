@@ -1,5 +1,5 @@
 import { expect, test, type Page } from '@playwright/test'
-import { seedHousehold, seedYesterdayMeal, tabBar, WAIT } from './seed'
+import { seedHousehold, seedPreviousPlan, tabBar, WAIT } from './seed'
 
 /**
  * Layout pass on the two phones this household uses (iPhone 14 Pro, 393pt and
@@ -168,8 +168,8 @@ test('every screen fits the viewport without sideways scroll', async ({
 
   const tag = `layout-${testInfo.project.name}`
   await seedHousehold(page, { tag })
-  // A previous day to repeat, so the Food page renders its repeat card here.
-  await seedYesterdayMeal(request, tag)
+  // A superseded plan, so the Food page renders its history section here.
+  await seedPreviousPlan(request, tag)
 
   for (const name of PAGES) {
     await tabBar(page).getByRole('link', { name }).click()
@@ -270,33 +270,69 @@ test('the label calculator lays out inside the food form', async ({ page }, test
   }
 })
 
-test('the repeat-a-day card offers yesterday and copies it onto today', async ({
-  page,
-  request,
-}, testInfo) => {
+/**
+ * A meal mid-flavour-switch is the widest row the app can produce: two food
+ * names, two gram figures and a meal total, all inside one checklist row on a
+ * 375pt screen. If any layout is going to break, it breaks here.
+ */
+test('a bowl mid-switch shows both foods and holds its layout', async ({ page }, testInfo) => {
   test.setTimeout(180_000)
 
-  const tag = `repeat-${testInfo.project.name}`
-  await seedHousehold(page, { tag })
-  await seedYesterdayMeal(request, tag)
+  await seedHousehold(page, { tag: `switch-${testInfo.project.name}` })
 
   await tabBar(page).getByRole('link', { name: 'Food' }).click()
-  const card = page.getByTestId('repeat-day')
-  await expect(card).toBeVisible(WAIT)
-  await expect(card).toContainText('Same as yesterday')
-  await expect(card).toContainText('2 meals · 280 kcal')
+  await expect(page.getByTestId('food-add-open')).toBeVisible(WAIT)
+  await page.getByTestId('food-add-open').click()
+  await expect(page.getByTestId('food-name')).toBeVisible(WAIT)
+  await page.getByTestId('food-name').fill('Wet Tuna in Jelly')
+  await page.getByTestId('food-type').selectOption('wet')
+  await page.getByTestId('food-kcal-per-gram').fill('0.75')
+  await page.getByTestId('food-save').click()
+  await expect(page.getByRole('listitem').filter({ hasText: 'Wet Tuna in Jelly' })).toBeVisible(
+    WAIT,
+  )
 
-  // Today already has the 40 g / 140 kcal meal from the seed.
-  await expect(page.getByTestId('today-kcal')).toHaveText('140', WAIT)
-  await page.getByTestId('repeat-day-all').click()
+  // Move her onto the tuna over four days, coming off the kibble.
+  await expect(page.getByTestId('plan-edit')).toBeVisible(WAIT)
+  await page.getByTestId('plan-edit').click()
+  await expect(page.getByTestId('plan-item-food-0')).toBeVisible(WAIT)
+  await page.getByTestId('plan-item-food-0').selectOption({ label: 'Wet Tuna in Jelly' })
+  await page.getByTestId('plan-item-grams-0').fill('315')
+  await page.getByTestId('plan-switch-toggle').check()
+  await page
+    .getByTestId('plan-switch-from')
+    .selectOption({ label: 'Test Kibble with a fairly long name' })
+  await expect(page.getByTestId('plan-switch-preview')).toContainText('25% · 50% · 75% · 100%')
+  await page.getByTestId('plan-save').click()
 
-  // 140 + 280 kcal, and yesterday's times carried over onto today's list
-  // (scoped: the repeat card shows the same times).
-  await expect(page.getByTestId('today-kcal')).toHaveText('420', WAIT)
-  await expect(page.getByText('Total: 120 g · 420 kcal')).toBeVisible(WAIT)
-  const todaysMeals = page.locator('section').filter({ hasText: "Today's meals" })
-  await expect(todaysMeals.getByText('07:15')).toBeVisible()
-  await expect(todaysMeals.getByText('19:30')).toBeVisible()
+  // Day one of four: a quarter of the bowl is the new food.
+  const firstMeal = page.getByRole('listitem').filter({ hasText: '07:00' })
+  await expect(firstMeal).toContainText('Test Kibble with a fairly long name', WAIT)
+  await expect(firstMeal).toContainText('Wet Tuna in Jelly')
+  await expect(firstMeal).toContainText('79 g')
+  await expect(firstMeal).toContainText('26 g')
+  await expect(page.getByText('Switching from Test Kibble')).toBeVisible(WAIT)
+
+  // The revision leaves a superseded plan behind, so the history is here too —
+  // opened, because a collapsed section cannot break a layout.
+  await page.getByText('Plan history').click()
+  // The superseded plan is the one still naming the kibble as the whole bowl.
+  await expect(page.getByText('69 g Test Kibble with a fairly long name a day')).toBeVisible(WAIT)
+
+  await page.screenshot({
+    path: `test-results/screenshots/${testInfo.project.name}-food-switch.png`,
+    fullPage: true,
+  })
+  await testInfo.attach(`${testInfo.project.name}-food-switch`, {
+    body: await page.screenshot({ fullPage: true }),
+    contentType: 'image/png',
+  })
+
+  expect(await overflowingElements(page), 'a switched bowl overflows the viewport').toEqual([])
+  expect(await documentScrollsSideways(page), 'the switched Food page scrolls sideways').toBe(false)
+  expect(await controlsOutsideTheirCard(page), 'a control escapes its card').toEqual([])
+  expect(await smallTouchTargets(page), 'an under-sized tap target').toEqual([])
+  expect(await textColumnMisalignments(page), 'a ragged text column').toEqual([])
 })
 
 test('the sign-in screen fits the viewport', async ({ page }, testInfo) => {

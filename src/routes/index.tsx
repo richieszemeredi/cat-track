@@ -7,12 +7,15 @@ import { StatCard } from '../components/StatCard'
 import { ageLabelLong, roundGrams, roundKcal, roundKg } from '../lib/catmath'
 import {
   feedingsForDayQueryOptions,
+  plansQueryOptions,
   useFeedingsForDayLive,
+  usePlansLive,
   useWeightsLive,
   weightsQueryOptions,
   type Cat,
 } from '../lib/db'
 import { useHousehold } from '../lib/household'
+import { mealTimes } from '../lib/plan'
 import { dailyKcalTarget, effectiveLifeStage, sumGrams, sumKcal } from '../lib/target'
 import { useToday } from '../lib/use-today'
 
@@ -59,9 +62,30 @@ function Dashboard({ cat }: { cat: Cat }) {
   useWeightsLive(householdId, cat.id)
   const feedingsQuery = useQuery(feedingsForDayQueryOptions(householdId, cat.id, start, end))
   useFeedingsForDayLive(householdId, cat.id, start, end)
+  const plansQuery = useQuery(plansQueryOptions(householdId, cat.id))
+  usePlansLive(householdId, cat.id)
 
   const weights = weightsQuery.data ?? []
   const feedings = feedingsQuery.data ?? []
+
+  // Only the plan's own meal count is needed here — how many bowls are owed
+  // today and how many have gone down. The composition lives on /food.
+  const plan = plansQuery.data?.[0] ?? null
+  const mealCount =
+    plan === null ? 0 : mealTimes(plan.mealsPerDay, plan.firstMealAt, plan.lastMealAt).length
+  const mealsGiven =
+    plan === null
+      ? 0
+      : new Set(
+          feedings
+            .filter(
+              (feeding) =>
+                feeding.planId === plan.id &&
+                feeding.mealIndex !== null &&
+                feeding.mealIndex < mealCount,
+            )
+            .map((feeding) => feeding.mealIndex),
+        ).size
 
   // weights arrive ordered by date asc — latest is the last element.
   const latest = weights.at(-1)
@@ -102,31 +126,60 @@ function Dashboard({ cat }: { cat: Cat }) {
         </p>
       ) : (
         <>
-          {/* The one number this screen exists to show. */}
+          {/* The one number this screen exists to show. With a plan in force
+              that is how far through it she is — the calorie total is a
+              foregone conclusion by breakfast, the bowls are not. */}
           <section className="gutter flex flex-col gap-3">
-            <h2 className="section-label">Eaten today</h2>
-            <p className="flex items-baseline gap-2">
-              <span
-                data-testid="dash-kcal-today"
-                className="text-5xl font-bold tracking-tight tabular-nums"
-              >
-                {roundKcal(eatenKcal)}
-              </span>
-              <span className="text-lg text-ink-soft">
-                {target === null ? 'kcal' : `of ${String(roundKcal(target))} kcal`}
-              </span>
-            </p>
-            {target === null ? (
-              <p className="text-sm text-ink-soft">Log a weigh-in to get a daily target.</p>
+            <h2 className="section-label">{plan === null ? 'Eaten today' : 'Today'}</h2>
+            {plan === null ? (
+              <>
+                <p className="flex items-baseline gap-2">
+                  <span
+                    data-testid="dash-kcal-today"
+                    className="text-5xl font-bold tracking-tight tabular-nums"
+                  >
+                    {roundKcal(eatenKcal)}
+                  </span>
+                  <span className="text-lg text-ink-soft">
+                    {target === null ? 'kcal' : `of ${String(roundKcal(target))} kcal`}
+                  </span>
+                </p>
+                {target === null ? (
+                  <p className="text-sm text-ink-soft">Log a weigh-in to get a daily target.</p>
+                ) : (
+                  <>
+                    <Meter value={eatenKcal} max={target} />
+                    <p
+                      className={`text-sm ${overTarget ? 'font-semibold text-coral-ink' : 'text-ink-soft'}`}
+                    >
+                      {overTarget
+                        ? `${String(roundKcal(eatenKcal - target))} kcal over · ${String(roundGrams(gramsToday))} g fed`
+                        : `${String(roundKcal(target - eatenKcal))} kcal left · ${String(roundGrams(gramsToday))} g fed`}
+                    </p>
+                  </>
+                )}
+              </>
             ) : (
               <>
-                <Meter value={eatenKcal} max={target} />
-                <p
-                  className={`text-sm ${overTarget ? 'font-semibold text-coral-ink' : 'text-ink-soft'}`}
-                >
-                  {overTarget
-                    ? `${String(roundKcal(eatenKcal - target))} kcal over · ${String(roundGrams(gramsToday))} g fed`
-                    : `${String(roundKcal(target - eatenKcal))} kcal left · ${String(roundGrams(gramsToday))} g fed`}
+                <p className="flex items-baseline gap-2">
+                  <span
+                    data-testid="dash-meals-today"
+                    className="text-5xl font-bold tracking-tight tabular-nums"
+                  >
+                    {mealsGiven} of {mealCount}
+                  </span>
+                  <span className="text-lg text-ink-soft">meals given</span>
+                </p>
+                <Meter value={mealsGiven} max={mealCount} />
+                {/* "target" is load-bearing: /food counts the same kcal against
+                    what the PLAN delivers, and two denominators sharing one
+                    phrasing would read as a contradiction. */}
+                <p data-testid="dash-kcal-today" className="text-sm text-ink-soft tabular-nums">
+                  {roundKcal(eatenKcal)}
+                  {target === null
+                    ? ' kcal'
+                    : ` of ${String(roundKcal(target))} kcal target`} · {roundGrams(gramsToday)} g
+                  fed
                 </p>
               </>
             )}
@@ -192,7 +245,7 @@ function Dashboard({ cat }: { cat: Cat }) {
       {canEdit && (
         <div className="flex gap-3">
           <Link to="/food" className="btn-primary flex-1">
-            Log a meal
+            {plan === null ? 'Set her plan' : "Today's plan"}
           </Link>
           <Link to="/weight" className="btn-secondary flex-1">
             Weigh in

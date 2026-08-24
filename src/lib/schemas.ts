@@ -7,6 +7,14 @@ import {
   type FoodType,
   type LifeStage,
 } from './catmath'
+import {
+  MAX_MEALS_PER_DAY,
+  MAX_TRANSITION_STEPS,
+  MIN_MEALS_PER_DAY,
+  TRANSITION_UNITS,
+  type PlanTransition,
+  type TransitionUnit,
+} from './plan'
 
 // Zod schemas validate every Firestore READ at the boundary (via safeParse in
 // db.ts) so one corrupt/legacy document degrades gracefully instead of
@@ -107,7 +115,66 @@ export const feedingSchema = z.object({
   amountG: z.number().positive().max(500),
   kcal: z.number().min(0).max(2000),
   note: z.string().max(500).nullable(),
+  // Which planned bowl this feeding ticks off; null for anything off-plan.
+  // Defaults rather than bare .nullable() — every feeding written before the
+  // planner existed lacks both keys, and a required-but-absent key would fail
+  // safeParse and silently drop the whole meal history.
+  planId: z.string().nullable().default(null),
+  mealIndex: z
+    .number()
+    .int()
+    .min(0)
+    .max(MAX_MEALS_PER_DAY - 1)
+    .nullable()
+    .default(null),
   createdBy: z.string().min(1),
   createdAt: timestampToDate,
 })
 export type Feeding = z.infer<typeof feedingSchema> & { id: string }
+
+const mealTimeSchema = z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/)
+
+/**
+ * A one-way switch onto the plan's food. Stored as the model's second nested
+ * map (after a food's `analysis`), so the rules validate it with hasAll as well
+ * as hasOnly — a half-filled transition would let a ratio be derived from a
+ * ramp nobody described.
+ */
+export const planTransitionSchema = z.object({
+  fromFoodId: z.string().min(1),
+  fromFoodNameSnapshot: z.string().min(1).max(80),
+  toFoodId: z.string().min(1),
+  steps: z.number().int().min(1).max(MAX_TRANSITION_STEPS),
+  unit: z.enum(TRANSITION_UNITS),
+  startedOn: timestampToDate,
+})
+export type { PlanTransition, TransitionUnit }
+
+/**
+ * A feeding plan. Meals are not stored: `mealsPerDay` plus the window derives
+ * them (see plan.ts). Plans are never edited in place — a revision is a new
+ * doc, and the previous plan is closed by the next one's `effectiveFrom`, so
+ * two phones can never write overlapping date ranges.
+ */
+export const planSchema = z.object({
+  effectiveFrom: timestampToDate,
+  mealsPerDay: z.number().int().min(MIN_MEALS_PER_DAY).max(MAX_MEALS_PER_DAY),
+  firstMealAt: mealTimeSchema,
+  lastMealAt: mealTimeSchema,
+  // What she weighed when the plan was set — this is what later lets the app
+  // say "she's 1.94 kg now, this was set at 1.62".
+  setAtWeightKg: z.number().positive().max(30).nullable().default(null),
+  transition: planTransitionSchema.nullable().default(null),
+  note: z.string().max(500).nullable(),
+  createdBy: z.string().min(1),
+  createdAt: timestampToDate,
+})
+export type Plan = z.infer<typeof planSchema> & { id: string }
+
+/** One food in the day's mix. Grams are per DAY; the serving is derived. */
+export const planItemSchema = z.object({
+  foodId: z.string().min(1),
+  foodNameSnapshot: z.string().min(1).max(80),
+  amountPerDayG: z.number().positive().max(2000),
+})
+export type PlanItem = z.infer<typeof planItemSchema> & { id: string }

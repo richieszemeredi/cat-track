@@ -52,6 +52,28 @@ service cloud.firestore {
       );
     }
 
+    // A plan's wall-clock window. Meal times are derived from the count and
+    // this window, so these two strings are the only clock values stored.
+    function validMealTime(t) {
+      return t is string && t.matches('^([01][0-9]|2[0-3]):[0-5][0-9]$');
+    }
+
+    // A one-way switch onto the plan's food. Same discipline as a food's
+    // analysis: hasAll as well as hasOnly, because a half-filled transition
+    // would let today's blend be derived from a ramp nobody fully described.
+    function validPlanTransition(t) {
+      return t == null || (
+        t.keys().hasOnly(['fromFoodId', 'fromFoodNameSnapshot', 'toFoodId', 'steps', 'unit', 'startedOn']) &&
+        t.keys().hasAll(['fromFoodId', 'fromFoodNameSnapshot', 'toFoodId', 'steps', 'unit', 'startedOn']) &&
+        validString(t.fromFoodId, 200) &&
+        validString(t.fromFoodNameSnapshot, 80) &&
+        validString(t.toFoodId, 200) &&
+        t.steps is int && t.steps >= 1 && t.steps <= 14 &&
+        t.unit in ['meal', 'day'] &&
+        t.startedOn is timestamp
+      );
+    }
+
     // ---------- membership discovery ----------
     // Lets a signed-in user run
     //   collectionGroup('members').where('uid', '==', auth.uid)
@@ -192,14 +214,69 @@ service cloud.firestore {
           allow delete: if isEditor(hid);
         }
 
+        // ---------- plans ----------
+        // A plan is never edited: a revision is a new document, and the plan
+        // before it is closed by this one's effectiveFrom. That is what stops
+        // two phones writing overlapping date ranges.
+        match /plans/{planId} {
+          allow read: if isMember(hid);
+          allow create: if isEditor(hid) &&
+            request.resource.data.keys().hasOnly([
+              'effectiveFrom', 'mealsPerDay', 'firstMealAt', 'lastMealAt',
+              'setAtWeightKg', 'transition', 'note', 'createdBy', 'createdAt'
+            ]) &&
+            request.resource.data.effectiveFrom is timestamp &&
+            request.resource.data.mealsPerDay is int &&
+            request.resource.data.mealsPerDay >= 1 &&
+            request.resource.data.mealsPerDay <= 6 &&
+            validMealTime(request.resource.data.firstMealAt) &&
+            validMealTime(request.resource.data.lastMealAt) &&
+            (request.resource.data.setAtWeightKg == null ||
+              (request.resource.data.setAtWeightKg is number &&
+               request.resource.data.setAtWeightKg > 0 &&
+               request.resource.data.setAtWeightKg <= 30)) &&
+            validPlanTransition(request.resource.data.get('transition', null)) &&
+            optionalString(request.resource.data.note, 500) &&
+            request.resource.data.createdAt is timestamp &&
+            request.resource.data.createdBy == request.auth.uid;
+          allow update: if false;
+          allow delete: if isEditor(hid);
+
+          // The day's mix, one document per food. A list on the plan doc would
+          // be unvalidatable — rules cannot iterate one — so each food is its
+          // own document and gets the same hasOnly treatment as everything else.
+          match /items/{itemId} {
+            allow read: if isMember(hid);
+            allow create: if isEditor(hid) &&
+              request.resource.data.keys().hasOnly([
+                'foodId', 'foodNameSnapshot', 'amountPerDayG'
+              ]) &&
+              validString(request.resource.data.foodId, 200) &&
+              validString(request.resource.data.foodNameSnapshot, 80) &&
+              request.resource.data.amountPerDayG is number &&
+              request.resource.data.amountPerDayG > 0 &&
+              request.resource.data.amountPerDayG <= 2000;
+            allow update: if false;
+            allow delete: if isEditor(hid);
+          }
+        }
+
         // ---------- feedings (append-only log docs) ----------
         match /feedings/{entryId} {
           allow read: if isMember(hid);
           allow create: if isEditor(hid) &&
             request.resource.data.keys().hasOnly([
               'datetime', 'foodId', 'foodNameSnapshot', 'amountG', 'kcal',
-              'note', 'createdBy', 'createdAt'
+              'note', 'planId', 'mealIndex', 'createdBy', 'createdAt'
             ]) &&
+            // get() with a default: every feeding written before the planner
+            // existed has neither key, and reading an absent key denies outright.
+            (request.resource.data.get('planId', null) == null ||
+              request.resource.data.get('planId', null) is string) &&
+            (request.resource.data.get('mealIndex', null) == null ||
+              (request.resource.data.get('mealIndex', null) is int &&
+               request.resource.data.get('mealIndex', null) >= 0 &&
+               request.resource.data.get('mealIndex', null) <= 5)) &&
             request.resource.data.datetime is timestamp &&
             validString(request.resource.data.foodNameSnapshot, 80) &&
             request.resource.data.amountG is number &&

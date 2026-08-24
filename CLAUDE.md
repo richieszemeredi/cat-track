@@ -47,9 +47,30 @@ Cloud Functions, no SSR hosting).
   are frequently absent from a label, so `TYPICAL_ASH_PCT` / `TYPICAL_FIBRE_PCT` fill in
   per food type — and an assumed value must never trip a "your figures are wrong" error,
   only a hint that the food Type is probably off.
+- `src/lib/plan.ts` — pure, unit-tested planner math. A cat eats the same thing every day,
+  so a plan stores a COUNT and a WINDOW, never a list of meals: `mealTimes(3, '07:00',
+'19:00')` _is_ 07:00 / 13:00 / 19:00. Grams are held per DAY because that is the figure
+  Hungarian tins print (a grams-per-day table, no kcal); the serving is derived. Also holds
+  the transition ramp — see below — and `isOutgrown`, whose 8% tolerance is deliberate:
+  servings round to 5 g, so an honest plan already sits within ~2% of target.
+- A **transition** is a one-way switch, not a rotation. The plan states the DESTINATION and
+  `transition` says where the cat is coming from and how fast (`steps` × `meal`|`day`), so a
+  four-day ramp is one declaration instead of four hand-authored plans. Every intermediate
+  ratio is derived by `mealComposition`, which splits the targeted item into two lines —
+  outgoing food first. Nothing per-day is stored, and when the ramp ends the derivation just
+  stops firing. Ticking such a bowl writes one feeding per food, in one batch.
+- Plans are **never edited**: a revision is a new doc, and the plan before it is closed by
+  the next one's `effectiveFrom` (rules deny `update`). That is what stops two phones writing
+  overlapping date ranges. `db.sortPlans` breaks a same-day tie on `createdAt` — ordering on
+  `effectiveFrom` alone let two revisions saved on one day fall back to document id, which
+  could leave the FIRST one in force.
 - Data model: `households/{hid}/members/{uid}` (roles owner|editor|viewer, source of truth
-  for access) and `households/{hid}/cats/{catId}/{weights|foods|feedings}` — append-only log
-  docs so two phones never clobber each other. `/invites` is reserved for the public launch.
+  for access) and `households/{hid}/cats/{catId}/{weights|foods|feedings|plans}` — append-only
+  log docs so two phones never clobber each other. `plans/{planId}/items/{itemId}` holds the
+  day's mix, one document per food, because rules cannot iterate a list: as its own document
+  every item gets the same `hasOnly` validation as everything else. A feeding carries
+  `planId` + `mealIndex` when it ticks off a planned bowl, and both null when it is off-plan
+  (the `LogMealForm` hatch). `/invites` is reserved for the public launch.
   A food's `analysis` map (the five label percentages, nullable) is the one nested map in
   the model: it is non-null only while `kcalPerGram` is the calculator's own output, so
   hand-editing the kcal field clears it and a stored analysis always explains the stored
@@ -59,6 +80,11 @@ Cloud Functions, no SSR hosting).
   keep parsing), from the `*Input` type in `db.ts`, and from the rules' `hasOnly` list —
   that last step is what stops it coming back. Retired so far: `bodyConditionScore`
   (weights), `packageSizeG` (foods), `mealType` (feedings, replaced by an editable time).
+  The whole "repeat a previous day" feature (`repeat.ts`, `RepeatDayCard`) is gone too: it
+  was the data model apologising for itself, and the plan subsumes it.
+- A food's `analysis` and a plan's `transition` are the model's only nested maps, and both
+  are validated with `hasAll` as well as `hasOnly` — a half-filled map would let a figure be
+  re-derived from constituents (or a ramp) it never saw.
 - Adding a field is the mirror image: give it `.default(...)` in the Zod schema, never a
   bare `.nullable()`. Documents written before the field existed have no such key at all,
   and a required-but-absent key fails `safeParse` — which silently drops every old doc.
@@ -93,6 +119,10 @@ paid for themselves: the weigh-in form's stacked-rows check pins a two-column gr
 shipped a date picker squeezed to 187pt, and the escapes-a-card check exists because a
 time input punched out through the right edge of its card while still sitting well
 inside the screen.
+
+`a bowl mid-switch shows both foods and holds its layout` is the widest row the app can
+produce — two food names, two gram figures and a meal total in one checklist row — so it
+is the first place a layout regression will show.
 
 **Playwright's WebKit is not iOS Safari.** It sizes `input[type=date|time]` correctly
 where a real iPhone sizes them from the native picker and ignores `width:100%` — that

@@ -1,5 +1,32 @@
 import { expect } from 'vitest'
-import { type Cat, type Food } from '../../src/lib/schemas'
+import { type Cat, type Food, type Plan, type PlanItem } from '../../src/lib/schemas'
+
+/** Plain-object Plan fixture (post-parse shape: Timestamps already Dates). */
+export function makePlan(overrides: Partial<Plan> = {}): Plan {
+  return {
+    id: 'plan-1',
+    effectiveFrom: new Date(2026, 7, 24),
+    mealsPerDay: 3,
+    firstMealAt: '07:00',
+    lastMealAt: '19:00',
+    setAtWeightKg: 1.62,
+    transition: null,
+    note: null,
+    createdBy: 'user-1',
+    createdAt: new Date(2026, 7, 24),
+    ...overrides,
+  }
+}
+
+export function makePlanItem(overrides: Partial<PlanItem> = {}): PlanItem {
+  return {
+    id: 'item-1',
+    foodId: 'food-1',
+    foodNameSnapshot: 'Crunchy Kibble',
+    amountPerDayG: 300,
+    ...overrides,
+  }
+}
 
 /** Plain-object Food fixture (post-parse shape: Timestamps already Dates). */
 export function makeFood(overrides: Partial<Food> = {}): Food {

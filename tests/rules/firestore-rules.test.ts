@@ -114,8 +114,43 @@ function feeding(createdBy: string) {
     amountG: 40,
     kcal: 152,
     note: null,
+    planId: null,
+    mealIndex: null,
     createdBy,
     createdAt: CREATED_AT,
+  }
+}
+
+function plan(createdBy: string) {
+  return {
+    effectiveFrom: ENTRY_DATE,
+    mealsPerDay: 3,
+    firstMealAt: '07:00',
+    lastMealAt: '19:00',
+    setAtWeightKg: 1.62,
+    transition: null,
+    note: null,
+    createdBy,
+    createdAt: CREATED_AT,
+  }
+}
+
+function transition() {
+  return {
+    fromFoodId: 'f-old',
+    fromFoodNameSnapshot: 'Applaws Chicken',
+    toFoodId: 'f-new',
+    steps: 4,
+    unit: 'day',
+    startedOn: ENTRY_DATE,
+  }
+}
+
+function planItem() {
+  return {
+    foodId: 'f-new',
+    foodNameSnapshot: 'Premiere Kitten',
+    amountPerDayG: 300,
   }
 }
 
@@ -574,6 +609,40 @@ describe('feedings', () => {
     )
   })
 
+  it('allows a feeding that ticks off a planned bowl', async () => {
+    await assertSucceeds(
+      addDoc(collection(authedDb('bob'), feedings), {
+        ...feeding('bob'),
+        planId: 'p1',
+        mealIndex: 2,
+      }),
+    )
+  })
+
+  // Feedings written before the planner existed have neither key at all, and
+  // reading a key that isn't there denies the write outright.
+  it('allows a feeding with no planId or mealIndex key at all', async () => {
+    const { planId, mealIndex, ...legacy } = feeding('bob')
+    void planId
+    void mealIndex
+    await assertSucceeds(addDoc(collection(authedDb('bob'), feedings), legacy))
+  })
+
+  it('denies a mealIndex outside 0..5', async () => {
+    await assertFails(
+      addDoc(collection(authedDb('bob'), feedings), { ...feeding('bob'), mealIndex: -1 }),
+    )
+    await assertFails(
+      addDoc(collection(authedDb('bob'), feedings), { ...feeding('bob'), mealIndex: 6 }),
+    )
+  })
+
+  it('denies a fractional mealIndex', async () => {
+    await assertFails(
+      addDoc(collection(authedDb('bob'), feedings), { ...feeding('bob'), mealIndex: 1.5 }),
+    )
+  })
+
   it('denies a retired mealType field', async () => {
     await assertFails(
       addDoc(collection(authedDb('bob'), feedings), { ...feeding('bob'), mealType: 'breakfast' }),
@@ -618,6 +687,197 @@ describe('feedings', () => {
   it('denies edits — feedings are append-only', async () => {
     await seedDoc(`${feedings}/fe1`, feeding('bob'))
     await assertFails(updateDoc(doc(authedDb('bob'), `${feedings}/fe1`), { kcal: 999 }))
+  })
+})
+
+describe('plans', () => {
+  const plans = `${C1}/plans`
+
+  it('allows editors to create a valid plan', async () => {
+    await assertSucceeds(addDoc(collection(authedDb('bob'), plans), plan('bob')))
+  })
+
+  it('denies viewers creating plans', async () => {
+    await assertFails(addDoc(collection(authedDb('vera'), plans), plan('vera')))
+  })
+
+  it('denies createdBy that is not the caller', async () => {
+    await assertFails(addDoc(collection(authedDb('bob'), plans), plan('alice')))
+  })
+
+  it('allows members to read plans', async () => {
+    await seedDoc(`${plans}/p1`, plan('bob'))
+    await assertSucceeds(getDoc(doc(authedDb('vera'), `${plans}/p1`)))
+  })
+
+  // A revision is a new document. Editing one in place would rewrite what the
+  // cat was eating in the past.
+  it('denies edits — a revision is a new plan', async () => {
+    await seedDoc(`${plans}/p1`, plan('bob'))
+    await assertFails(updateDoc(doc(authedDb('bob'), `${plans}/p1`), { mealsPerDay: 4 }))
+  })
+
+  it('allows editors to delete a plan', async () => {
+    await seedDoc(`${plans}/p1`, plan('bob'))
+    await assertSucceeds(deleteDoc(doc(authedDb('bob'), `${plans}/p1`)))
+  })
+
+  it('denies a meal count outside 1..6', async () => {
+    await assertFails(
+      addDoc(collection(authedDb('bob'), plans), { ...plan('bob'), mealsPerDay: 0 }),
+    )
+    await assertFails(
+      addDoc(collection(authedDb('bob'), plans), { ...plan('bob'), mealsPerDay: 7 }),
+    )
+  })
+
+  it('denies a fractional meal count', async () => {
+    await assertFails(
+      addDoc(collection(authedDb('bob'), plans), { ...plan('bob'), mealsPerDay: 2.5 }),
+    )
+  })
+
+  it('denies a malformed meal time', async () => {
+    await assertFails(
+      addDoc(collection(authedDb('bob'), plans), { ...plan('bob'), firstMealAt: '7:00' }),
+    )
+    await assertFails(
+      addDoc(collection(authedDb('bob'), plans), { ...plan('bob'), lastMealAt: '24:00' }),
+    )
+    await assertFails(
+      addDoc(collection(authedDb('bob'), plans), { ...plan('bob'), lastMealAt: 1900 }),
+    )
+  })
+
+  it('denies an unknown field', async () => {
+    await assertFails(
+      addDoc(collection(authedDb('bob'), plans), { ...plan('bob'), mealTimes: ['07:00'] }),
+    )
+  })
+
+  it('accepts a null setAtWeightKg but not an impossible one', async () => {
+    await assertSucceeds(
+      addDoc(collection(authedDb('bob'), plans), { ...plan('bob'), setAtWeightKg: null }),
+    )
+    await assertFails(
+      addDoc(collection(authedDb('bob'), plans), { ...plan('bob'), setAtWeightKg: 0 }),
+    )
+  })
+
+  describe('transition', () => {
+    it('accepts a complete transition', async () => {
+      await assertSucceeds(
+        addDoc(collection(authedDb('bob'), plans), { ...plan('bob'), transition: transition() }),
+      )
+    })
+
+    // Same rule as a food's analysis: a half-filled map would let today's
+    // blend be derived from a ramp nobody fully described.
+    it('denies a partial transition', async () => {
+      const { unit, ...partial } = transition()
+      void unit
+      await assertFails(
+        addDoc(collection(authedDb('bob'), plans), { ...plan('bob'), transition: partial }),
+      )
+    })
+
+    it('denies an unknown key inside the transition', async () => {
+      await assertFails(
+        addDoc(collection(authedDb('bob'), plans), {
+          ...plan('bob'),
+          transition: { ...transition(), pace: 'slow' },
+        }),
+      )
+    })
+
+    it('denies an unknown unit', async () => {
+      await assertFails(
+        addDoc(collection(authedDb('bob'), plans), {
+          ...plan('bob'),
+          transition: { ...transition(), unit: 'week' },
+        }),
+      )
+    })
+
+    it('denies a step count outside 1..14', async () => {
+      await assertFails(
+        addDoc(collection(authedDb('bob'), plans), {
+          ...plan('bob'),
+          transition: { ...transition(), steps: 0 },
+        }),
+      )
+      await assertFails(
+        addDoc(collection(authedDb('bob'), plans), {
+          ...plan('bob'),
+          transition: { ...transition(), steps: 15 },
+        }),
+      )
+    })
+  })
+
+  describe('items', () => {
+    const items = `${plans}/p1/items`
+
+    it('allows editors to create a valid item', async () => {
+      await assertSucceeds(addDoc(collection(authedDb('bob'), items), planItem()))
+    })
+
+    it('denies viewers creating items', async () => {
+      await assertFails(addDoc(collection(authedDb('vera'), items), planItem()))
+    })
+
+    it('denies an amount of 0 or above 2000 g a day', async () => {
+      await assertFails(
+        addDoc(collection(authedDb('bob'), items), { ...planItem(), amountPerDayG: 0 }),
+      )
+      await assertFails(
+        addDoc(collection(authedDb('bob'), items), { ...planItem(), amountPerDayG: 2001 }),
+      )
+    })
+
+    it('denies an empty foodNameSnapshot', async () => {
+      await assertFails(
+        addDoc(collection(authedDb('bob'), items), { ...planItem(), foodNameSnapshot: '' }),
+      )
+    })
+
+    it('denies an unknown field', async () => {
+      await assertFails(
+        addDoc(collection(authedDb('bob'), items), { ...planItem(), time: '07:00' }),
+      )
+    })
+
+    it('denies edits — items belong to an unrevisable plan', async () => {
+      await seedDoc(`${items}/i1`, planItem())
+      await assertFails(updateDoc(doc(authedDb('bob'), `${items}/i1`), { amountPerDayG: 400 }))
+    })
+
+    // Ticking one bowl during a flavour switch writes a feeding per food, so
+    // a plan revision must land whole or not at all.
+    it('allows a plan and its items in one batch', async () => {
+      const bobDb = authedDb('bob')
+      const batch = writeBatch(bobDb)
+      const planRef = doc(collection(bobDb, plans))
+      batch.set(planRef, plan('bob'))
+      batch.set(doc(collection(bobDb, `${planRef.path}/items`)), planItem())
+      batch.set(doc(collection(bobDb, `${planRef.path}/items`)), {
+        ...planItem(),
+        foodId: 'f-old',
+      })
+      await assertSucceeds(batch.commit())
+    })
+
+    it('denies a batch where one item is invalid', async () => {
+      const bobDb = authedDb('bob')
+      const batch = writeBatch(bobDb)
+      const planRef = doc(collection(bobDb, plans))
+      batch.set(planRef, plan('bob'))
+      batch.set(doc(collection(bobDb, `${planRef.path}/items`)), {
+        ...planItem(),
+        amountPerDayG: 9000,
+      })
+      await assertFails(batch.commit())
+    })
   })
 })
 

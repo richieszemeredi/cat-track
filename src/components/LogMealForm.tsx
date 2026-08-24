@@ -79,6 +79,10 @@ export function LogMealForm({
           amountG: gramsNum,
           kcal,
           note: trimmedNote === '' ? null : trimmedNote,
+          // This form is the off-plan hatch — a treat, a stolen bite, a tin
+          // that wasn't on the plan. Planned bowls are ticked, not typed.
+          planId: null,
+          mealIndex: null,
         }),
       )
       // 'confirmed' and 'queued' both count as success (offline-first).

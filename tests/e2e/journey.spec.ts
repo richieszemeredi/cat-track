@@ -49,7 +49,14 @@ test('full household journey', async ({ page, context }, testInfo) => {
   // The saved cat renders as the profile card heading.
   await expect(page.getByRole('heading', { name: 'Mochi' })).toBeVisible(WAIT)
 
-  // ---- d. add a food, log a meal ----
+  // ---- d. weigh in, so the plan has a target to sit against ----
+  await tabBar(page).getByRole('link', { name: 'Weight' }).click()
+  await expect(page.getByTestId('weight-kg')).toBeVisible(WAIT)
+  await page.getByTestId('weight-kg').fill('1.50')
+  await page.getByTestId('weight-save').click()
+  await expect(page.getByTestId('weight-latest')).toHaveText('1.50 kg', WAIT)
+
+  // ---- e. add a food ----
   await tabBar(page).getByRole('link', { name: 'Food' }).click()
   await expect(page.getByTestId('food-add-open')).toBeVisible(WAIT)
   await page.getByTestId('food-add-open').click()
@@ -59,43 +66,50 @@ test('full household journey', async ({ page, context }, testInfo) => {
   await page.getByTestId('food-save').click()
 
   // Catalog row: the name, then the energy line "3.5 kcal/g · 350 kcal / 100 g".
-  // Scoped to the list item: a bare getByText would also match the meal form's
+  // Scoped to the list item: a bare getByText would also match a form's
   // <option>, which Playwright treats as hidden.
   await expect(page.getByRole('listitem').filter({ hasText: 'Test Kibble' })).toBeVisible(WAIT)
   await expect(page.getByText('3.5 kcal/g · 350 kcal / 100 g')).toBeVisible(WAIT)
 
-  // The meal form only renders once an active food exists.
-  await expect(page.getByTestId('meal-grams')).toBeVisible(WAIT)
-  await page.getByTestId('meal-grams').fill('40')
-  // 40 g × 3.5 kcal/g = 140 kcal live preview.
-  await expect(page.getByTestId('meal-kcal-preview')).toHaveText('≈ 140 kcal')
-  await page.getByTestId('meal-save').click()
+  // ---- f. set her plan: a count, a window, and grams a day ----
+  await expect(page.getByTestId('plan-setup')).toBeVisible(WAIT)
+  await page.getByTestId('plan-setup').click()
 
-  // Today's list + totals reflect the meal (no weigh-in yet, so no target).
-  await expect(page.getByTestId('today-kcal')).toHaveText('140', WAIT)
-  await expect(page.getByText('Total: 40 g · 140 kcal')).toBeVisible(WAIT)
+  // Meal times are derived, never typed.
+  await expect(page.getByTestId('plan-times')).toHaveText('6 h apart — 07:00 · 13:00 · 19:00', WAIT)
+  await page.getByTestId('plan-item-grams-0').fill('69')
+  // 69 g × 3.5 kcal/g = 242 kcal a day, 23 g a meal.
+  await expect(page.getByTestId('plan-daily-kcal')).toHaveText('242')
+  await expect(page.getByTestId('plan-per-meal')).toHaveText('Each meal: 23 g Test Kibble')
+  await page.getByTestId('plan-save').click()
 
-  // ---- e. weigh in, check the dashboard ----
-  await tabBar(page).getByRole('link', { name: 'Weight' }).click()
-  await expect(page.getByTestId('weight-kg')).toBeVisible(WAIT)
-  await page.getByTestId('weight-kg').fill('1.50')
-  await page.getByTestId('weight-save').click()
-  await expect(page.getByTestId('weight-latest')).toHaveText('1.50 kg', WAIT)
+  // ---- g. tick a bowl ----
+  await expect(page.getByTestId('today-meals')).toHaveText('0 of 3', WAIT)
+  await expect(page.getByTestId('plan-ratio')).toContainText('%', WAIT)
 
+  await page.getByTestId('meal-tick-0').click()
+  await expect(page.getByTestId('today-meals')).toHaveText('1 of 3', WAIT)
+  // 23 g × 3.5 = 81 kcal of the 242 the plan is worth.
+  await expect(page.getByTestId('today-kcal')).toContainText('81 of 242 kcal', WAIT)
+
+  // A tick is undoable — it deletes the feedings it wrote.
+  await page.getByTestId('meal-tick-0').click()
+  await expect(page.getByTestId('today-meals')).toHaveText('0 of 3', WAIT)
+  await page.getByTestId('meal-tick-0').click()
+  await expect(page.getByTestId('today-meals')).toHaveText('1 of 3', WAIT)
+
+  // ---- h. the dashboard leads with the same figure ----
   await tabBar(page).getByRole('link', { name: 'Home' }).click()
-  // With a weight logged there is a daily target: "140 / <target> kcal".
-  await expect(page.getByTestId('dash-kcal-today')).toContainText('140', WAIT)
+  await expect(page.getByTestId('dash-meals-today')).toHaveText('1 of 3', WAIT)
   await expect(page.getByTestId('dash-weight')).toContainText('1.50 kg', WAIT)
 
-  // ---- f. offline: log a meal, then sync ----
+  // ---- i. offline: tick another bowl, then sync ----
   await context.setOffline(true)
   await tabBar(page).getByRole('link', { name: 'Food' }).click()
-  await expect(page.getByTestId('meal-grams')).toBeVisible(WAIT)
-  await page.getByTestId('meal-grams').fill('30')
-  await page.getByTestId('meal-save').click()
-  // Firestore latency compensation shows the queued meal immediately:
-  // 40+30 g and 140+105 kcal.
-  await expect(page.getByText('Total: 70 g · 245 kcal')).toBeVisible(WAIT)
+  await expect(page.getByTestId('meal-tick-1')).toBeVisible(WAIT)
+  await page.getByTestId('meal-tick-1').click()
+  // Firestore latency compensation shows the queued tick immediately.
+  await expect(page.getByTestId('today-meals')).toHaveText('2 of 3', WAIT)
 
   await context.setOffline(false)
   // One short settle so the queued write reaches the emulator before reload.
@@ -104,7 +118,7 @@ test('full household journey', async ({ page, context }, testInfo) => {
   await page.reload()
 
   // After reload the app re-authenticates and re-reads from the emulator —
-  // the offline-logged meal must still be there.
+  // the offline tick must still be there.
   await expect(tabBar(page)).toBeVisible({ timeout: 30_000 })
-  await expect(page.getByText('Total: 70 g · 245 kcal')).toBeVisible({ timeout: 30_000 })
+  await expect(page.getByTestId('today-meals')).toHaveText('2 of 3', { timeout: 30_000 })
 })

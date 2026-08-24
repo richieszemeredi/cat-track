@@ -28,6 +28,8 @@ import {
   feedingSchema,
   foodSchema,
   memberSchema,
+  planItemSchema,
+  planSchema,
   weightEntrySchema,
   type Cat,
   type Feeding,
@@ -35,6 +37,9 @@ import {
   type FoodAnalysis,
   type FoodType,
   type LifeStage,
+  type Plan,
+  type PlanItem,
+  type PlanTransition,
   type Role,
   type Sex,
   type WeightEntry,
@@ -91,6 +96,12 @@ function foodsRef(hid: string, catId: string): CollectionReference {
 }
 function feedingsRef(hid: string, catId: string): CollectionReference {
   return collection(db, 'households', hid, 'cats', catId, 'feedings')
+}
+function plansRef(hid: string, catId: string): CollectionReference {
+  return collection(db, 'households', hid, 'cats', catId, 'plans')
+}
+function planItemsRef(hid: string, catId: string, planId: string): CollectionReference {
+  return collection(db, 'households', hid, 'cats', catId, 'plans', planId, 'items')
 }
 
 // ---------- membership discovery ----------
@@ -311,43 +322,95 @@ export function useFeedingsForDayLive(
   )
 }
 
-/**
- * The most recent feedings across all days, newest first — powers the
- * "repeat a previous day" shortcut. Capped: we only ever need the last day or
- * two that actually had meals, and a cat eats a handful of times a day.
- */
-const RECENT_FEEDINGS_LIMIT = 40
+// ---------- plans ----------
 
-export function recentFeedingsQueryOptions(hid: string, catId: string) {
+/**
+ * Every plan, newest first. A plan is never edited: a revision is a new doc,
+ * and the one before it is closed by this one's effectiveFrom — so [0] is the
+ * plan in force and the rest are the history. Capped because a cat that lived
+ * to twenty on fortnightly revisions still would not reach it.
+ */
+const PLANS_LIMIT = 100
+
+/**
+ * Newest first, with same-day revisions broken by when they were written.
+ *
+ * Ordering on effectiveFrom alone leaves two plans saved on the same day tied,
+ * and Firestore then falls back to document id — so "bump the grams, then bump
+ * them again" could leave the FIRST revision in force. Sorted here rather than
+ * in the query because a second orderBy would need a composite index.
+ */
+function sortPlans(plans: Plan[]): Plan[] {
+  return [...plans].sort(
+    (a, b) =>
+      b.effectiveFrom.getTime() - a.effectiveFrom.getTime() ||
+      b.createdAt.getTime() - a.createdAt.getTime(),
+  )
+}
+
+export function plansQueryOptions(hid: string, catId: string) {
   return queryOptions({
-    queryKey: ['feedings-recent', hid, catId] as const,
+    queryKey: ['plans', hid, catId] as const,
     queryFn: async () =>
-      parseDocs(
-        feedingSchema,
-        await getDocs(
-          query(feedingsRef(hid, catId), orderBy('datetime', 'desc'), limit(RECENT_FEEDINGS_LIMIT)),
+      sortPlans(
+        parseDocs(
+          planSchema,
+          await getDocs(
+            query(plansRef(hid, catId), orderBy('effectiveFrom', 'desc'), limit(PLANS_LIMIT)),
+          ),
         ),
       ),
     staleTime: Infinity,
   })
 }
 
-export function useRecentFeedingsLive(hid: string, catId: string): void {
+export function usePlansLive(hid: string, catId: string): void {
   const qc = useQueryClient()
   useEffect(
     () =>
       onSnapshot(
-        query(feedingsRef(hid, catId), orderBy('datetime', 'desc'), limit(RECENT_FEEDINGS_LIMIT)),
+        query(plansRef(hid, catId), orderBy('effectiveFrom', 'desc'), limit(PLANS_LIMIT)),
         (snap) => {
           qc.setQueryData(
-            recentFeedingsQueryOptions(hid, catId).queryKey,
-            parseDocs(feedingSchema, snap),
+            plansQueryOptions(hid, catId).queryKey,
+            sortPlans(parseDocs(planSchema, snap)),
           )
         },
-        onListenError(qc, recentFeedingsQueryOptions(hid, catId).queryKey),
+        onListenError(qc, plansQueryOptions(hid, catId).queryKey),
       ),
     [hid, catId, qc],
   )
+}
+
+/**
+ * The foods a plan is made of. A separate collection rather than a list on the
+ * plan doc because security rules cannot iterate a list — as its own document
+ * every item gets the same hasOnly field validation as everything else.
+ */
+export function planItemsQueryOptions(hid: string, catId: string, planId: string) {
+  return queryOptions({
+    queryKey: ['plan-items', hid, catId, planId] as const,
+    queryFn: async () =>
+      parseDocs(planItemSchema, await getDocs(query(planItemsRef(hid, catId, planId)))),
+    staleTime: Infinity,
+  })
+}
+
+export function usePlanItemsLive(hid: string, catId: string, planId: string | null): void {
+  const qc = useQueryClient()
+  useEffect(() => {
+    if (planId === null) return
+    return onSnapshot(
+      query(planItemsRef(hid, catId, planId)),
+      (snap) => {
+        qc.setQueryData(
+          planItemsQueryOptions(hid, catId, planId).queryKey,
+          parseDocs(planItemSchema, snap),
+        )
+      },
+      onListenError(qc, planItemsQueryOptions(hid, catId, planId).queryKey),
+    )
+  }, [hid, catId, planId, qc])
 }
 
 // ---------- offline-aware write helper ----------
@@ -491,6 +554,64 @@ export function updateFood(
   return updateDoc(doc(foodsRef(hid, catId), foodId), { ...patch })
 }
 
+export interface PlanInput {
+  effectiveFrom: Date
+  mealsPerDay: number
+  firstMealAt: string
+  lastMealAt: string
+  setAtWeightKg: number | null
+  transition: PlanTransition | null
+  note: string | null
+}
+
+export interface PlanItemInput {
+  foodId: string
+  foodNameSnapshot: string
+  amountPerDayG: number
+}
+
+/**
+ * Save a plan revision: a new plan doc plus its items, in one batch. Atomic
+ * because a plan whose items half-landed would silently under-feed the cat —
+ * and unlike a half-copied day, nobody would notice by looking.
+ */
+export function savePlan(
+  hid: string,
+  catId: string,
+  uid: string,
+  input: PlanInput,
+  items: readonly PlanItemInput[],
+): Promise<unknown> {
+  const batch = writeBatch(db)
+  const planDoc = doc(plansRef(hid, catId))
+
+  batch.set(planDoc, {
+    ...input,
+    effectiveFrom: Timestamp.fromDate(input.effectiveFrom),
+    transition:
+      input.transition === null
+        ? null
+        : { ...input.transition, startedOn: Timestamp.fromDate(input.transition.startedOn) },
+    createdBy: uid,
+    createdAt: serverTimestamp(),
+  })
+
+  for (const item of items) {
+    batch.set(doc(planItemsRef(hid, catId, planDoc.id)), { ...item })
+  }
+
+  return batch.commit()
+}
+
+/** Remove a plan and its items — for a revision saved by mistake. */
+export async function deletePlan(hid: string, catId: string, planId: string): Promise<unknown> {
+  const items = await getDocs(query(planItemsRef(hid, catId, planId)))
+  const batch = writeBatch(db)
+  for (const item of items.docs) batch.delete(item.ref)
+  batch.delete(doc(plansRef(hid, catId), planId))
+  return batch.commit()
+}
+
 export interface FeedingInput {
   datetime: Date
   foodId: string | null
@@ -498,6 +619,9 @@ export interface FeedingInput {
   amountG: number
   kcal: number
   note: string | null
+  /** The planned bowl this ticks off; both null for anything off-plan. */
+  planId: string | null
+  mealIndex: number | null
 }
 
 export function addFeeding(
@@ -515,8 +639,10 @@ export function addFeeding(
 }
 
 /**
- * Log several meals at once ("repeat a previous day"). One batch so the day
- * either lands whole or not at all — a half-copied day is worse than none.
+ * Log several foods at once — ticking one planned bowl during a flavour
+ * switch writes a feeding per food. One batch, so a bowl either lands whole or
+ * not at all; a half-recorded meal would read as a smaller portion than the
+ * cat actually got.
  */
 export function addFeedings(
   hid: string,
@@ -540,5 +666,16 @@ export function deleteFeeding(hid: string, catId: string, entryId: string): Prom
   return deleteDoc(doc(feedingsRef(hid, catId), entryId))
 }
 
+/** Un-tick a bowl: every feeding it wrote goes, or none does. */
+export function deleteFeedings(
+  hid: string,
+  catId: string,
+  entryIds: readonly string[],
+): Promise<unknown> {
+  const batch = writeBatch(db)
+  for (const entryId of entryIds) batch.delete(doc(feedingsRef(hid, catId), entryId))
+  return batch.commit()
+}
+
 // Re-exported so feature code can type cache data without importing schemas.
-export type { Cat, Feeding, Food, WeightEntry }
+export type { Cat, Feeding, Food, Plan, PlanItem, PlanTransition, WeightEntry }

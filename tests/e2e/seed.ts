@@ -47,6 +47,14 @@ export async function seedHousehold(page: Page, options: SeedOptions): Promise<v
   await page.getByTestId('cat-save').click()
   await expect(page.getByRole('heading', { name: 'Mochi' })).toBeVisible(WAIT)
 
+  // Weigh in before the plan: the plan records what she weighed when it was
+  // set, and needs a target to show a percentage against.
+  await tabBar(page).getByRole('link', { name: 'Weight' }).click()
+  await expect(page.getByTestId('weight-kg')).toBeVisible(WAIT)
+  await page.getByTestId('weight-kg').fill('1.50')
+  await page.getByTestId('weight-save').click()
+  await expect(page.getByTestId('weight-latest')).toHaveText('1.50 kg', WAIT)
+
   await tabBar(page).getByRole('link', { name: 'Food' }).click()
   await expect(page.getByTestId('food-add-open')).toBeVisible(WAIT)
   await page.getByTestId('food-add-open').click()
@@ -55,22 +63,21 @@ export async function seedHousehold(page: Page, options: SeedOptions): Promise<v
   await page.getByTestId('food-kcal-per-gram').fill('3.5')
   await page.getByTestId('food-save').click()
 
-  await expect(page.getByTestId('meal-grams')).toBeVisible(WAIT)
-  await page.getByTestId('meal-grams').fill('40')
-  await page.getByTestId('meal-save').click()
-  await expect(page.getByTestId('today-kcal')).toHaveText('140', WAIT)
-
-  await tabBar(page).getByRole('link', { name: 'Weight' }).click()
-  await expect(page.getByTestId('weight-kg')).toBeVisible(WAIT)
-  await page.getByTestId('weight-kg').fill('1.50')
-  await page.getByTestId('weight-save').click()
-  await expect(page.getByTestId('weight-latest')).toHaveText('1.50 kg', WAIT)
+  // 69 g a day of a 3.5 kcal/g food is 242 kcal — near enough this kitten's
+  // 237 kcal target that the "she's outgrown this" nudge stays quiet.
+  await expect(page.getByTestId('plan-setup')).toBeVisible(WAIT)
+  await page.getByTestId('plan-setup').click()
+  await expect(page.getByTestId('plan-item-grams-0')).toBeVisible(WAIT)
+  await page.getByTestId('plan-item-grams-0').fill('69')
+  await page.getByTestId('plan-save').click()
+  await expect(page.getByTestId('today-meals')).toHaveText('0 of 3', WAIT)
 }
 
 // ---------- direct emulator writes ----------
-// The UI can only log meals for today (by design), so "repeat a previous day"
-// needs a yesterday to repeat. Write it straight to the Firestore emulator's
-// REST API, which bypasses rules with the well-known `owner` bearer token.
+// A plan revision is always "from today" in the UI (by design), so the plan
+// history needs an older plan to show. Write it straight to the Firestore
+// emulator's REST API, which bypasses rules with the well-known `owner`
+// bearer token.
 
 const EMULATOR = 'http://127.0.0.1:8080/v1/projects/demo-cattrack/databases/(default)/documents'
 const OWNER = { Authorization: 'Bearer owner' } as const
@@ -87,12 +94,8 @@ async function listDocs(request: APIRequestContext, path: string): Promise<RestD
   return body.documents ?? []
 }
 
-/**
- * Log a meal on the previous calendar day for the household named `tag`.
- * Timestamps are built from the local clock so the meal lands on the same
- * "yesterday" the browser computes.
- */
-export async function seedYesterdayMeal(request: APIRequestContext, tag: string): Promise<void> {
+/** Resolve `households/<tag>/cats/<first>` to a REST-relative path. */
+async function catPathFor(request: APIRequestContext, tag: string): Promise<string> {
   const households = await listDocs(request, 'households')
   const household = households.find((d) => d.fields?.['name']?.stringValue === tag)
   const householdPath = household?.name
@@ -102,36 +105,61 @@ export async function seedYesterdayMeal(request: APIRequestContext, tag: string)
 
   const cats = await listDocs(request, `${relative}/cats`)
   const catPath = cats[0]?.name
-  if (catPath === undefined) throw new Error('no cat to attach a meal to')
-  const catRelative = catPath.slice(catPath.indexOf('/documents/') + 11)
+  if (catPath === undefined) throw new Error('no cat in that household')
+  return catPath.slice(catPath.indexOf('/documents/') + 11)
+}
 
-  const yesterday = new Date()
-  yesterday.setDate(yesterday.getDate() - 1)
-  const at = (hours: number, minutes: number) => {
-    const when = new Date(yesterday)
-    when.setHours(hours, minutes, 0, 0)
-    return when.toISOString()
-  }
+/**
+ * Add a superseded plan for the household named `tag`, dated a fortnight ago,
+ * so the plan history has something to draw. Points at the household's first
+ * food so its energy figure resolves like a real plan's would.
+ */
+export async function seedPreviousPlan(request: APIRequestContext, tag: string): Promise<void> {
+  const catRelative = await catPathFor(request, tag)
 
-  for (const [hours, minutes, grams] of [
-    [7, 15, 35],
-    [19, 30, 45],
-  ] as const) {
-    const response = await request.post(`${EMULATOR}/${catRelative}/feedings`, {
-      headers: OWNER,
-      data: {
-        fields: {
-          datetime: { timestampValue: at(hours, minutes) },
-          foodId: { nullValue: null },
-          foodNameSnapshot: { stringValue: 'Test Kibble with a fairly long name' },
-          amountG: { doubleValue: grams },
-          kcal: { doubleValue: grams * 3.5 },
-          note: { nullValue: null },
-          createdBy: { stringValue: 'seed' },
-          createdAt: { timestampValue: at(hours, minutes) },
-        },
+  const foods = await listDocs(request, `${catRelative}/foods`)
+  const foodPath = foods[0]?.name
+  if (foodPath === undefined) throw new Error('no food to build a plan from')
+  const foodId = foodPath.slice(foodPath.lastIndexOf('/') + 1)
+  const foodName = foods[0]?.fields?.['name']?.stringValue ?? 'Test Kibble'
+
+  const twoWeeksAgo = new Date()
+  twoWeeksAgo.setDate(twoWeeksAgo.getDate() - 14)
+  twoWeeksAgo.setHours(0, 0, 0, 0)
+  const at = twoWeeksAgo.toISOString()
+
+  const planResponse = await request.post(`${EMULATOR}/${catRelative}/plans`, {
+    headers: OWNER,
+    data: {
+      fields: {
+        effectiveFrom: { timestampValue: at },
+        mealsPerDay: { integerValue: '4' },
+        firstMealAt: { stringValue: '07:00' },
+        lastMealAt: { stringValue: '21:00' },
+        setAtWeightKg: { doubleValue: 1.1 },
+        transition: { nullValue: null },
+        note: { nullValue: null },
+        createdBy: { stringValue: 'seed' },
+        createdAt: { timestampValue: at },
       },
-    })
-    expect(response.ok(), 'seeding a previous-day meal failed').toBe(true)
-  }
+    },
+  })
+  expect(planResponse.ok(), 'seeding a previous plan failed').toBe(true)
+
+  const created = (await planResponse.json()) as RestDoc
+  const planPath = created.name
+  if (planPath === undefined) throw new Error('emulator returned no plan path')
+  const planRelative = planPath.slice(planPath.indexOf('/documents/') + 11)
+
+  const itemResponse = await request.post(`${EMULATOR}/${planRelative}/items`, {
+    headers: OWNER,
+    data: {
+      fields: {
+        foodId: { stringValue: foodId },
+        foodNameSnapshot: { stringValue: foodName },
+        amountPerDayG: { doubleValue: 48 },
+      },
+    },
+  })
+  expect(itemResponse.ok(), 'seeding a previous plan item failed').toBe(true)
 }
