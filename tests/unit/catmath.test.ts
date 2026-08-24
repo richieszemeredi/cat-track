@@ -17,6 +17,7 @@ import {
   MER_MULTIPLIERS,
   mer,
   rer,
+  formatWeightKg,
   roundGrams,
   roundKcal,
   roundKg,
@@ -354,6 +355,17 @@ describe('rounding helpers', () => {
     expect(roundKg(4.567)).toBe(4.57)
     expect(roundKg(4.564)).toBe(4.56)
     expect(roundKg(3)).toBe(3)
+  })
+
+  it('formatWeightKg switches to grams under 1 kg', () => {
+    expect(formatWeightKg(0.09)).toBe('90 g')
+    expect(formatWeightKg(0.0949)).toBe('95 g')
+    expect(formatWeightKg(-0.09)).toBe('-90 g')
+  })
+
+  it('formatWeightKg stays in kg at 1 kg and above', () => {
+    expect(formatWeightKg(1)).toBe('1.00 kg')
+    expect(formatWeightKg(4.567)).toBe('4.57 kg')
   })
 })
 

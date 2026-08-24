@@ -6,7 +6,7 @@ import { ErrorCard } from '../components/ErrorCard'
 import { GrowthChart } from '../components/GrowthChart'
 import { WeighForm } from '../components/WeighForm'
 import { useAuth } from '../lib/auth'
-import { roundKg } from '../lib/catmath'
+import { formatWeightKg } from '../lib/catmath'
 import { awaitOrQueued, deleteWeightEntry, useWeightsLive, weightsQueryOptions } from '../lib/db'
 import { useHousehold } from '../lib/household'
 import { type Cat, type WeightEntry } from '../lib/schemas'
@@ -106,7 +106,7 @@ function WeightBody({
             data-testid="weight-latest"
             className="text-5xl font-bold tracking-tight tabular-nums"
           >
-            {latest === undefined ? '—' : `${roundKg(latest.weightKg).toFixed(2)} kg`}
+            {latest === undefined ? '—' : formatWeightKg(latest.weightKg)}
           </span>
         </p>
         <p className="text-sm text-ink-soft">
@@ -121,7 +121,7 @@ function WeightBody({
                 className={change.delta > 0 && isKitten ? 'font-semibold text-positive' : undefined}
               >
                 {change.delta >= 0 ? '+' : ''}
-                {roundKg(change.delta).toFixed(2)} kg
+                {formatWeightKg(change.delta)}
               </span>{' '}
               since {change.sinceLabel}
             </>
@@ -191,7 +191,7 @@ function HistoryRow({
   return (
     <li className="flex items-center gap-3 px-4 py-3">
       <span className="w-20 shrink-0 font-semibold tabular-nums">
-        {roundKg(entry.weightKg).toFixed(2)} kg
+        {formatWeightKg(entry.weightKg)}
       </span>
       <span className="min-w-0 flex-1">
         <span className="text-sm text-ink-soft">{format(entry.date, 'MMM d, yyyy')}</span>

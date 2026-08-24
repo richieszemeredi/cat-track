@@ -233,3 +233,11 @@ export function roundGrams(grams: number): number {
 export function roundKg(kg: number): number {
   return Math.round(kg * 100) / 100
 }
+
+// Under 1 kg, "0.09 kg" reads worse than "90 g" — a newborn kitten's weight
+// and the week-to-week gain of an older one both live in that range.
+// Math.abs so a negative delta (a kitten that lost weight) still switches
+// unit at the same 1 kg threshold instead of only when it grows.
+export function formatWeightKg(kg: number): string {
+  return Math.abs(kg) < 1 ? `${String(roundGrams(kg * 1000))} g` : `${roundKg(kg).toFixed(2)} kg`
+}
