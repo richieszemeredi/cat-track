@@ -1,4 +1,4 @@
-import { differenceInDays, differenceInMonths } from 'date-fns'
+import { differenceInCalendarDays, differenceInDays, differenceInMonths } from 'date-fns'
 
 // Pure calorie / growth math. Everything here mirrors common veterinary
 // guidance but is an ESTIMATE — the UI must keep the "consult your vet"
@@ -219,6 +219,74 @@ export function growthBand(ageMonths: number, adultWeightKg?: number | null): Gr
     expected = adult
   }
   return { lowKg: expected * 0.8, expectedKg: expected, highKg: expected * 1.2 }
+}
+
+// ---------- week-over-week change ----------
+
+/**
+ * The shortest span a weekly rate may be derived from. A weigh-in the next
+ * morning says nothing about a week: dividing by one day and multiplying by
+ * seven would scale kitchen-scale noise (±10 g on a kitten) up sevenfold and
+ * report a thriving kitten as losing 70 g a week.
+ */
+export const MIN_TREND_SPAN_DAYS = 5
+
+export interface WeightPoint {
+  date: Date
+  weightKg: number
+}
+
+export interface WeightTrend {
+  /** Change per 7 days across the span, in kg — negative when losing. */
+  kgPerWeek: number
+  /** The weigh-in the rate is measured from. */
+  from: Date
+  /** Whole days between that weigh-in and the latest one. */
+  spanDays: number
+}
+
+/**
+ * Week-over-week change, measured between the latest weigh-in and an earlier
+ * one — the figure that says whether a kitten is growing, rather than the raw
+ * gap-dependent delta between the last two entries.
+ *
+ * The baseline is the entry whose span is CLOSEST to 7 days (ties going to the
+ * longer span, which dilutes scale noise rather than amplifying it), not
+ * simply the previous entry: weighing twice in one week should sharpen the
+ * figure, never shorten the window it is derived from. Returns null while
+ * every entry sits inside MIN_TREND_SPAN_DAYS of the latest — there is nothing
+ * honest to say per week yet, and the caller shows the raw change instead.
+ */
+export function weeklyWeightTrend(entries: readonly WeightPoint[]): WeightTrend | null {
+  let latest: WeightPoint | null = null
+  for (const entry of entries) {
+    if (latest === null || entry.date.getTime() >= latest.date.getTime()) latest = entry
+  }
+  if (latest === null) return null
+  const anchor = latest
+
+  // Calendar days, not elapsed hours: a weigh-in is a dated event, and the
+  // hour it happened to be taken at must not move the divisor (nor may a DST
+  // change turn a 7-day span into 6.96).
+  let best: { entry: WeightPoint; spanDays: number } | null = null
+  for (const entry of entries) {
+    if (entry === anchor) continue
+    const spanDays = differenceInCalendarDays(anchor.date, entry.date)
+    if (spanDays < MIN_TREND_SPAN_DAYS) continue
+    const closer = best === null || Math.abs(spanDays - 7) < Math.abs(best.spanDays - 7)
+    const tieOnTheLongerSpan =
+      best !== null &&
+      Math.abs(spanDays - 7) === Math.abs(best.spanDays - 7) &&
+      spanDays > best.spanDays
+    if (closer || tieOnTheLongerSpan) best = { entry, spanDays }
+  }
+  if (best === null) return null
+
+  return {
+    kgPerWeek: ((anchor.weightKg - best.entry.weightKg) / best.spanDays) * 7,
+    from: best.entry.date,
+    spanDays: best.spanDays,
+  }
 }
 
 /** Round for display: kcal to whole numbers, grams to whole numbers, kg to 2 dp. */

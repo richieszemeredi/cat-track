@@ -1,5 +1,5 @@
 import { expect, test, type Page } from '@playwright/test'
-import { seedHousehold, seedPreviousPlan, tabBar, WAIT } from './seed'
+import { seedHousehold, seedLastWeeksWeighIn, seedPreviousPlan, tabBar, WAIT } from './seed'
 
 /**
  * Layout pass on the two phones this household uses (iPhone 14 Pro, 393pt and
@@ -170,6 +170,9 @@ test('every screen fits the viewport without sideways scroll', async ({
   await seedHousehold(page, { tag })
   // A superseded plan, so the Food page renders its history section here.
   await seedPreviousPlan(request, tag)
+  // A second weigh-in a week back, so Home and Weight lay out the per-week
+  // change instead of the shorter first-weigh-in line.
+  await seedLastWeeksWeighIn(request, tag)
 
   for (const name of PAGES) {
     await tabBar(page).getByRole('link', { name }).click()

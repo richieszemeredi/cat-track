@@ -21,6 +21,8 @@ import {
   roundGrams,
   roundKcal,
   roundKg,
+  weeklyWeightTrend,
+  MIN_TREND_SPAN_DAYS,
 } from '../../src/lib/catmath'
 
 describe('rer', () => {
@@ -427,5 +429,75 @@ describe('energy from label constituents (modified Atwater)', () => {
 
   it('sums the declared constituents', () => {
     expect(analysisSumPct(premiereKitten)).toBeCloseTo(96.9, 6)
+  })
+})
+
+describe('weeklyWeightTrend', () => {
+  // Day 0 is the kitten's first weigh-in; every case below is expressed as
+  // days from it, which is how the weigh-in cadence is actually discussed.
+  const day = (n: number, weightKg: number) => ({ date: new Date(2026, 0, 1 + n), weightKg })
+
+  it('returns null with fewer than two weigh-ins', () => {
+    expect(weeklyWeightTrend([])).toBeNull()
+    expect(weeklyWeightTrend([day(0, 1.2)])).toBeNull()
+  })
+
+  it('returns null while every earlier weigh-in is inside the minimum span', () => {
+    // Weighed three mornings running: a real gain, but nothing to say per week.
+    expect(weeklyWeightTrend([day(0, 1.2), day(1, 1.21), day(2, 1.23)])).toBeNull()
+    expect(MIN_TREND_SPAN_DAYS).toBe(5)
+  })
+
+  it('reports the raw change on the weekly cadence the app asks for', () => {
+    const trend = weeklyWeightTrend([day(0, 1.2), day(7, 1.31)])
+    expect(trend?.kgPerWeek).toBeCloseTo(0.11, 10)
+    expect(trend?.spanDays).toBe(7)
+    expect(trend?.from).toEqual(new Date(2026, 0, 1))
+  })
+
+  it('scales a longer gap down to a week rather than reporting it whole', () => {
+    // Three weeks between weigh-ins: +0.3 kg is +0.1 kg per week, not +0.3.
+    const trend = weeklyWeightTrend([day(0, 1.2), day(21, 1.5)])
+    expect(trend?.kgPerWeek).toBeCloseTo(0.1, 10)
+    expect(trend?.spanDays).toBe(21)
+  })
+
+  it('measures from the weigh-in nearest a week back, not the previous one', () => {
+    // An extra weigh-in yesterday must sharpen the window, not shorten it to
+    // one day and multiply that day's scale noise by seven.
+    const trend = weeklyWeightTrend([day(0, 1.2), day(7, 1.3), day(13, 1.39), day(14, 1.4)])
+    expect(trend?.spanDays).toBe(7)
+    expect(trend?.kgPerWeek).toBeCloseTo(0.1, 10)
+  })
+
+  it('picks a 7-day baseline out of daily weigh-ins', () => {
+    const daily = Array.from({ length: 11 }, (_, n) => day(n, 1.2 + n * 0.015))
+    const trend = weeklyWeightTrend(daily)
+    expect(trend?.spanDays).toBe(7)
+    expect(trend?.kgPerWeek).toBeCloseTo(0.105, 10)
+  })
+
+  it('breaks a tie on the longer span, which dilutes scale noise', () => {
+    // Spans 9 and 5 are both two days off a week; 9 divides the noise by more.
+    const trend = weeklyWeightTrend([day(0, 1.2), day(4, 1.28), day(9, 1.38)])
+    expect(trend?.spanDays).toBe(9)
+    expect(trend?.kgPerWeek).toBeCloseTo(((1.38 - 1.2) / 9) * 7, 10)
+  })
+
+  it('goes negative when the cat is losing weight', () => {
+    const trend = weeklyWeightTrend([day(0, 5.2), day(7, 5.05)])
+    expect(trend?.kgPerWeek).toBeCloseTo(-0.15, 10)
+  })
+
+  it('finds the latest weigh-in even when the entries arrive out of order', () => {
+    const trend = weeklyWeightTrend([day(7, 1.3), day(0, 1.2), day(3, 1.25)])
+    expect(trend?.spanDays).toBe(7)
+    expect(trend?.kgPerWeek).toBeCloseTo(0.1, 10)
+  })
+
+  it('ignores a same-day second weigh-in as a baseline', () => {
+    const trend = weeklyWeightTrend([day(0, 1.2), day(7, 1.29), day(7, 1.3)])
+    expect(trend?.spanDays).toBe(7)
+    expect(trend?.from).toEqual(new Date(2026, 0, 1))
   })
 })

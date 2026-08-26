@@ -4,7 +4,14 @@ import { format } from 'date-fns'
 import { type ReactNode } from 'react'
 import { ErrorCard } from '../components/ErrorCard'
 import { StatCard } from '../components/StatCard'
-import { ageLabelLong, roundGrams, roundKcal, roundKg } from '../lib/catmath'
+import {
+  ageLabelLong,
+  formatWeightKg,
+  roundGrams,
+  roundKcal,
+  roundKg,
+  weeklyWeightTrend,
+} from '../lib/catmath'
 import {
   feedingsForDayQueryOptions,
   plansQueryOptions,
@@ -99,14 +106,27 @@ function Dashboard({ cat }: { cat: Cat }) {
   const stage = effectiveLifeStage(cat, now)
   const isKitten = stage === 'kitten_0_4' || stage === 'kitten_4_12'
 
+  // Per week wherever a long enough span exists (catmath.weeklyWeightTrend);
+  // the raw change between the last two weigh-ins only while it doesn't. The
+  // sub-label always says which, so the tile is never ambiguous about what it
+  // divided by.
+  const trend = weeklyWeightTrend(weights)
   const weightDelta =
-    latest !== undefined && previous !== undefined
-      ? roundKg(latest.weightKg - previous.weightKg)
-      : null
+    trend !== null
+      ? trend.kgPerWeek
+      : latest !== undefined && previous !== undefined
+        ? latest.weightKg - previous.weightKg
+        : null
   const weightSub: ReactNode =
     latest === undefined ? 'No weigh-ins yet' : format(latest.date, 'MMM d')
   const changeSub: ReactNode =
-    weightDelta !== null ? 'since the last weigh-in' : latest === undefined ? '—' : 'First weigh-in'
+    trend !== null
+      ? 'per week'
+      : weightDelta !== null
+        ? 'since the last weigh-in'
+        : latest === undefined
+          ? '—'
+          : 'First weigh-in'
 
   const statsLoading = weightsQuery.isLoading || feedingsQuery.isLoading
   const statsError = weightsQuery.error ?? feedingsQuery.error
@@ -204,7 +224,7 @@ function Dashboard({ cat }: { cat: Cat }) {
                 value={
                   weightDelta === null
                     ? '—'
-                    : `${weightDelta >= 0 ? '+' : ''}${weightDelta.toFixed(2)} kg`
+                    : `${weightDelta >= 0 ? '+' : ''}${formatWeightKg(weightDelta)}`
                 }
                 sub={changeSub}
               />

@@ -163,3 +163,33 @@ export async function seedPreviousPlan(request: APIRequestContext, tag: string):
   })
   expect(itemResponse.ok(), 'seeding a previous plan item failed').toBe(true)
 }
+
+/**
+ * Add a weigh-in a week before the seeded one, so the weight screens show the
+ * week-over-week figure ("+180 g per week since ...") rather than the
+ * first-weigh-in fallback. That sentence is the longest line the Latest
+ * section can produce, which is exactly what the layout pass wants to measure.
+ */
+export async function seedLastWeeksWeighIn(request: APIRequestContext, tag: string): Promise<void> {
+  const catRelative = await catPathFor(request, tag)
+
+  const aWeekAgo = new Date()
+  aWeekAgo.setDate(aWeekAgo.getDate() - 7)
+  aWeekAgo.setHours(9, 0, 0, 0)
+  const at = aWeekAgo.toISOString()
+
+  const response = await request.post(`${EMULATOR}/${catRelative}/weights`, {
+    headers: OWNER,
+    data: {
+      fields: {
+        date: { timestampValue: at },
+        // 1.32 kg a week before the seeded 1.50 kg: +180 g per week.
+        weightKg: { doubleValue: 1.32 },
+        note: { nullValue: null },
+        createdBy: { stringValue: 'seed' },
+        createdAt: { timestampValue: at },
+      },
+    },
+  })
+  expect(response.ok(), "seeding last week's weigh-in failed").toBe(true)
+}

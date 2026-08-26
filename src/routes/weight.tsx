@@ -6,7 +6,7 @@ import { ErrorCard } from '../components/ErrorCard'
 import { GrowthChart } from '../components/GrowthChart'
 import { WeighForm } from '../components/WeighForm'
 import { useAuth } from '../lib/auth'
-import { formatWeightKg } from '../lib/catmath'
+import { formatWeightKg, weeklyWeightTrend } from '../lib/catmath'
 import { awaitOrQueued, deleteWeightEntry, useWeightsLive, weightsQueryOptions } from '../lib/db'
 import { useHousehold } from '../lib/household'
 import { type Cat, type WeightEntry } from '../lib/schemas'
@@ -78,14 +78,21 @@ function WeightBody({
         ? 'Time for the weekly weigh-in.'
         : null
 
-  // Change since the previous weigh-in — shown raw, never extrapolated: with
-  // the weekly weigh-in cadence this IS the weekly change, and scaling a
-  // short gap up to 7 days would only amplify kitchen-scale noise.
-  let change: { delta: number; sinceLabel: string } | null = null
-  if (latest !== undefined && previous !== undefined) {
+  // Week-over-week change: the figure that says whether she is growing. It is
+  // derived over a span of at least MIN_TREND_SPAN_DAYS days (see catmath), so
+  // a second weigh-in the next morning sharpens the window instead of scaling
+  // kitchen-scale noise up sevenfold. Until such a span exists there is nothing
+  // honest to say per week, and the raw change since the previous entry stands
+  // in — it is the same shape of sentence, so the fallback doesn't read as a
+  // different screen.
+  const trend = weeklyWeightTrend(entries)
+  let change: { delta: number; suffix: string } | null = null
+  if (trend !== null) {
+    change = { delta: trend.kgPerWeek, suffix: `per week since ${format(trend.from, 'MMM d')}` }
+  } else if (latest !== undefined && previous !== undefined) {
     change = {
       delta: latest.weightKg - previous.weightKg,
-      sinceLabel: format(previous.date, 'MMM d'),
+      suffix: `since ${format(previous.date, 'MMM d')}`,
     }
   }
 
@@ -123,7 +130,7 @@ function WeightBody({
                 {change.delta >= 0 ? '+' : ''}
                 {formatWeightKg(change.delta)}
               </span>{' '}
-              since {change.sinceLabel}
+              {change.suffix}
             </>
           )}
         </p>

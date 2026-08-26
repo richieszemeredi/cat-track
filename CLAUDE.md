@@ -47,6 +47,13 @@ Cloud Functions, no SSR hosting).
   are frequently absent from a label, so `TYPICAL_ASH_PCT` / `TYPICAL_FIBRE_PCT` fill in
   per food type — and an assumed value must never trip a "your figures are wrong" error,
   only a hint that the food Type is probably off.
+- `weeklyWeightTrend` is the week-over-week figure both weight screens lead with. It
+  measures from the weigh-in whose span is CLOSEST to 7 days, not from the previous entry,
+  and reports nothing below a 5-day span (`MIN_TREND_SPAN_DAYS`): dividing a next-morning
+  re-weigh by one day and multiplying by seven turns ±10 g of kitchen-scale noise into
+  ±70 g/week and would show a thriving kitten as losing weight. An extra weigh-in must
+  sharpen the window, never shorten it. Below that span the screens fall back to the raw
+  change since the previous entry, phrased as the same shape of sentence.
 - `src/lib/plan.ts` — pure, unit-tested planner math. A cat eats the same thing every day,
   so a plan stores a COUNT and a WINDOW, never a list of meals: `mealTimes(3, '07:00',
 '19:00')` _is_ 07:00 / 13:00 / 19:00. Grams are held per DAY because that is the figure
