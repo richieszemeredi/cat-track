@@ -15,6 +15,7 @@ import { membershipQueryOptions } from '../lib/db'
 import { HouseholdProvider } from '../lib/household'
 import { type RouterContext } from '../lib/router-context'
 import { useOnline } from '../lib/use-online'
+import { RemindersProvider } from '../lib/use-reminders'
 
 export const Route = createRootRouteWithContext<RouterContext>()({
   component: RootComponent,
@@ -64,7 +65,11 @@ function MembershipGate({ user }: { user: User }) {
 
   return (
     <HouseholdProvider householdId={found.householdId} role={found.role}>
-      <AppShell />
+      {/* Outside the shell so feeding reminders keep ticking on every screen,
+          not just the food one. */}
+      <RemindersProvider>
+        <AppShell />
+      </RemindersProvider>
     </HouseholdProvider>
   )
 }
