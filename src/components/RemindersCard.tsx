@@ -1,5 +1,9 @@
 import { LEAD_MINUTES } from '../lib/reminders'
-import { type RemindersState } from '../lib/use-reminders'
+// A top-level `import type` rather than the inline `{ type X }` used elsewhere:
+// verbatimModuleSyntax keeps the inline form's statement, so naming a type from
+// use-reminders would drag in db.ts → firebase.ts and initialize Firebase for
+// real. This card calls nothing, and its test should need no Firebase config.
+import type { RemindersState } from '../lib/use-reminders'
 
 /**
  * The reminder switch, as a device setting rather than anything shared — and

@@ -2,7 +2,7 @@ import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
 import { RemindersCard } from '../../src/components/RemindersCard'
-import { type RemindersState } from '../../src/lib/use-reminders'
+import type { RemindersState } from '../../src/lib/use-reminders'
 
 function renderCard(overrides: Partial<RemindersState> = {}) {
   const enable = vi.fn(async () => {
