@@ -15,8 +15,9 @@ food bowl. Built for exactly one household, one cat, and a lot of love.
 - [Firebase](https://firebase.google.com): Firestore (offline-persistent) + Google Auth + Hosting
 - [Tailwind CSS v4](https://tailwindcss.com) with custom warm/playful design tokens
 - [Zod](https://zod.dev) validation at every Firestore read boundary
-- Vitest (unit + component), `@firebase/rules-unit-testing` (security rules), Playwright (e2e on an
-  iPhone viewport), all against the Firebase emulators
+- Vitest (unit + component), `@firebase/rules-unit-testing` (security rules), Playwright (e2e on
+  Safari iPhone 14 Pro + Chrome, layout pass also on iPhone 12 Mini and desktop), all against the
+  Firebase emulators
 - PWA via `vite-plugin-pwa` — installable on iPhone home screens
 
 ## Prerequisites
@@ -60,7 +61,7 @@ localhost); the redirect flow is only used inside the installed iPhone app. Make
 | `VITE_USE_EMULATORS=true npm run dev` | Dev server against the local emulators (see two-terminal recipe above)                           |
 | `npm run test`                        | Unit + component tests (Vitest, with coverage)                                                   |
 | `npm run test:rules`                  | Firestore security rules tests — wraps `firebase emulators:exec`, needs the JDK                  |
-| `npm run test:e2e`                    | Playwright e2e on an iPhone 13 viewport — wraps `firebase emulators:exec`, needs the JDK         |
+| `npm run test:e2e`                    | Playwright e2e on iPhone/Chrome viewports — wraps `firebase emulators:exec`, needs the JDK       |
 | `npm run lint`                        | ESLint (strict type-checked config)                                                              |
 | `npm run typecheck`                   | TypeScript, no emit                                                                              |
 | `npm run build`                       | Typecheck + production build to `dist/`                                                          |
@@ -159,8 +160,6 @@ Dependabot keeps npm dependencies (weekly, minor+patch grouped) and GitHub Actio
 - **Form drafts don't survive an iOS cold start** — a half-typed entry is lost if iOS evicts
   the backgrounded PWA. Forms are 2–4 fields, so re-typing is cheap; a draft-persistence hook
   is the natural follow-up.
-- **The daily target is shown in kcal only** — the per-food gram portion ("≈ 62 g of Kitten
-  Chow") needs a designated primary food; planned alongside M1.
 - **Membership lookup uses a members collection-group query** — the security rule scopes it to
   your own docs, but any future collection literally named `members` would inherit that rule;
   rename or re-scope if one ever appears.

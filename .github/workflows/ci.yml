@@ -59,8 +59,8 @@ jobs:
           distribution: temurin
           java-version: 21
 
-      # E2E runs on the Playwright iPhone 13 device, which uses the WebKit
-      # engine — install webkit plus chromium to be safe.
+      # E2E runs on Safari (iPhone 14 Pro, WebKit) and Chrome (Pixel 7) —
+      # install webkit plus chromium.
       - name: Install Playwright browsers
         run: npx playwright install --with-deps webkit chromium
 
