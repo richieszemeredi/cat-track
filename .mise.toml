@@ -1,0 +1,7 @@
+[tools]
+# Matches .github/workflows CI exactly, so "works on my machine" means the
+# same thing as "works in CI" — notably: `npm run test:rules` / `test:e2e`
+# need the JDK to start the Firestore emulator, which is a real prerequisite
+# for this project, not an optional extra.
+node = "24"
+java = "temurin-21"
