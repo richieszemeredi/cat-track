@@ -1,7 +1,7 @@
 import { useQueries, useQuery } from '@tanstack/react-query'
 import { createFileRoute, Link } from '@tanstack/react-router'
-import { format, isSameDay } from 'date-fns'
-import { useState } from 'react'
+import { format, isSameDay, isValid, parse } from 'date-fns'
+import { useState, type SubmitEvent } from 'react'
 import { ErrorCard } from '../components/ErrorCard'
 import { FoodForm } from '../components/FoodForm'
 import { LogMealForm } from '../components/LogMealForm'
@@ -26,6 +26,7 @@ import {
   foodsQueryOptions,
   planItemsQueryOptions,
   plansQueryOptions,
+  retimeFeedings,
   updateFood,
   useFeedingsForDayLive,
   useFoodsLive,
@@ -41,6 +42,7 @@ import {
 } from '../lib/db'
 import { useHousehold } from '../lib/household'
 import {
+  adjustedMealTimes,
   isOutgrown,
   mealComposition,
   mealTimes,
@@ -167,6 +169,17 @@ function FoodContent({ cat }: { cat: Cat }) {
   const givenCount = [...givenByMeal.keys()].filter((index) => index < times.length).length
   const eatenKcal = sumKcal(feedings)
 
+  // A meal's own actual time, first-feeding-wins (a flavour switch's two
+  // lines share one meal and were written with the same datetime) — this is
+  // what pushes the rest of the day's not-yet-given bowls off the plan's
+  // fixed clock and onto how the day has actually gone.
+  const givenAtByMeal = new Map<number, Date>()
+  for (const [mealIndex, entries] of givenByMeal) {
+    const first = entries[0]
+    if (first !== undefined) givenAtByMeal.set(mealIndex, first.datetime)
+  }
+  const adjustedTimes = adjustedMealTimes(times, day.start, givenAtByMeal)
+
   async function toggleMeal(mealIndex: number): Promise<void> {
     if (plan === null || uid === null) return
     setMealError(null)
@@ -184,15 +197,14 @@ function FoodContent({ cat }: { cat: Cat }) {
         return
       }
 
-      const lines = mealComposition(
-        { mealsPerDay: plan.mealsPerDay, transition: plan.transition },
-        planItems,
-        day.start,
-        mealIndex,
-      )
+      const lines = mealComposition({ mealsPerDay: plan.mealsPerDay }, planItems)
+      // The tick logs the bowl's own (possibly already-shifted) due time, not
+      // the moment of the tap — a quick tap after feeding her fast shouldn't
+      // need a follow-up edit just to fix the time back to when it happened.
+      const datetime = adjustedTimes[mealIndex] ?? day.start
       const inputs = lines
         .map((line) => ({
-          datetime: new Date(),
+          datetime,
           foodId: line.foodId,
           foodNameSnapshot: line.name,
           amountG: roundGrams(line.grams),
@@ -213,6 +225,30 @@ function FoodContent({ cat }: { cat: Cat }) {
       await awaitOrQueued(addFeedings(householdId, cat.id, uid, inputs))
     } catch (err) {
       setMealError(err instanceof Error ? err.message : 'Could not update the meal.')
+    } finally {
+      setBusyMeal(null)
+    }
+  }
+
+  // Shift a ticked bowl to when it actually happened — the tick itself logs
+  // the meal's own due time so a fast tap needs no immediate correction, but
+  // a genuinely early or late feeding still wants recording as such.
+  async function fixMealTime(mealIndex: number, timeStr: string): Promise<void> {
+    if (uid === null) return
+    const already = givenByMeal.get(mealIndex)
+    if (already === undefined || already.length === 0) return
+    const datetime = parse(timeStr, 'HH:mm', day.start)
+    if (!isValid(datetime)) {
+      setMealError('Pick a valid time.')
+      return
+    }
+    setMealError(null)
+    setBusyMeal(mealIndex)
+    try {
+      // 'confirmed' and 'queued' both count as success (offline-first).
+      await awaitOrQueued(retimeFeedings(householdId, cat.id, uid, already, datetime))
+    } catch (err) {
+      setMealError(err instanceof Error ? err.message : 'Could not update the time.')
     } finally {
       setBusyMeal(null)
     }
@@ -353,16 +389,19 @@ function FoodContent({ cat }: { cat: Cat }) {
                   <MealRow
                     key={time + String(mealIndex)}
                     time={time}
+                    adjustedAt={adjustedTimes[mealIndex] ?? day.start}
                     mealIndex={mealIndex}
                     plan={plan}
                     items={planItems}
                     kcalPerGram={kcalPerGram}
-                    day={day.start}
                     given={givenByMeal.get(mealIndex) ?? []}
                     busy={busyMeal === mealIndex}
                     canEdit={canEdit}
                     onToggle={() => {
                       void toggleMeal(mealIndex)
+                    }}
+                    onFixTime={(timeStr) => {
+                      void fixMealTime(mealIndex, timeStr)
                     }}
                   />
                 ))}
@@ -383,13 +422,6 @@ function FoodContent({ cat }: { cat: Cat }) {
                   )}
                 </li>
               </ul>
-              {plan.transition === null ? null : (
-                <p className="gutter text-sm text-ink-soft">
-                  Switching from {plan.transition.fromFoodNameSnapshot} over {plan.transition.steps}{' '}
-                  {plan.transition.unit === 'day' ? 'days' : 'meals'}, from{' '}
-                  {format(plan.transition.startedOn, 'd MMM')}.
-                </p>
-              )}
             </>
           )}
           {mealError === null ? null : <SectionError label={mealError} />}
@@ -736,33 +768,31 @@ function OutgrownNudge({
 
 function MealRow({
   time,
+  adjustedAt,
   mealIndex,
   plan,
   items,
   kcalPerGram,
-  day,
   given,
   busy,
   canEdit,
   onToggle,
+  onFixTime,
 }: {
   time: string
+  /** When this bowl is actually next due, after any earlier lateness cascades. */
+  adjustedAt: Date
   mealIndex: number
   plan: Plan
   items: PlanItem[]
   kcalPerGram: ReadonlyMap<string, number>
-  day: Date
   given: Feeding[]
   busy: boolean
   canEdit: boolean
   onToggle: () => void
+  onFixTime: (timeStr: string) => void
 }) {
-  const lines = mealComposition(
-    { mealsPerDay: plan.mealsPerDay, transition: plan.transition },
-    items,
-    day,
-    mealIndex,
-  )
+  const lines = mealComposition({ mealsPerDay: plan.mealsPerDay }, items)
   const grams = lines.reduce((total, line) => total + line.grams, 0)
   const kcal = lines.reduce(
     (total, line) => total + line.grams * (kcalPerGram.get(line.foodId) ?? 0),
@@ -770,6 +800,13 @@ function MealRow({
   )
   const isGiven = given.length > 0
   const by = given[0]
+  const shiftedTime = format(adjustedAt, 'HH:mm')
+  const isShifted = !isGiven && shiftedTime !== time
+
+  const [editingTime, setEditingTime] = useState(false)
+  const [timeValue, setTimeValue] = useState(() =>
+    by === undefined ? time : format(by.datetime, 'HH:mm'),
+  )
 
   // The tick is the whole point of keeping a daily record: one bowl goes down,
   // and the other phone can see that it did.
@@ -817,7 +854,7 @@ function MealRow({
       <div className="flex min-w-0 flex-1 flex-col gap-1">
         <div className="flex items-baseline justify-between gap-2">
           <span className={`font-medium tabular-nums ${isGiven ? 'text-ink-soft' : ''}`}>
-            {time}
+            {isGiven ? time : shiftedTime}
           </span>
           <span className="shrink-0 text-sm text-ink-soft tabular-nums">
             {roundGrams(grams)} g · {roundKcal(kcal)} kcal
@@ -833,8 +870,58 @@ function MealRow({
             <span className="shrink-0 tabular-nums">{roundGrams(line.grams)} g</span>
           </div>
         ))}
+        {/* A late (or early) earlier bowl pushes this one too, to keep the
+            pacing between meals — see plan.ts's adjustedMealTimes. */}
+        {isShifted ? (
+          <span className="text-xs text-ink-soft">Usually {time}, pushed by an earlier meal</span>
+        ) : null}
         {isGiven && by !== undefined ? (
-          <span className="text-xs text-ink-soft">Given {format(by.datetime, 'HH:mm')}</span>
+          editingTime ? (
+            <form
+              className="flex flex-wrap items-center gap-2"
+              onSubmit={(e: SubmitEvent<HTMLFormElement>) => {
+                e.preventDefault()
+                onFixTime(timeValue)
+                setEditingTime(false)
+              }}
+            >
+              <input
+                type="time"
+                required
+                value={timeValue}
+                onChange={(e) => {
+                  setTimeValue(e.target.value)
+                }}
+                className="field w-auto"
+              />
+              <button type="submit" className="btn-chip">
+                Save
+              </button>
+              <button
+                type="button"
+                className="btn-chip"
+                onClick={() => {
+                  setEditingTime(false)
+                }}
+              >
+                Cancel
+              </button>
+            </form>
+          ) : canEdit ? (
+            <button
+              type="button"
+              disabled={busy}
+              onClick={() => {
+                setTimeValue(format(by.datetime, 'HH:mm'))
+                setEditingTime(true)
+              }}
+              className="-mx-2 flex min-h-9 w-fit items-center rounded px-2 text-xs text-ink-soft active:bg-sand disabled:opacity-60"
+            >
+              Given {format(by.datetime, 'HH:mm')} · edit
+            </button>
+          ) : (
+            <span className="text-xs text-ink-soft">Given {format(by.datetime, 'HH:mm')}</span>
+          )
         ) : null}
       </div>
     </li>
@@ -861,8 +948,11 @@ function PlanHistory({
     queries: plans.map((plan) => planItemsQueryOptions(hid, catId, plan.id)),
   })
 
-  async function remove(plan: Plan): Promise<void> {
-    if (!window.confirm('Delete this plan from the history?')) return
+  async function remove(plan: Plan, isCurrent: boolean): Promise<void> {
+    const prompt = isCurrent
+      ? 'Delete this plan and go back to the previous one?'
+      : 'Delete this plan from the history?'
+    if (!window.confirm(prompt)) return
     setError(null)
     try {
       await awaitOrQueued(deletePlan(hid, catId, plan.id))
@@ -921,12 +1011,16 @@ function PlanHistory({
                   : ` · she was ${String(roundKg(plan.setAtWeightKg))} kg`}
               </span>
             </div>
-            {canEdit && index > 0 ? (
+            {canEdit ? (
               <button
                 type="button"
-                aria-label="Delete this plan"
+                aria-label={
+                  index === 0
+                    ? 'Delete this plan and go back to the previous one'
+                    : 'Delete this plan'
+                }
                 onClick={() => {
-                  void remove(plan)
+                  void remove(plan, index === 0)
                 }}
                 className="btn-icon"
               >

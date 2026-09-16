@@ -7,14 +7,7 @@ import {
   type FoodType,
   type LifeStage,
 } from './catmath'
-import {
-  MAX_MEALS_PER_DAY,
-  MAX_TRANSITION_STEPS,
-  MIN_MEALS_PER_DAY,
-  TRANSITION_UNITS,
-  type PlanTransition,
-  type TransitionUnit,
-} from './plan'
+import { MAX_MEALS_PER_DAY, MIN_MEALS_PER_DAY } from './plan'
 
 // Zod schemas validate every Firestore READ at the boundary (via safeParse in
 // db.ts) so one corrupt/legacy document degrades gracefully instead of
@@ -135,22 +128,6 @@ export type Feeding = z.infer<typeof feedingSchema> & { id: string }
 const mealTimeSchema = z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/)
 
 /**
- * A one-way switch onto the plan's food. Stored as the model's second nested
- * map (after a food's `analysis`), so the rules validate it with hasAll as well
- * as hasOnly — a half-filled transition would let a ratio be derived from a
- * ramp nobody described.
- */
-export const planTransitionSchema = z.object({
-  fromFoodId: z.string().min(1),
-  fromFoodNameSnapshot: z.string().min(1).max(80),
-  toFoodId: z.string().min(1),
-  steps: z.number().int().min(1).max(MAX_TRANSITION_STEPS),
-  unit: z.enum(TRANSITION_UNITS),
-  startedOn: timestampToDate,
-})
-export type { PlanTransition, TransitionUnit }
-
-/**
  * A feeding plan. Meals are not stored: `mealsPerDay` plus the window derives
  * them (see plan.ts). Plans are never edited in place — a revision is a new
  * doc, and the previous plan is closed by the next one's `effectiveFrom`, so
@@ -164,7 +141,6 @@ export const planSchema = z.object({
   // What she weighed when the plan was set — this is what later lets the app
   // say "she's 1.94 kg now, this was set at 1.62".
   setAtWeightKg: z.number().positive().max(30).nullable().default(null),
-  transition: planTransitionSchema.nullable().default(null),
   note: z.string().max(500).nullable(),
   createdBy: z.string().min(1),
   createdAt: timestampToDate,

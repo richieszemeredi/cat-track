@@ -274,14 +274,14 @@ test('the label calculator lays out inside the food form', async ({ page }, test
 })
 
 /**
- * A meal mid-flavour-switch is the widest row the app can produce: two food
+ * A bowl with two foods on it is the widest row the app can produce: two food
  * names, two gram figures and a meal total, all inside one checklist row on a
  * 375pt screen. If any layout is going to break, it breaks here.
  */
-test('a bowl mid-switch shows both foods and holds its layout', async ({ page }, testInfo) => {
+test('a two-food bowl shows both foods and holds its layout', async ({ page }, testInfo) => {
   test.setTimeout(180_000)
 
-  await seedHousehold(page, { tag: `switch-${testInfo.project.name}` })
+  await seedHousehold(page, { tag: `combo-${testInfo.project.name}` })
 
   await tabBar(page).getByRole('link', { name: 'Food' }).click()
   await expect(page.getByTestId('food-add-open')).toBeVisible(WAIT)
@@ -295,26 +295,21 @@ test('a bowl mid-switch shows both foods and holds its layout', async ({ page },
     WAIT,
   )
 
-  // Move her onto the tuna over four days, coming off the kibble.
+  // She eats both the kibble and the tuna at every meal.
   await expect(page.getByTestId('plan-edit')).toBeVisible(WAIT)
   await page.getByTestId('plan-edit').click()
-  await expect(page.getByTestId('plan-item-food-0')).toBeVisible(WAIT)
-  await page.getByTestId('plan-item-food-0').selectOption({ label: 'Wet Tuna in Jelly' })
-  await page.getByTestId('plan-item-grams-0').fill('315')
-  await page.getByTestId('plan-switch-toggle').check()
-  await page
-    .getByTestId('plan-switch-from')
-    .selectOption({ label: 'Test Kibble with a fairly long name' })
-  await expect(page.getByTestId('plan-switch-preview')).toContainText('25% · 50% · 75% · 100%')
+  await expect(page.getByTestId('plan-item-grams-0')).toBeVisible(WAIT)
+  await page.getByTestId('plan-item-grams-0').fill('60')
+  await page.getByTestId('plan-add-food').click()
+  await page.getByTestId('plan-item-food-1').selectOption({ label: 'Wet Tuna in Jelly' })
+  await page.getByTestId('plan-item-grams-1').fill('240')
   await page.getByTestId('plan-save').click()
 
-  // Day one of four: a quarter of the bowl is the new food.
   const firstMeal = page.getByRole('listitem').filter({ hasText: '07:00' })
   await expect(firstMeal).toContainText('Test Kibble with a fairly long name', WAIT)
   await expect(firstMeal).toContainText('Wet Tuna in Jelly')
-  await expect(firstMeal).toContainText('79 g')
-  await expect(firstMeal).toContainText('26 g')
-  await expect(page.getByText('Switching from Test Kibble')).toBeVisible(WAIT)
+  await expect(firstMeal).toContainText('20 g')
+  await expect(firstMeal).toContainText('80 g')
 
   // The revision leaves a superseded plan behind, so the history is here too —
   // opened, because a collapsed section cannot break a layout.
@@ -323,16 +318,16 @@ test('a bowl mid-switch shows both foods and holds its layout', async ({ page },
   await expect(page.getByText('69 g Test Kibble with a fairly long name a day')).toBeVisible(WAIT)
 
   await page.screenshot({
-    path: `test-results/screenshots/${testInfo.project.name}-food-switch.png`,
+    path: `test-results/screenshots/${testInfo.project.name}-food-combo.png`,
     fullPage: true,
   })
-  await testInfo.attach(`${testInfo.project.name}-food-switch`, {
+  await testInfo.attach(`${testInfo.project.name}-food-combo`, {
     body: await page.screenshot({ fullPage: true }),
     contentType: 'image/png',
   })
 
-  expect(await overflowingElements(page), 'a switched bowl overflows the viewport').toEqual([])
-  expect(await documentScrollsSideways(page), 'the switched Food page scrolls sideways').toBe(false)
+  expect(await overflowingElements(page), 'a combo bowl overflows the viewport').toEqual([])
+  expect(await documentScrollsSideways(page), 'the combo Food page scrolls sideways').toBe(false)
   expect(await controlsOutsideTheirCard(page), 'a control escapes its card').toEqual([])
   expect(await smallTouchTargets(page), 'an under-sized tap target').toEqual([])
   expect(await textColumnMisalignments(page), 'a ragged text column').toEqual([])

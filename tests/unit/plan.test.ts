@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import {
+  adjustedMealTimes,
   isMealTime,
   isOutgrown,
-  isTransitionComplete,
   mealComposition,
   mealSpacingMinutes,
   mealTimes,
@@ -13,8 +13,15 @@ import {
   roundToStep,
   scaleItemsToTarget,
   type PlanItemLike,
-  type PlanTransition,
 } from '../../src/lib/plan'
+
+const DAY = new Date(2026, 8, 7) // 7 September 2026, local time.
+
+function at(hours: number, minutes: number): Date {
+  const date = new Date(DAY)
+  date.setHours(hours, minutes, 0, 0)
+  return date
+}
 
 // The tin these numbers come from: Premiere Meat Menu Kitten, 0.96 kcal/g.
 const PREMIERE = 0.96
@@ -95,6 +102,41 @@ describe('mealSpacingMinutes', () => {
   })
 })
 
+describe('adjustedMealTimes', () => {
+  const TIMES = mealTimes(3, '07:00', '19:00') // 07:00 / 13:00 / 19:00
+
+  it('matches the plan when nothing has been given yet', () => {
+    expect(adjustedMealTimes(TIMES, DAY, new Map())).toEqual([at(7, 0), at(13, 0), at(19, 0)])
+  })
+
+  it('pushes every later, not-yet-given meal back by a late meal’s own delay', () => {
+    // Lunch ran 90 minutes late; dinner should too, not land 90 minutes after
+    // an on-time lunch would have.
+    const given = new Map([[1, at(14, 30)]])
+    expect(adjustedMealTimes(TIMES, DAY, given)).toEqual([at(7, 0), at(14, 30), at(20, 30)])
+  })
+
+  it('pulls later meals earlier by the same amount when one runs early', () => {
+    const given = new Map([[1, at(12, 15)]])
+    expect(adjustedMealTimes(TIMES, DAY, given)).toEqual([at(7, 0), at(12, 15), at(18, 15)])
+  })
+
+  it('re-bases the offset on the most recently given meal, not a running total', () => {
+    // Breakfast 20 minutes early, lunch 40 minutes late relative to ITS OWN
+    // slot: dinner follows lunch's lateness, not the sum of both.
+    const given = new Map([
+      [0, at(6, 40)],
+      [1, at(13, 40)],
+    ])
+    expect(adjustedMealTimes(TIMES, DAY, given)).toEqual([at(6, 40), at(13, 40), at(19, 40)])
+  })
+
+  it('leaves a meal already given exactly where it was logged', () => {
+    const given = new Map([[0, at(7, 30)]])
+    expect(adjustedMealTimes(TIMES, DAY, given)[0]).toEqual(at(7, 30))
+  })
+})
+
 describe('daily totals', () => {
   it('divides the day into servings', () => {
     expect(perMealGrams(300, 3)).toBe(100)
@@ -116,140 +158,18 @@ describe('daily totals', () => {
   })
 })
 
-describe('transitionProgress', () => {
-  const startedOn = new Date(2026, 7, 24)
-
-  function switchOver(steps: number, unit: 'meal' | 'day'): PlanTransition {
-    return {
-      fromFoodId: 'applaws',
-      fromFoodNameSnapshot: 'Applaws Chicken',
-      toFoodId: 'premiere',
-      steps,
-      unit,
-      startedOn,
-    }
-  }
-
-  it('ramps a four-day switch 25 / 50 / 75 / 100', () => {
-    const transition = switchOver(4, 'day')
-    const shares = [0, 1, 2, 3].map((offset) =>
-      transitionProgressOn(transition, new Date(2026, 7, 24 + offset)),
-    )
-    expect(shares).toEqual([0.25, 0.5, 0.75, 1])
-  })
-
-  it('stays at 1 once the ramp is over', () => {
-    const transition = switchOver(4, 'day')
-    expect(transitionProgressOn(transition, new Date(2026, 7, 30))).toBe(1)
-  })
-
-  it('ramps per meal when the switch is measured in meals', () => {
-    const transition = switchOver(2, 'meal')
-    expect(
-      mealComposition({ mealsPerDay: 3, transition }, [item('premiere', 300)], startedOn, 0),
-    ).toEqual([
-      { foodId: 'applaws', name: 'Applaws Chicken', grams: 50 },
-      { foodId: 'premiere', name: 'premiere', grams: 50 },
-    ])
-    // Second meal of the same day completes a two-meal switch.
-    expect(
-      mealComposition({ mealsPerDay: 3, transition }, [item('premiere', 300)], startedOn, 1),
-    ).toEqual([{ foodId: 'premiere', name: 'premiere', grams: 100 }])
-  })
-
-  it('is all-old before the switch starts', () => {
-    const transition = switchOver(4, 'day')
-    expect(transitionProgressOn(transition, new Date(2026, 7, 23))).toBe(0)
-  })
-
-  function transitionProgressOn(transition: PlanTransition, day: Date): number {
-    const lines = mealComposition({ mealsPerDay: 1, transition }, [item('premiere', 100)], day, 0)
-    const target = lines.find((line) => line.foodId === 'premiere')
-    return (target?.grams ?? 0) / 100
-  }
-})
-
-describe('isTransitionComplete', () => {
-  const transition: PlanTransition = {
-    fromFoodId: 'applaws',
-    fromFoodNameSnapshot: 'Applaws Chicken',
-    toFoodId: 'premiere',
-    steps: 4,
-    unit: 'day',
-    startedOn: new Date(2026, 7, 24),
-  }
-
-  it('is false while the ramp is running', () => {
-    expect(isTransitionComplete(transition, 3, new Date(2026, 7, 26))).toBe(false)
-  })
-
-  it('is true from the last day onwards', () => {
-    expect(isTransitionComplete(transition, 3, new Date(2026, 7, 27))).toBe(true)
-    expect(isTransitionComplete(transition, 3, new Date(2026, 8, 1))).toBe(true)
-  })
-})
-
 describe('mealComposition', () => {
-  const day = new Date(2026, 7, 25)
-
-  it('is one line per food when nothing is in transition', () => {
+  it('is one line per food', () => {
     expect(
-      mealComposition(
-        { mealsPerDay: 3, transition: null },
-        [item('premiere', 180), item('applaws', 120)],
-        day,
-        0,
-      ),
+      mealComposition({ mealsPerDay: 3 }, [item('premiere', 180), item('applaws', 120)]),
     ).toEqual([
       { foodId: 'premiere', name: 'premiere', grams: 60 },
       { foodId: 'applaws', name: 'applaws', grams: 40 },
     ])
   })
 
-  it('splits the targeted item into outgoing and incoming, outgoing first', () => {
-    const transition: PlanTransition = {
-      fromFoodId: 'applaws',
-      fromFoodNameSnapshot: 'Applaws Chicken',
-      toFoodId: 'premiere',
-      steps: 4,
-      unit: 'day',
-      startedOn: new Date(2026, 7, 24),
-    }
-    // Day two of four: half and half.
-    expect(
-      mealComposition({ mealsPerDay: 3, transition }, [item('premiere', 300)], day, 0),
-    ).toEqual([
-      { foodId: 'applaws', name: 'Applaws Chicken', grams: 50 },
-      { foodId: 'premiere', name: 'premiere', grams: 50 },
-    ])
-  })
-
-  it('leaves every other item alone', () => {
-    const transition: PlanTransition = {
-      fromFoodId: 'gone',
-      fromFoodNameSnapshot: 'Old Flavour',
-      toFoodId: 'premiere',
-      steps: 4,
-      unit: 'day',
-      startedOn: new Date(2026, 7, 24),
-    }
-    const lines = mealComposition(
-      { mealsPerDay: 2, transition },
-      [item('premiere', 200), item('applaws', 100)],
-      day,
-      0,
-    )
-    expect(lines).toHaveLength(3)
-    expect(lines[2]).toEqual({ foodId: 'applaws', name: 'applaws', grams: 50 })
-  })
-
   it('leaves grams unrounded so a day of servings still sums to the plan', () => {
-    const lines = mealComposition(
-      { mealsPerDay: 3, transition: null },
-      [item('premiere', 250)],
-      day,
-      0,
-    )
+    const lines = mealComposition({ mealsPerDay: 3 }, [item('premiere', 250)])
     expect(lines[0]?.grams).toBeCloseTo(83.333, 3)
   })
 })

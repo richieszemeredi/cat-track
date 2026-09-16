@@ -58,22 +58,6 @@ service cloud.firestore {
       return t is string && t.matches('^([01][0-9]|2[0-3]):[0-5][0-9]$');
     }
 
-    // A one-way switch onto the plan's food. Same discipline as a food's
-    // analysis: hasAll as well as hasOnly, because a half-filled transition
-    // would let today's blend be derived from a ramp nobody fully described.
-    function validPlanTransition(t) {
-      return t == null || (
-        t.keys().hasOnly(['fromFoodId', 'fromFoodNameSnapshot', 'toFoodId', 'steps', 'unit', 'startedOn']) &&
-        t.keys().hasAll(['fromFoodId', 'fromFoodNameSnapshot', 'toFoodId', 'steps', 'unit', 'startedOn']) &&
-        validString(t.fromFoodId, 200) &&
-        validString(t.fromFoodNameSnapshot, 80) &&
-        validString(t.toFoodId, 200) &&
-        t.steps is int && t.steps >= 1 && t.steps <= 14 &&
-        t.unit in ['meal', 'day'] &&
-        t.startedOn is timestamp
-      );
-    }
-
     // ---------- membership discovery ----------
     // Lets a signed-in user run
     //   collectionGroup('members').where('uid', '==', auth.uid)
@@ -223,7 +207,7 @@ service cloud.firestore {
           allow create: if isEditor(hid) &&
             request.resource.data.keys().hasOnly([
               'effectiveFrom', 'mealsPerDay', 'firstMealAt', 'lastMealAt',
-              'setAtWeightKg', 'transition', 'note', 'createdBy', 'createdAt'
+              'setAtWeightKg', 'note', 'createdBy', 'createdAt'
             ]) &&
             request.resource.data.effectiveFrom is timestamp &&
             request.resource.data.mealsPerDay is int &&
@@ -235,7 +219,6 @@ service cloud.firestore {
               (request.resource.data.setAtWeightKg is number &&
                request.resource.data.setAtWeightKg > 0 &&
                request.resource.data.setAtWeightKg <= 30)) &&
-            validPlanTransition(request.resource.data.get('transition', null)) &&
             optionalString(request.resource.data.note, 500) &&
             request.resource.data.createdAt is timestamp &&
             request.resource.data.createdBy == request.auth.uid;

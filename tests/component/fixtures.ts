@@ -10,7 +10,6 @@ export function makePlan(overrides: Partial<Plan> = {}): Plan {
     firstMealAt: '07:00',
     lastMealAt: '19:00',
     setAtWeightKg: 1.62,
-    transition: null,
     note: null,
     createdBy: 'user-1',
     createdAt: new Date(2026, 7, 24),

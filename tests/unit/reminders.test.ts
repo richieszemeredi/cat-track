@@ -122,14 +122,14 @@ describe('decideReminders', () => {
   function decide(options: {
     now: Date
     shown?: Set<string>
-    given?: Set<number>
+    given?: Map<number, Date>
     times?: string[]
   }) {
     return decideReminders({
       times: options.times ?? mealTimes(3, '07:00', '19:00'),
       now: options.now,
       shown: options.shown ?? new Set(),
-      given: options.given ?? new Set(),
+      given: options.given ?? new Map(),
       today,
     })
   }
@@ -148,7 +148,7 @@ describe('decideReminders', () => {
   })
 
   it('stays quiet about a bowl the other phone already ticked off', () => {
-    const decision = decide({ now: at(7, 0), given: new Set([0]) })
+    const decision = decide({ now: at(7, 0), given: new Map([[0, at(7, 0)]]) })
 
     expect(decision.show).toEqual([])
     // Still remembered, so unticking the bowl inside the due window does not
@@ -157,7 +157,9 @@ describe('decideReminders', () => {
   })
 
   it('lets an untouched bowl through while another is already fed', () => {
-    expect(ids(decide({ now: at(13, 0), given: new Set([0]) }).show)).toEqual(['2026-09-07:1:due'])
+    expect(ids(decide({ now: at(13, 0), given: new Map([[0, at(7, 0)]]) }).show)).toEqual([
+      '2026-09-07:1:due',
+    ])
   })
 
   it('does not let a tick today silence tomorrow’s first meal', () => {
@@ -167,7 +169,7 @@ describe('decideReminders', () => {
       times: ['00:10'],
       now: at(23, 55),
       shown: new Set(),
-      given: new Set([0]),
+      given: new Map([[0, at(0, 10)]]),
       today,
     })
 
@@ -178,6 +180,18 @@ describe('decideReminders', () => {
     const stale = new Set(['2026-01-01:0:due'])
 
     expect(decide({ now: at(7, 0), shown: stale }).seen.has('2026-01-01:0:due')).toBe(false)
+  })
+
+  it('pushes an untouched bowl’s reminder to match a late earlier meal', () => {
+    // Breakfast ran an hour late; the 13:00 lead-in must fire at 13:45, not
+    // 12:45, and name 14:00 rather than the plan's original 13:00.
+    const decision = decide({
+      now: at(13, 45),
+      given: new Map([[0, at(8, 0)]]),
+    })
+
+    expect(ids(decision.show)).toEqual(['2026-09-07:1:soon'])
+    expect(decision.show[0]?.mealTime).toBe('14:00')
   })
 })
 

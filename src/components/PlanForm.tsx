@@ -1,18 +1,10 @@
 import { format, isValid, parse, startOfDay } from 'date-fns'
 import { useState, type SubmitEvent } from 'react'
 import { roundGrams, roundKcal } from '../lib/catmath'
-import {
-  awaitOrQueued,
-  savePlan,
-  type Food,
-  type Plan,
-  type PlanItem,
-  type PlanTransition,
-} from '../lib/db'
+import { awaitOrQueued, savePlan, type Food, type Plan, type PlanItem } from '../lib/db'
 import { DECIMAL_INPUT_PROPS, parseDecimal } from '../lib/numbers'
 import {
   MAX_MEALS_PER_DAY,
-  MAX_TRANSITION_STEPS,
   MIN_MEALS_PER_DAY,
   isMealTime,
   mealSpacingMinutes,
@@ -21,9 +13,7 @@ import {
   planDailyGrams,
   planDailyKcal,
   planTargetRatio,
-  TRANSITION_UNITS,
   type PlanItemLike,
-  type TransitionUnit,
 } from '../lib/plan'
 
 const INPUT_CLASS = 'field'
@@ -93,12 +83,6 @@ export function PlanForm({
       : [{ key: makeKey(), foodId: foods[0]?.id ?? '', grams: '' }],
   )
 
-  const [switching, setSwitching] = useState(false)
-  const [fromFoodId, setFromFoodId] = useState('')
-  const [toFoodId, setToFoodId] = useState('')
-  const [steps, setSteps] = useState('4')
-  const [unit, setUnit] = useState<TransitionUnit>('day')
-
   const [error, setError] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
 
@@ -118,11 +102,6 @@ export function PlanForm({
   const dailyGrams = planDailyGrams(draftItems)
   const dailyKcal = planDailyKcal(draftItems, kcalPerGram)
   const ratio = planTargetRatio(dailyKcal, targetKcal)
-
-  const stepsNum = parseDecimal(steps)
-  const switchTargets = draftItems.filter((item) => item.foodId !== fromFoodId)
-  const resolvedToFoodId =
-    switchTargets.find((item) => item.foodId === toFoodId)?.foodId ?? switchTargets[0]?.foodId ?? ''
 
   function patchItem(key: string, patch: Partial<DraftItem>): void {
     setItems((current) => current.map((item) => (item.key === key ? { ...item, ...patch } : item)))
@@ -156,36 +135,6 @@ export function PlanForm({
     }
     const effectiveFrom = startOfDay(start)
 
-    let transition: PlanTransition | null = null
-    if (switching) {
-      const from = foods.find((food) => food.id === fromFoodId)
-      if (from === undefined) {
-        setError('Pick the food she is switching from.')
-        return
-      }
-      if (resolvedToFoodId === '') {
-        setError('Pick the food she is switching onto.')
-        return
-      }
-      if (
-        stepsNum === null ||
-        !Number.isInteger(stepsNum) ||
-        stepsNum < 1 ||
-        stepsNum > MAX_TRANSITION_STEPS
-      ) {
-        setError(`A switch runs over 1 to ${String(MAX_TRANSITION_STEPS)} steps.`)
-        return
-      }
-      transition = {
-        fromFoodId: from.id,
-        fromFoodNameSnapshot: from.name,
-        toFoodId: resolvedToFoodId,
-        steps: stepsNum,
-        unit,
-        startedOn: effectiveFrom,
-      }
-    }
-
     setError(null)
     setSaving(true)
     try {
@@ -200,7 +149,6 @@ export function PlanForm({
             firstMealAt,
             lastMealAt,
             setAtWeightKg: latestWeightKg,
-            transition,
             note: null,
           },
           draftItems,
@@ -353,106 +301,6 @@ export function PlanForm({
         </div>
       </section>
 
-      {/* A switch is one declaration, not four hand-authored plans. */}
-      <section className="flex flex-col gap-3">
-        <h2 className="section-label">Switching food</h2>
-        <div className="surface flex flex-col gap-3 p-4">
-          <label className="flex min-h-11 items-center gap-3 text-sm font-semibold">
-            <input
-              type="checkbox"
-              data-testid="plan-switch-toggle"
-              checked={switching}
-              onChange={(e) => {
-                setSwitching(e.target.checked)
-              }}
-              className="h-5 w-5 accent-coral"
-            />
-            She is coming off another food
-          </label>
-
-          {switching ? (
-            <>
-              <label className="flex flex-col gap-1 text-xs font-normal text-ink-soft">
-                Switching from
-                <select
-                  data-testid="plan-switch-from"
-                  value={fromFoodId}
-                  onChange={(e) => {
-                    setFromFoodId(e.target.value)
-                  }}
-                  className={INPUT_CLASS}
-                >
-                  <option value="">Pick a food</option>
-                  {foods.map((food) => (
-                    <option key={food.id} value={food.id}>
-                      {food.name}
-                    </option>
-                  ))}
-                </select>
-              </label>
-
-              {switchTargets.length > 1 ? (
-                <label className="flex flex-col gap-1 text-xs font-normal text-ink-soft">
-                  Onto
-                  <select
-                    data-testid="plan-switch-to"
-                    value={resolvedToFoodId}
-                    onChange={(e) => {
-                      setToFoodId(e.target.value)
-                    }}
-                    className={INPUT_CLASS}
-                  >
-                    {switchTargets.map((item) => (
-                      <option key={item.foodId} value={item.foodId}>
-                        {item.foodNameSnapshot}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-              ) : null}
-
-              <div className="grid grid-cols-2 gap-2">
-                <label className="flex flex-col gap-1 text-xs font-normal text-ink-soft">
-                  Over
-                  <input
-                    {...DECIMAL_INPUT_PROPS}
-                    data-testid="plan-switch-steps"
-                    value={steps}
-                    onChange={(e) => {
-                      setSteps(e.target.value)
-                    }}
-                    className={INPUT_CLASS}
-                  />
-                </label>
-                <label className="flex flex-col gap-1 text-xs font-normal text-ink-soft">
-                  Counted in
-                  <select
-                    data-testid="plan-switch-unit"
-                    value={unit}
-                    onChange={(e) => {
-                      setUnit(e.target.value as TransitionUnit)
-                    }}
-                    className={INPUT_CLASS}
-                  >
-                    {TRANSITION_UNITS.map((value) => (
-                      <option key={value} value={value}>
-                        {value === 'day' ? 'days' : 'meals'}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-              </div>
-
-              <p data-testid="plan-switch-preview" className="text-sm text-ink-soft tabular-nums">
-                {stepsNum === null || stepsNum < 1
-                  ? 'How many steps should the switch take?'
-                  : switchRamp(stepsNum)}
-              </p>
-            </>
-          ) : null}
-        </div>
-      </section>
-
       <section className="flex flex-col gap-1">
         <p className="flex items-baseline gap-2">
           <span
@@ -530,13 +378,4 @@ export function PlanForm({
       <p className="text-xs text-ink-soft">Estimates only — always confirm with your vet.</p>
     </form>
   )
-}
-
-/** "25% · 50% · 75% · 100% new food" — the whole ramp, at a glance. */
-function switchRamp(steps: number): string {
-  const shares = Array.from(
-    { length: Math.min(steps, MAX_TRANSITION_STEPS) },
-    (_, index) => `${String(Math.round(((index + 1) / steps) * 100))}%`,
-  )
-  return `${shares.join(' · ')} new food`
 }

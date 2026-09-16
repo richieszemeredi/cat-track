@@ -137,7 +137,6 @@ export async function seedPreviousPlan(request: APIRequestContext, tag: string):
         firstMealAt: { stringValue: '07:00' },
         lastMealAt: { stringValue: '21:00' },
         setAtWeightKg: { doubleValue: 1.1 },
-        transition: { nullValue: null },
         note: { nullValue: null },
         createdBy: { stringValue: 'seed' },
         createdAt: { timestampValue: at },

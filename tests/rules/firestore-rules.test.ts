@@ -128,21 +128,9 @@ function plan(createdBy: string) {
     firstMealAt: '07:00',
     lastMealAt: '19:00',
     setAtWeightKg: 1.62,
-    transition: null,
     note: null,
     createdBy,
     createdAt: CREATED_AT,
-  }
-}
-
-function transition() {
-  return {
-    fromFoodId: 'f-old',
-    fromFoodNameSnapshot: 'Applaws Chicken',
-    toFoodId: 'f-new',
-    steps: 4,
-    unit: 'day',
-    startedOn: ENTRY_DATE,
   }
 }
 
@@ -762,57 +750,6 @@ describe('plans', () => {
     await assertFails(
       addDoc(collection(authedDb('bob'), plans), { ...plan('bob'), setAtWeightKg: 0 }),
     )
-  })
-
-  describe('transition', () => {
-    it('accepts a complete transition', async () => {
-      await assertSucceeds(
-        addDoc(collection(authedDb('bob'), plans), { ...plan('bob'), transition: transition() }),
-      )
-    })
-
-    // Same rule as a food's analysis: a half-filled map would let today's
-    // blend be derived from a ramp nobody fully described.
-    it('denies a partial transition', async () => {
-      const { unit, ...partial } = transition()
-      void unit
-      await assertFails(
-        addDoc(collection(authedDb('bob'), plans), { ...plan('bob'), transition: partial }),
-      )
-    })
-
-    it('denies an unknown key inside the transition', async () => {
-      await assertFails(
-        addDoc(collection(authedDb('bob'), plans), {
-          ...plan('bob'),
-          transition: { ...transition(), pace: 'slow' },
-        }),
-      )
-    })
-
-    it('denies an unknown unit', async () => {
-      await assertFails(
-        addDoc(collection(authedDb('bob'), plans), {
-          ...plan('bob'),
-          transition: { ...transition(), unit: 'week' },
-        }),
-      )
-    })
-
-    it('denies a step count outside 1..14', async () => {
-      await assertFails(
-        addDoc(collection(authedDb('bob'), plans), {
-          ...plan('bob'),
-          transition: { ...transition(), steps: 0 },
-        }),
-      )
-      await assertFails(
-        addDoc(collection(authedDb('bob'), plans), {
-          ...plan('bob'),
-          transition: { ...transition(), steps: 15 },
-        }),
-      )
-    })
   })
 
   describe('items', () => {

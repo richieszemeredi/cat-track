@@ -134,7 +134,6 @@ describe('PlanForm', () => {
     expect(input.firstMealAt).toBe('07:00')
     expect(input.lastMealAt).toBe('19:00')
     expect(input.setAtWeightKg).toBe(1.94)
-    expect(input.transition).toBeNull()
     expect(items).toEqual([
       { foodId: 'food-1', foodNameSnapshot: 'Crunchy Kibble', amountPerDayG: 300 },
     ])
@@ -241,82 +240,5 @@ describe('PlanForm', () => {
 
     expect(screen.getByRole('alert')).toHaveTextContent('Missing or insufficient permissions.')
     expect(onDone).not.toHaveBeenCalled()
-  })
-
-  describe('switching food', () => {
-    it('stays hidden until she is actually coming off something', () => {
-      renderForm()
-      expect(screen.queryByTestId('plan-switch-from')).not.toBeInTheDocument()
-    })
-
-    it('previews the whole ramp', async () => {
-      const user = userEvent.setup()
-      renderForm()
-
-      await user.click(screen.getByTestId('plan-switch-toggle'))
-      expect(screen.getByTestId('plan-switch-preview')).toHaveTextContent(
-        '25% · 50% · 75% · 100% new food',
-      )
-    })
-
-    it('describes a same-day switch in meals', async () => {
-      const user = userEvent.setup()
-      renderForm()
-
-      await user.click(screen.getByTestId('plan-switch-toggle'))
-      await user.clear(screen.getByTestId('plan-switch-steps'))
-      await user.type(screen.getByTestId('plan-switch-steps'), '2')
-      await user.selectOptions(screen.getByTestId('plan-switch-unit'), 'meal')
-
-      expect(screen.getByTestId('plan-switch-preview')).toHaveTextContent('50% · 100% new food')
-    })
-
-    it('saves the switch as one declaration, not four plans', async () => {
-      const user = userEvent.setup()
-      renderForm()
-
-      await user.type(screen.getByTestId('plan-item-grams-0'), '300')
-      await user.click(screen.getByTestId('plan-switch-toggle'))
-      await user.selectOptions(screen.getByTestId('plan-switch-from'), 'food-2')
-      await user.click(screen.getByTestId('plan-save'))
-
-      const { input } = savedPlan()
-      expect(input.transition).toMatchObject({
-        fromFoodId: 'food-2',
-        fromFoodNameSnapshot: 'Wet Tuna',
-        toFoodId: 'food-1',
-        steps: 4,
-        unit: 'day',
-      })
-      // The ramp starts when the plan does — no second date to keep in sync.
-      expect(input.transition?.startedOn).toEqual(input.effectiveFrom)
-    })
-
-    it('will not save a switch with no food to switch from', async () => {
-      const user = userEvent.setup()
-      renderForm()
-
-      await user.type(screen.getByTestId('plan-item-grams-0'), '300')
-      await user.click(screen.getByTestId('plan-switch-toggle'))
-      await user.click(screen.getByTestId('plan-save'))
-
-      expect(screen.getByRole('alert')).toHaveTextContent('Pick the food she is switching from')
-      expect(savePlanMock).not.toHaveBeenCalled()
-    })
-
-    it('rejects a step count outside the allowed range', async () => {
-      const user = userEvent.setup()
-      renderForm()
-
-      await user.type(screen.getByTestId('plan-item-grams-0'), '300')
-      await user.click(screen.getByTestId('plan-switch-toggle'))
-      await user.selectOptions(screen.getByTestId('plan-switch-from'), 'food-2')
-      await user.clear(screen.getByTestId('plan-switch-steps'))
-      await user.type(screen.getByTestId('plan-switch-steps'), '20')
-      await user.click(screen.getByTestId('plan-save'))
-
-      expect(screen.getByRole('alert')).toHaveTextContent('A switch runs over 1 to 14 steps')
-      expect(savePlanMock).not.toHaveBeenCalled()
-    })
   })
 })

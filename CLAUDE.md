@@ -58,14 +58,8 @@ Cloud Functions, no SSR hosting).
   so a plan stores a COUNT and a WINDOW, never a list of meals: `mealTimes(3, '07:00',
 '19:00')` _is_ 07:00 / 13:00 / 19:00. Grams are held per DAY because that is the figure
   Hungarian tins print (a grams-per-day table, no kcal); the serving is derived. Also holds
-  the transition ramp — see below — and `isOutgrown`, whose 8% tolerance is deliberate:
-  servings round to 5 g, so an honest plan already sits within ~2% of target.
-- A **transition** is a one-way switch, not a rotation. The plan states the DESTINATION and
-  `transition` says where the cat is coming from and how fast (`steps` × `meal`|`day`), so a
-  four-day ramp is one declaration instead of four hand-authored plans. Every intermediate
-  ratio is derived by `mealComposition`, which splits the targeted item into two lines —
-  outgoing food first. Nothing per-day is stored, and when the ramp ends the derivation just
-  stops firing. Ticking such a bowl writes one feeding per food, in one batch.
+  `isOutgrown`, whose 8% tolerance is deliberate: servings round to 5 g, so an honest plan
+  already sits within ~2% of target.
 - Plans are **never edited**: a revision is a new doc, and the plan before it is closed by
   the next one's `effectiveFrom` (rules deny `update`). That is what stops two phones writing
   overlapping date ranges. `db.sortPlans` breaks a same-day tie on `createdAt` — ordering on
@@ -104,10 +98,10 @@ Cloud Functions, no SSR hosting).
   that last step is what stops it coming back. Retired so far: `bodyConditionScore`
   (weights), `packageSizeG` (foods), `mealType` (feedings, replaced by an editable time).
   The whole "repeat a previous day" feature (`repeat.ts`, `RepeatDayCard`) is gone too: it
-  was the data model apologising for itself, and the plan subsumes it.
-- A food's `analysis` and a plan's `transition` are the model's only nested maps, and both
-  are validated with `hasAll` as well as `hasOnly` — a half-filled map would let a figure be
-  re-derived from constituents (or a ramp) it never saw.
+  was the data model apologising for itself, and the plan subsumes it. Same for a plan's
+  `transition` (the food-switch ramp): it split a bowl across two foods via
+  `mealComposition`, turned out not to earn its keep, and is gone from the schema, the
+  rules, `PlanForm`, and `plan.ts` — `mealComposition` is back to one line per plan item.
 - Adding a field is the mirror image: give it `.default(...)` in the Zod schema, never a
   bare `.nullable()`. Documents written before the field existed have no such key at all,
   and a required-but-absent key fails `safeParse` — which silently drops every old doc.
@@ -143,7 +137,7 @@ shipped a date picker squeezed to 187pt, and the escapes-a-card check exists bec
 time input punched out through the right edge of its card while still sitting well
 inside the screen.
 
-`a bowl mid-switch shows both foods and holds its layout` is the widest row the app can
+`a two-food bowl shows both foods and holds its layout` is the widest row the app can
 produce — two food names, two gram figures and a meal total in one checklist row — so it
 is the first place a layout regression will show.
 

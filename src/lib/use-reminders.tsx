@@ -149,8 +149,8 @@ function ReminderScheduler() {
 
 interface ReminderInputs {
   times: string[]
-  /** Meal indexes already ticked off today, against the plan in force. */
-  given: Set<number>
+  /** Meal index -> when it was given today, against the plan in force. */
+  given: Map<number, Date>
   day: DayRange
   catName: string
 }
@@ -167,12 +167,19 @@ function CatReminders({ hid, cat }: { hid: string; cat: Cat }) {
   const plan = plansQuery.data?.[0] ?? null
   const times = plan === null ? [] : mealTimes(plan.mealsPerDay, plan.firstMealAt, plan.lastMealAt)
 
-  const given = new Set<number>()
+  const given = new Map<number, Date>()
   for (const feeding of feedingsQuery.data ?? []) {
     // Only a tick against THIS plan counts, exactly as on the checklist: a
     // feeding left over from yesterday's plan must not silence today's bowl.
-    if (plan !== null && feeding.planId === plan.id && feeding.mealIndex !== null) {
-      given.add(feeding.mealIndex)
+    // The first feeding for a bowl sets it — a flavour switch's two lines
+    // share one meal and were written with the same datetime.
+    if (
+      plan !== null &&
+      feeding.planId === plan.id &&
+      feeding.mealIndex !== null &&
+      !given.has(feeding.mealIndex)
+    ) {
+      given.set(feeding.mealIndex, feeding.datetime)
     }
   }
 

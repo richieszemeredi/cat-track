@@ -39,7 +39,6 @@ import {
   type LifeStage,
   type Plan,
   type PlanItem,
-  type PlanTransition,
   type Role,
   type Sex,
   type WeightEntry,
@@ -560,7 +559,6 @@ export interface PlanInput {
   firstMealAt: string
   lastMealAt: string
   setAtWeightKg: number | null
-  transition: PlanTransition | null
   note: string | null
 }
 
@@ -588,10 +586,6 @@ export function savePlan(
   batch.set(planDoc, {
     ...input,
     effectiveFrom: Timestamp.fromDate(input.effectiveFrom),
-    transition:
-      input.transition === null
-        ? null
-        : { ...input.transition, startedOn: Timestamp.fromDate(input.transition.startedOn) },
     createdBy: uid,
     createdAt: serverTimestamp(),
   })
@@ -677,5 +671,37 @@ export function deleteFeedings(
   return batch.commit()
 }
 
+/**
+ * Correct when a ticked bowl actually happened. Feedings are append-only
+ * (rules deny `update`), so this is a delete-and-recreate — done as one
+ * batch so a network drop mid-fix can never leave the bowl un-ticked.
+ */
+export function retimeFeedings(
+  hid: string,
+  catId: string,
+  uid: string,
+  entries: readonly Feeding[],
+  datetime: Date,
+): Promise<unknown> {
+  const batch = writeBatch(db)
+  const stamp = Timestamp.fromDate(datetime)
+  for (const entry of entries) {
+    batch.delete(doc(feedingsRef(hid, catId), entry.id))
+    batch.set(doc(feedingsRef(hid, catId)), {
+      datetime: stamp,
+      foodId: entry.foodId,
+      foodNameSnapshot: entry.foodNameSnapshot,
+      amountG: entry.amountG,
+      kcal: entry.kcal,
+      note: entry.note,
+      planId: entry.planId,
+      mealIndex: entry.mealIndex,
+      createdBy: uid,
+      createdAt: serverTimestamp(),
+    })
+  }
+  return batch.commit()
+}
+
 // Re-exported so feature code can type cache data without importing schemas.
-export type { Cat, Feeding, Food, Plan, PlanItem, PlanTransition, WeightEntry }
+export type { Cat, Feeding, Food, Plan, PlanItem, WeightEntry }

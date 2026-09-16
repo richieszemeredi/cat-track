@@ -1,5 +1,6 @@
-import { addDays, addMinutes, startOfDay } from 'date-fns'
+import { addDays, addMinutes, format } from 'date-fns'
 import { type DayRange } from './dates'
+import { adjustedMealTimes, atTimeOn, type GivenAt } from './plan'
 
 // Feeding reminders, as pure math: two per planned meal — one a quarter of an
 // hour before the bowl is due, one when it is.
@@ -45,13 +46,6 @@ function dayKey(day: Date): string {
   return `${String(day.getFullYear())}-${month}-${date}`
 }
 
-function atTimeOn(day: Date, hhmm: string): Date {
-  const [hours, minutes] = hhmm.split(':')
-  const at = startOfDay(day)
-  at.setHours(Number(hours), Number(minutes), 0, 0)
-  return at
-}
-
 /**
  * Both reminders for every meal `times` implies on `day`, earliest first.
  *
@@ -60,14 +54,25 @@ function atTimeOn(day: Date, hhmm: string): Date {
  * "tomorrow's first meal" so it is neither shown twice nor missed entirely.
  * Each "HH:mm" is placed on `day` itself, exactly as the checklist reads a
  * window that runs past midnight (22:00 -> 02:00) as one day's meals.
+ *
+ * `given`, when passed, pushes each not-yet-given meal's `at`/`mealAt` to
+ * match the checklist's own late-runs-the-day-late pacing — see
+ * `adjustedMealTimes` — so a reminder never nags about the plan's original
+ * time once that time has actually moved.
  */
-export function remindersForDay(times: readonly string[], day: Date): Reminder[] {
+export function remindersForDay(times: readonly string[], day: Date, given?: GivenAt): Reminder[] {
   const key = dayKey(day)
+  const schedule =
+    given === undefined
+      ? times.map((time) => atTimeOn(day, time))
+      : adjustedMealTimes(times, day, given)
 
   return times
-    .flatMap((mealTime, mealIndex) => {
-      const mealAt = atTimeOn(day, mealTime)
-      const shared = { mealIndex, mealAt, mealTime }
+    .flatMap((planTime, mealIndex) => {
+      const mealAt = schedule[mealIndex] ?? atTimeOn(day, planTime)
+      // Named after where the bowl actually landed, not the plan's original
+      // slot — a pushed-back reminder should say the time it now means.
+      const shared = { mealIndex, mealAt, mealTime: format(mealAt, 'HH:mm') }
       return [
         {
           ...shared,
@@ -89,9 +94,11 @@ export function remindersForDay(times: readonly string[], day: Date): Reminder[]
  * actual narrowing. At six meals a day that is 36 candidates — cheap enough to
  * rebuild on every tick rather than cache and invalidate.
  */
-export function remindersAround(times: readonly string[], now: Date): Reminder[] {
+export function remindersAround(times: readonly string[], now: Date, given?: GivenAt): Reminder[] {
   return [-1, 0, 1]
-    .flatMap((offset) => remindersForDay(times, addDays(now, offset)))
+    .flatMap((offset) =>
+      remindersForDay(times, addDays(now, offset), offset === 0 ? given : undefined),
+    )
     .sort((a, b) => a.at.getTime() - b.at.getTime())
 }
 
@@ -126,11 +133,11 @@ export function decideReminders({
   times: readonly string[]
   now: Date
   shown: ReadonlySet<string>
-  /** Meal indexes ticked off today, against the plan in force. */
-  given: ReadonlySet<number>
+  /** Meal index -> when it was given today, against the plan in force. */
+  given: GivenAt
   today: DayRange
 }): ReminderDecision {
-  const candidates = remindersAround(times, now)
+  const candidates = remindersAround(times, now, given)
   // Pruned to the three days the ids can come from, so the list cannot grow
   // without bound on a phone that never clears its storage.
   const seen = new Set([...shown].filter((id) => candidates.some((r) => r.id === id)))

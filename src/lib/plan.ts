@@ -1,4 +1,4 @@
-import { differenceInCalendarDays, startOfDay } from 'date-fns'
+import { addMinutes, differenceInMinutes, startOfDay } from 'date-fns'
 
 // The feeding plan, as pure math. A cat eats the same thing every day, so the
 // plan stores a COUNT and a WINDOW rather than a list of meals: three meals
@@ -55,6 +55,14 @@ export function mealTimes(mealsPerDay: number, firstMealAt: string, lastMealAt: 
   return Array.from({ length: mealsPerDay }, (_, index) => toHhmm(Math.round(first + index * step)))
 }
 
+/** A stored "HH:mm" placed on a calendar day, exactly as the checklist reads it. */
+export function atTimeOn(day: Date, hhmm: string): Date {
+  const [hours, minutes] = hhmm.split(':')
+  const at = startOfDay(day)
+  at.setHours(Number(hours), Number(minutes), 0, 0)
+  return at
+}
+
 /** Gap between consecutive meals, in minutes; null when there is only one. */
 export function mealSpacingMinutes(
   mealsPerDay: number,
@@ -68,6 +76,32 @@ export function mealSpacingMinutes(
   const first = toMinutes(times[0] ?? '')
   const second = toMinutes(times[1] ?? '')
   return second <= first ? second + MINUTES_PER_DAY - first : second - first
+}
+
+/** mealIndex -> when that bowl was actually given, keyed against today's plan. */
+export type GivenAt = ReadonlyMap<number, Date>
+
+/**
+ * Today's meal times as they actually stand, not as the plan states them.
+ *
+ * Once a meal is logged, every later meal that has not happened yet shifts by
+ * exactly how far off THAT meal ran — early or late — from its own planned
+ * slot: a 90-minute-late lunch pushes dinner back 90 minutes too, so the cat's
+ * pacing holds even when the clock does not. The offset comes from the most
+ * recently given meal before each slot, not a running total — catching back
+ * up to schedule at meal 2 must not carry meal 1's lateness into meal 3.
+ */
+export function adjustedMealTimes(times: readonly string[], day: Date, given: GivenAt): Date[] {
+  let offsetMinutes = 0
+  return times.map((time, index) => {
+    const plannedAt = atTimeOn(day, time)
+    const actualAt = given.get(index)
+    if (actualAt !== undefined) {
+      offsetMinutes = differenceInMinutes(actualAt, plannedAt)
+      return actualAt
+    }
+    return addMinutes(plannedAt, offsetMinutes)
+  })
 }
 
 /** Minimal shape of a stored plan item — the destination mix, per day. */
@@ -104,64 +138,6 @@ export function planDailyKcal(
   )
 }
 
-// ---------- transitions ----------
-
-export const TRANSITION_UNITS = ['meal', 'day'] as const
-export type TransitionUnit = (typeof TRANSITION_UNITS)[number]
-
-/**
- * A one-way switch onto the plan's food. The plan states the DESTINATION; the
- * transition says where the cat is coming from and how fast. Every intermediate
- * ratio is derived, so a four-day ramp costs one declaration instead of four
- * hand-authored plans.
- *
- * This is a switch, not a rotation: it ends, and afterwards the plan is simply
- * what it always said it was.
- */
-export interface PlanTransition {
-  fromFoodId: string
-  fromFoodNameSnapshot: string
-  toFoodId: string
-  steps: number
-  unit: TransitionUnit
-  startedOn: Date
-}
-
-export const MAX_TRANSITION_STEPS = 14
-
-/**
- * Share of the NEW food at a given meal, from 0 (all old) to 1 (switch done).
- *
- * Steps are 1-based in effect: a 4-day switch runs 25% / 50% / 75% / 100%, so
- * the last step is the first day fully on the new food. Anything at or after
- * the end of the ramp is 1.
- */
-export function transitionProgress(
-  transition: PlanTransition,
-  mealsPerDay: number,
-  day: Date,
-  mealIndex: number,
-): number {
-  if (transition.steps < 1) return 1
-
-  const dayIndex = differenceInCalendarDays(startOfDay(day), startOfDay(transition.startedOn))
-  if (dayIndex < 0) return 0
-
-  const stepIndex =
-    transition.unit === 'day' ? dayIndex : dayIndex * Math.max(1, mealsPerDay) + mealIndex
-
-  return Math.min(1, (stepIndex + 1) / transition.steps)
-}
-
-/** True once every meal of `day` is fully on the new food. */
-export function isTransitionComplete(
-  transition: PlanTransition,
-  mealsPerDay: number,
-  day: Date,
-): boolean {
-  return transitionProgress(transition, mealsPerDay, day, 0) >= 1
-}
-
 /** One food in one bowl. */
 export interface MealLine {
   foodId: string
@@ -171,47 +147,15 @@ export interface MealLine {
 
 export interface PlanShape {
   mealsPerDay: number
-  transition: PlanTransition | null
 }
 
-/**
- * What actually goes in the bowl at `mealIndex` on `day`.
- *
- * Normally one line per plan item. While a transition is running, the item it
- * targets splits into two lines — outgoing food first, since early in a ramp
- * that is the bulk of the bowl. Grams are left unrounded; the UI rounds for
- * display so the day's total never drifts by the sum of three roundings.
- */
-export function mealComposition(
-  plan: PlanShape,
-  items: readonly PlanItemLike[],
-  day: Date,
-  mealIndex: number,
-): MealLine[] {
-  const { transition } = plan
-
-  return items.flatMap((item) => {
-    const serving = perMealGrams(item.amountPerDayG, plan.mealsPerDay)
-    const target: MealLine = {
-      foodId: item.foodId,
-      name: item.foodNameSnapshot,
-      grams: serving,
-    }
-
-    if (transition?.toFoodId !== item.foodId) return [target]
-
-    const share = transitionProgress(transition, plan.mealsPerDay, day, mealIndex)
-    if (share >= 1) return [target]
-
-    return [
-      {
-        foodId: transition.fromFoodId,
-        name: transition.fromFoodNameSnapshot,
-        grams: serving * (1 - share),
-      },
-      { ...target, grams: serving * share },
-    ]
-  })
+/** What goes in one bowl — one line per plan item, the same at every meal. */
+export function mealComposition(plan: PlanShape, items: readonly PlanItemLike[]): MealLine[] {
+  return items.map((item) => ({
+    foodId: item.foodId,
+    name: item.foodNameSnapshot,
+    grams: perMealGrams(item.amountPerDayG, plan.mealsPerDay),
+  }))
 }
 
 // ---------- plan vs. the cat ----------
