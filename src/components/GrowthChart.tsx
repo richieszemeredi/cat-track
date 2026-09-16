@@ -8,8 +8,9 @@ import {
   Tooltip,
   XAxis,
   YAxis,
+  type TooltipContentProps,
 } from 'recharts'
-import { growthBand, roundKg, WEEKS_LABEL_CUTOFF } from '../lib/catmath'
+import { growthBand, roundKg, weeklyAverages, WEEKS_LABEL_CUTOFF } from '../lib/catmath'
 import { type Cat, type WeightEntry } from '../lib/schemas'
 
 // Average month length in days — keeps entry ages on a smooth numeric axis.
@@ -20,20 +21,39 @@ interface ChartPoint {
   /** Age on the x axis, in the chart's current unit (weeks or months). */
   age: number
   band: [number, number]
-  /** Weigh-in at this exact age; null everywhere else (Tooltip filters nulls). */
+  /** A weekly average at this exact age; null everywhere else. */
   kg: number | null
 }
 
-/** Tooltip values: the band series yields [low, high]; the line yields a number. */
-function formatKgValue(value: unknown): string {
-  if (Array.isArray(value)) {
-    const parts = value
-      .filter((v): v is number => typeof v === 'number')
-      .map((v) => String(roundKg(v)))
-    return `${parts.join(' – ')} kg`
-  }
-  if (typeof value === 'number') return `${String(roundKg(value))} kg`
-  return ''
+/**
+ * Every week on the grid — real weigh-in or not — has an expected range
+ * worth seeing, so the tooltip always shows one. "Actual" only joins it on a
+ * week she was actually weighed, since that is the one thing that is not
+ * true of every week.
+ */
+function GrowthTooltip({
+  active,
+  payload,
+  label,
+  useWeeks,
+}: Partial<TooltipContentProps<number | readonly number[], string>> & { useWeeks: boolean }) {
+  if (active !== true) return null
+  const point = payload?.[0]?.payload as ChartPoint | undefined
+  if (point === undefined) return null
+
+  return (
+    <div className="rounded-lg border border-sand bg-surface px-3 py-2 text-xs shadow-md">
+      <p className="font-semibold text-ink">
+        {typeof label === 'number'
+          ? `${String(Math.round(label))} ${useWeeks ? 'weeks' : 'months'} old`
+          : ''}
+      </p>
+      {point.kg === null ? null : <p className="text-ink-soft">Actual: {point.kg} kg</p>}
+      <p className="text-ink-soft">
+        Expected range: {point.band[0]} – {point.band[1]} kg
+      </p>
+    </div>
+  )
 }
 
 /**
@@ -62,31 +82,26 @@ export function GrowthChart({ cat, entries }: { cat: Cat; entries: WeightEntry[]
   const maxMonths = Math.max(useWeeks ? 1 : 3, ageMonths + (useWeeks ? 0.5 : 1))
   const maxAxis = toAxis(maxMonths)
 
-  // One sample per half-week (weeks view) or half-month (months view), plus an
-  // exact sample at every weigh-in so the line lands on its real age.
-  const stepMonths = useWeeks ? 0.5 / WEEKS_PER_MONTH : 0.5
-  const kgByAxisAge = new Map<number, number>()
-  for (const entry of entries) {
-    const months = Math.max(0, differenceInDays(entry.date, cat.birthDate)) / DAYS_PER_MONTH
-    kgByAxisAge.set(toAxis(months), roundKg(entry.weightKg))
+  // One element per week — real or reference — so a touch only ever lands on
+  // a whole week, never a half-week sample the band happened to need. Real
+  // weigh-ins land on the same grid because weeklyAverages positions each
+  // week's point at that week's own start.
+  const maxWeeks = Math.ceil(maxMonths * WEEKS_PER_MONTH)
+  const kgByWeek = new Map<number, number>()
+  for (const point of weeklyAverages(entries, cat.birthDate)) {
+    const week = Math.round(differenceInDays(point.date, cat.birthDate) / 7)
+    kgByWeek.set(week, roundKg(point.weightKg))
   }
 
-  const ages = new Set<number>(kgByAxisAge.keys())
-  for (let months = 0; months <= maxMonths + 1e-9; months += stepMonths) {
-    ages.add(toAxis(months))
-  }
-
-  const data: ChartPoint[] = [...ages]
-    .sort((a, b) => a - b)
-    .map((age) => {
-      const months = useWeeks ? age / WEEKS_PER_MONTH : age
-      const { lowKg, highKg } = growthBand(months, cat.idealWeightKg)
-      return {
-        age,
-        band: [roundKg(lowKg), roundKg(highKg)],
-        kg: kgByAxisAge.get(age) ?? null,
-      }
-    })
+  const data: ChartPoint[] = Array.from({ length: maxWeeks + 1 }, (_, week) => {
+    const months = week / WEEKS_PER_MONTH
+    const { lowKg, highKg } = growthBand(months, cat.idealWeightKg)
+    return {
+      age: toAxis(months),
+      band: [roundKg(lowKg), roundKg(highKg)],
+      kg: kgByWeek.get(week) ?? null,
+    }
+  })
 
   // ~6 ticks whatever the span, rounded to a friendly interval.
   const rawStep = maxAxis / 6
@@ -117,14 +132,10 @@ export function GrowthChart({ cat, entries }: { cat: Cat; entries: WeightEntry[]
               tick={{ fontSize: 12, fill: '#8a7168' }}
               stroke="#e3d3c6"
             />
-            <Tooltip
-              formatter={formatKgValue}
-              labelFormatter={(label: unknown) =>
-                typeof label === 'number'
-                  ? `${String(Math.round(label))} ${useWeeks ? 'weeks' : 'months'} old`
-                  : ''
-              }
-            />
+            {/* No animation: since it now hides at every band-only sample,
+                a touch sweeping across dots would otherwise fade in and out
+                on every one of them instead of jumping straight there. */}
+            <Tooltip content={<GrowthTooltip useWeeks={useWeeks} />} isAnimationActive={false} />
             <Area
               dataKey="band"
               name="Expected range"

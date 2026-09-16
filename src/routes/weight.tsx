@@ -17,6 +17,11 @@ export const Route = createFileRoute('/weight')({
   errorComponent: ({ error, reset }) => <ErrorCard error={error} onRetry={reset} />,
 })
 
+// A cat weighed weekly for a few years is still a few hundred rows — the
+// chart above wants every one of them, but nobody scrolls that far down a
+// log. The list renders this many at a time, oldest revealed on request.
+const HISTORY_PAGE_SIZE = 20
+
 function WeightPage() {
   const { householdId, canEdit, activeCat, catsLoading } = useHousehold()
   const { user } = useAuth()
@@ -49,6 +54,7 @@ function WeightBody({
   const weightsQuery = useQuery(weightsQueryOptions(hid, cat.id))
   useWeightsLive(hid, cat.id)
   const [deleteError, setDeleteError] = useState<string | null>(null)
+  const [historyShown, setHistoryShown] = useState(HISTORY_PAGE_SIZE)
 
   if (weightsQuery.isLoading) return <div className="h-24 animate-pulse rounded-squishy bg-sand" />
   if (weightsQuery.isError) {
@@ -166,20 +172,36 @@ function WeightBody({
         {entries.length === 0 ? (
           <p className="gutter text-sm text-ink-soft">No weigh-ins yet.</p>
         ) : (
-          <ul className="surface divide-y divide-sand">
-            {[...entries].reverse().map((entry) => (
-              <HistoryRow
-                key={entry.id}
-                entry={entry}
-                canEdit={canEdit}
-                onDelete={() => {
-                  if (window.confirm('Delete this weigh-in?')) {
-                    handleDelete(entry.id)
-                  }
+          <>
+            <ul className="surface divide-y divide-sand">
+              {[...entries]
+                .reverse()
+                .slice(0, historyShown)
+                .map((entry) => (
+                  <HistoryRow
+                    key={entry.id}
+                    entry={entry}
+                    canEdit={canEdit}
+                    onDelete={() => {
+                      if (window.confirm('Delete this weigh-in?')) {
+                        handleDelete(entry.id)
+                      }
+                    }}
+                  />
+                ))}
+            </ul>
+            {entries.length > historyShown ? (
+              <button
+                type="button"
+                onClick={() => {
+                  setHistoryShown((shown) => shown + HISTORY_PAGE_SIZE)
                 }}
-              />
-            ))}
-          </ul>
+                className="btn-chip gutter self-start"
+              >
+                Show older ({entries.length - historyShown} more)
+              </button>
+            ) : null}
+          </>
         )}
       </section>
     </>

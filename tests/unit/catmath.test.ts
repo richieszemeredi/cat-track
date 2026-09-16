@@ -21,6 +21,7 @@ import {
   roundGrams,
   roundKcal,
   roundKg,
+  weeklyAverages,
   weeklyWeightTrend,
   MIN_TREND_SPAN_DAYS,
 } from '../../src/lib/catmath'
@@ -499,5 +500,41 @@ describe('weeklyWeightTrend', () => {
     const trend = weeklyWeightTrend([day(0, 1.2), day(7, 1.29), day(7, 1.3)])
     expect(trend?.spanDays).toBe(7)
     expect(trend?.from).toEqual(new Date(2026, 0, 1))
+  })
+})
+
+describe('weeklyAverages', () => {
+  const EPOCH = new Date(2026, 0, 1) // the cat's birth date
+
+  const day = (n: number, weightKg: number) => ({ date: new Date(2026, 0, 1 + n), weightKg })
+
+  it('is a no-op on entries already a week or more apart', () => {
+    const points = [day(0, 1.2), day(7, 1.3), day(14, 1.4)]
+    expect(weeklyAverages(points, EPOCH)).toEqual(points)
+  })
+
+  it('averages the weight of a dense week but dates the point at the week start', () => {
+    // Three weigh-ins inside week 0: the weight is their mean, but the point
+    // sits exactly at the week's own start so it lands on the chart's grid.
+    const [point] = weeklyAverages([day(0, 1.2), day(1, 1.23), day(2, 1.26)], EPOCH)
+    expect(point?.weightKg).toBeCloseTo(1.23, 10)
+    expect(point?.date).toEqual(day(0, 0).date)
+  })
+
+  it('keeps separate weeks separate', () => {
+    const points = weeklyAverages([day(0, 1.2), day(1, 1.22), day(8, 1.4), day(9, 1.42)], EPOCH)
+    expect(points).toHaveLength(2)
+    expect(points[0]?.weightKg).toBeCloseTo(1.21, 10)
+    expect(points[1]?.weightKg).toBeCloseTo(1.41, 10)
+  })
+
+  it('returns points oldest first regardless of input order', () => {
+    // Day 9 falls in week 1, whose own start is day 7.
+    const points = weeklyAverages([day(9, 1.42), day(0, 1.2)], EPOCH)
+    expect(points.map((p) => p.date)).toEqual([day(0, 0).date, day(7, 0).date])
+  })
+
+  it('is empty for no entries', () => {
+    expect(weeklyAverages([], EPOCH)).toEqual([])
   })
 })

@@ -1,4 +1,4 @@
-import { differenceInCalendarDays, differenceInDays, differenceInMonths } from 'date-fns'
+import { addDays, differenceInCalendarDays, differenceInDays, differenceInMonths } from 'date-fns'
 
 // Pure calorie / growth math. Everything here mirrors common veterinary
 // guidance but is an ESTIMATE — the UI must keep the "consult your vet"
@@ -287,6 +287,34 @@ export function weeklyWeightTrend(entries: readonly WeightPoint[]): WeightTrend 
     from: best.entry.date,
     spanDays: best.spanDays,
   }
+}
+
+/**
+ * Collapse same-week weigh-ins into one point: the average weight, dated at
+ * that week's own start. A cat weighed daily makes the growth chart's line
+ * dense and jittery; weeks are the unit kitten growth is actually discussed
+ * in, so one point per week reads far better than one per weigh-in. Buckets
+ * are WEEKS SINCE `epoch` (the cat's birth date) rather than a calendar
+ * week. The date is the bucket's start rather than an average of the raw
+ * dates so it lands exactly on the chart's own weekly grid — an averaged
+ * date would drift a fraction of a week off that grid and plot as a second,
+ * separate element right next to it.
+ */
+export function weeklyAverages(entries: readonly WeightPoint[], epoch: Date): WeightPoint[] {
+  const buckets = new Map<number, WeightPoint[]>()
+  for (const entry of entries) {
+    const week = Math.floor(differenceInCalendarDays(entry.date, epoch) / 7)
+    const bucket = buckets.get(week)
+    if (bucket === undefined) buckets.set(week, [entry])
+    else bucket.push(entry)
+  }
+
+  return [...buckets.entries()]
+    .sort(([a], [b]) => a - b)
+    .map(([week, points]) => ({
+      date: addDays(epoch, week * 7),
+      weightKg: points.reduce((sum, p) => sum + p.weightKg, 0) / points.length,
+    }))
 }
 
 /** Round for display: kcal to whole numbers, grams to whole numbers, kg to 2 dp. */
