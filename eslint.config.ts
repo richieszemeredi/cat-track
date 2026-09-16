@@ -26,6 +26,10 @@ export default defineConfig(
       'playwright-report',
       'test-results',
       'src/routeTree.gen.ts',
+      // Claude Code's own local worktrees/scratch state — untracked, and a
+      // stray full checkout under here (e.g. .claude/worktrees/*) doubles
+      // eslint's scope and reliably OOMs it on the default heap.
+      '.claude',
     ],
   },
   eslint.configs.recommended,
