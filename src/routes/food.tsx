@@ -739,7 +739,7 @@ function OutgrownNudge({
   return (
     <section
       data-testid="plan-outgrown"
-      className="gutter mx-4 flex flex-col gap-3 rounded-squishy bg-coral-soft p-4"
+      className="mx-4 flex flex-col gap-3 rounded-squishy bg-coral-soft p-4"
     >
       <h2 className="section-label text-coral-ink">
         {share < 100 ? "She's outgrown this plan" : 'This plan is over her target'}
