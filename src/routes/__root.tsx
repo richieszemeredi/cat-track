@@ -14,6 +14,7 @@ import { useAuth } from '../lib/auth'
 import { membershipQueryOptions } from '../lib/db'
 import { HouseholdProvider } from '../lib/household'
 import { type RouterContext } from '../lib/router-context'
+import { useDisplayNameSync } from '../lib/use-display-name-sync'
 import { useOnline } from '../lib/use-online'
 import { RemindersProvider } from '../lib/use-reminders'
 
@@ -44,6 +45,9 @@ function MembershipGate({ user }: { user: User }) {
     // other phone, the waiting partner gets in on the next tick.
     refetchInterval: (query) => (query.state.data ? false : 15_000),
   })
+  // Must run every render (Rules of Hooks) — it no-ops until membership
+  // actually resolves.
+  useDisplayNameSync(user, membership.data ?? null)
 
   if (membership.isLoading) return <Splash message="Finding your household…" />
   if (membership.isError) {

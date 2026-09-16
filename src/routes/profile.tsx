@@ -220,9 +220,13 @@ function HouseholdCard({ hid, role }: { hid: string; role: Role }) {
   )
 }
 
+// Nobody can look up another uid's Auth profile from the client, so this is
+// only ever seen for the moment between adding a member and that member's
+// own device syncing their real name in (see use-display-name-sync.ts).
+const PLACEHOLDER_DISPLAY_NAME = 'New member'
+
 function AddMemberForm({ hid }: { hid: string }) {
   const [memberUid, setMemberUid] = useState('')
-  const [displayName, setDisplayName] = useState('')
   const [memberRole, setMemberRole] = useState<'editor' | 'viewer'>('editor')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -233,19 +237,17 @@ function AddMemberForm({ hid }: { hid: string }) {
     setError(null)
     setFlash(null)
     const uid = memberUid.trim()
-    const name = displayName.trim()
-    if (uid === '' || name === '') {
-      setError('Both the user ID and a display name are needed.')
+    if (uid === '') {
+      setError('A user ID is needed.')
       return
     }
     setBusy(true)
-    awaitOrQueued(addMember(hid, { uid, role: memberRole, displayName: name }))
+    awaitOrQueued(addMember(hid, { uid, role: memberRole, displayName: PLACEHOLDER_DISPLAY_NAME }))
       .then((result) => {
         setFlash(
           result === 'queued' ? 'Member added — will sync when back online 📶' : 'Member added! 🎉',
         )
         setMemberUid('')
-        setDisplayName('')
         setMemberRole('editor')
       })
       .catch((err: unknown) => {
@@ -274,20 +276,6 @@ function AddMemberForm({ hid }: { hid: string }) {
         </label>
 
         <label className="text-sm font-semibold">
-          Display name
-          <input
-            type="text"
-            value={displayName}
-            required
-            maxLength={60}
-            onChange={(event) => {
-              setDisplayName(event.target.value)
-            }}
-            className={FIELD}
-          />
-        </label>
-
-        <label className="text-sm font-semibold">
           Role
           <select
             value={memberRole}
@@ -306,8 +294,8 @@ function AddMemberForm({ hid }: { hid: string }) {
         </button>
 
         <p className="text-xs text-ink-soft">
-          Your partner signs in with Google once, then you paste their user ID here. (Invite links
-          come later.)
+          Your partner signs in with Google once, then you paste their user ID here — their name
+          shows up on its own the next time they open the app. (Invite links come later.)
         </p>
 
         {flash === null ? null : <p className="text-sm font-semibold text-positive">{flash}</p>}

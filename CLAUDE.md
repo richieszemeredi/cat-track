@@ -31,6 +31,12 @@ Cloud Functions, no SSR hosting).
   comes while offline. Forms must treat both `'confirmed'` and `'queued'` as success.
 - `src/routes/__root.tsx` — gate chain: auth loading → SignInScreen → membership lookup
   (collection-group query on `members`) → CreateHouseholdScreen → HouseholdProvider + shell.
+  A member's `displayName` is never typed or edited: `use-display-name-sync.ts` mirrors it
+  from the signed-in user's own Auth profile (name, else email) every time membership
+  resolves, and rules let a member `update` only their OWN doc's `displayName`. Firestore
+  still has to hold a copy — there is no client-side way to read the OTHER member's Auth
+  profile without a Cloud Function the Spark tier doesn't have — so `addMember` writes a
+  placeholder name that self-corrects the moment the invited member's own client loads.
 - `src/lib/household.tsx` — `useHousehold()`: `householdId`, `role`, `canEdit`, `cats`,
   `activeCat` (MVP is single-cat = first created). Viewers (`role: 'viewer'`) must not see
   mutating UI.

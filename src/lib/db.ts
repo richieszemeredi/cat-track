@@ -108,6 +108,7 @@ function planItemsRef(hid: string, catId: string, planId: string): CollectionRef
 export interface Membership {
   householdId: string
   role: Role
+  displayName: string
 }
 
 /** Find the signed-in user's household via a members collection-group query. */
@@ -126,7 +127,7 @@ export async function findMembership(uid: string): Promise<Membership | null> {
   }
   const householdId = d.ref.parent.parent?.id
   if (householdId === undefined) return null
-  return { householdId, role: parsed.data.role }
+  return { householdId, role: parsed.data.role, displayName: parsed.data.displayName }
 }
 
 export function membershipQueryOptions(uid: string) {
@@ -178,6 +179,20 @@ export function addMember(
     joinedAt: serverTimestamp(),
     displayName: member.displayName,
   })
+}
+
+/**
+ * Keep a member's own display name in step with their Firebase Auth
+ * profile — see use-display-name-sync.ts, the only caller. Nobody types or
+ * edits this; a member can only ever update their OWN doc (rules), so an
+ * invited member's placeholder name self-corrects the moment they sign in.
+ */
+export function updateMemberDisplayName(
+  hid: string,
+  uid: string,
+  displayName: string,
+): Promise<unknown> {
+  return updateDoc(doc(membersRef(hid), uid), { displayName })
 }
 
 // ---------- queries + live subscriptions ----------

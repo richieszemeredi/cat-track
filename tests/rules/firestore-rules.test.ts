@@ -269,6 +269,27 @@ describe('members', () => {
     await assertFails(updateDoc(doc(authedDb('alice'), `${H1}/members/alice`), { role: 'editor' }))
   })
 
+  it('lets a member correct their own display name', async () => {
+    await assertSucceeds(
+      updateDoc(doc(authedDb('bob'), `${H1}/members/bob`), { displayName: 'Bobby' }),
+    )
+  })
+
+  it('denies a member renaming someone else', async () => {
+    await assertFails(
+      updateDoc(doc(authedDb('bob'), `${H1}/members/alice`), { displayName: 'Not Alice' }),
+    )
+  })
+
+  it('denies a member changing their own role while fixing their name', async () => {
+    await assertFails(
+      updateDoc(doc(authedDb('bob'), `${H1}/members/bob`), {
+        displayName: 'Bobby',
+        role: 'owner',
+      }),
+    )
+  })
+
   it('allows a member to leave (self-delete)', async () => {
     await assertSucceeds(deleteDoc(doc(authedDb('bob'), `${H1}/members/bob`)))
   })

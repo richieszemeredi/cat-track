@@ -101,14 +101,21 @@ service cloud.firestore {
           );
         // Single-owner invariant: an update can never promote anyone to owner
         // and never demote the owner (households always keep exactly one).
-        allow update: if isOwner(hid) &&
-          request.resource.data.keys().hasOnly(['uid', 'role', 'joinedAt', 'displayName']) &&
+        // Two ways in: the owner changing someone's role, or a member keeping
+        // their OWN display name in sync with their account (see
+        // use-display-name-sync.ts) — nobody may rename anyone else, and
+        // nobody may promote themself while doing it.
+        allow update: if request.resource.data.keys().hasOnly(['uid', 'role', 'joinedAt', 'displayName']) &&
           request.resource.data.uid == resource.data.uid &&
           request.resource.data.joinedAt == resource.data.joinedAt &&
           validString(request.resource.data.displayName, 60) &&
           (
-            (resource.data.role == 'owner' && request.resource.data.role == 'owner') ||
-            (resource.data.role != 'owner' && request.resource.data.role in ['editor', 'viewer'])
+            (isOwner(hid) &&
+              (
+                (resource.data.role == 'owner' && request.resource.data.role == 'owner') ||
+                (resource.data.role != 'owner' && request.resource.data.role in ['editor', 'viewer'])
+              )) ||
+            (request.auth.uid == uid && request.resource.data.role == resource.data.role)
           );
         // Owner can remove members; anyone can leave. The owner cannot leave
         // (households must keep their owner).
