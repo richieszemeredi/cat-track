@@ -295,7 +295,9 @@ export function feedingsForDayQueryOptions(
             feedingsRef(hid, catId),
             where('datetime', '>=', Timestamp.fromDate(dayStart)),
             where('datetime', '<', Timestamp.fromDate(dayEnd)),
-            orderBy('datetime', 'desc'),
+            // Earliest first: today's meals read top-to-bottom as a morning-to-
+            // evening timeline, same order the planned checklist already reads in.
+            orderBy('datetime', 'asc'),
           ),
         ),
       ),
@@ -319,7 +321,7 @@ export function useFeedingsForDayLive(
           feedingsRef(hid, catId),
           where('datetime', '>=', Timestamp.fromMillis(startMs)),
           where('datetime', '<', Timestamp.fromMillis(endMs)),
-          orderBy('datetime', 'desc'),
+          orderBy('datetime', 'asc'),
         ),
         (snap) => {
           qc.setQueryData(
