@@ -16,6 +16,25 @@ Cloud Functions, no SSR hosting).
 - `npm run test:visual` — layout pass only, on both phones; writes `test-results/screenshots/*.png`
 - `npm run build` — `tsc -b --noEmit` + `vite build` (PWA assets into `dist/`)
 
+## Git workflow
+
+The owner works in bursts — several asks dropped in one sitting — and wants that turned
+into a clean, incremental history, not one giant commit at the end. So: commit as you go,
+not in a pile-up.
+
+- Each independent change is its own commit, made as soon as that change is done and
+  verified (typecheck + the tests that cover it, at minimum), not batched with whatever
+  comes next in the same conversation. If a fix or a follow-up request changes something
+  already committed this session, that is a new commit on top — never an amend of one the
+  user has already seen land.
+- This is standing authorization to commit without asking each time. Pushing and any
+  Firestore rules/hosting deploy are separate, still-ask-first actions — a commit lands
+  locally; it does not imply `git push` or `firebase deploy`.
+- When a chunk of work touches the same files for two different asks (e.g. two features
+  both editing `plan.ts`), split by content, not just by file: stage only the hunks for the
+  change being committed. A later ask's edits to an already-committed file are their own
+  commit even if the diff overlaps.
+
 ## Architecture (read these before touching data flow)
 
 - `src/lib/firebase.ts` — app/auth/db singletons. `VITE_USE_EMULATORS=true` switches to the
