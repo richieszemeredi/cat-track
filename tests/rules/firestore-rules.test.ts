@@ -631,9 +631,8 @@ describe('feedings', () => {
   // Feedings written before the planner existed have neither key at all, and
   // reading a key that isn't there denies the write outright.
   it('allows a feeding with no planId or mealIndex key at all', async () => {
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars -- excluded via rest spread
     const { planId, mealIndex, ...legacy } = feeding('bob')
-    void planId
-    void mealIndex
     await assertSucceeds(addDoc(collection(authedDb('bob'), feedings), legacy))
   })
 
