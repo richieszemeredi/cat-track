@@ -98,15 +98,29 @@ test('full household journey', async ({ page, context }, testInfo) => {
   await page.getByTestId('meal-tick-0').click()
   await expect(page.getByTestId('today-meals')).toHaveText('1 of 3', WAIT)
 
-  // ---- g2. move tonight's bowl without touching the plan ----
+  // ---- g2. a bowl given late drags the rest of the day with it ----
+  // The tick logs the bowl's own due time, so a day only runs off schedule
+  // once a given meal is corrected to when it really happened. Everything
+  // after it shifts by that much — which is the state a moved bowl has to
+  // survive.
+  await page.getByTestId('meal-time-0').click()
+  await page.getByTestId('meal-time-input-0').fill('07:30')
+  await page.getByTestId('meal-time-save-0').click()
+  await expect(page.getByRole('listitem').filter({ hasText: 'Planned 13:00' })).toContainText(
+    '13:30',
+    WAIT,
+  )
+
+  // ---- g3. move tonight's bowl without touching the plan ----
   // A plan is never edited, so "feed her an hour early today" is an override
-  // both phones read — the row leads with the new time and keeps the plan's
-  // own as a footnote.
+  // both phones read. It lands on the time typed and nowhere else: the 30
+  // minutes breakfast ran late must not slide it to 18:30.
   await page.getByTestId('meal-time-2').click()
   await page.getByTestId('meal-time-input-2').fill('18:00')
   await page.getByTestId('meal-time-save-2').click()
   const eveningMeal = page.getByRole('listitem').filter({ hasText: 'Planned 19:00' })
   await expect(eveningMeal).toContainText('18:00', WAIT)
+  await expect(eveningMeal).not.toContainText('18:30')
 
   // ---- h. the dashboard leads with the same figure ----
   await tabBar(page).getByRole('link', { name: 'Home' }).click()

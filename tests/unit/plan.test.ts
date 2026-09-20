@@ -135,6 +135,31 @@ describe('adjustedMealTimes', () => {
     const given = new Map([[0, at(7, 30)]])
     expect(adjustedMealTimes(TIMES, DAY, given)[0]).toEqual(at(7, 30))
   })
+
+  it('puts a moved bowl exactly where it was moved to', () => {
+    const moved = new Map([[1, at(14, 45)]])
+    expect(adjustedMealTimes(TIMES, DAY, new Map(), moved)).toEqual([
+      at(7, 0),
+      at(14, 45),
+      at(19, 0),
+    ])
+  })
+
+  it('does not slide a moved bowl by an earlier meal’s lateness', () => {
+    // The whole point of typing a time is that it is the time: breakfast
+    // running 30 minutes late must not turn a 14:45 lunch into 15:15.
+    const given = new Map([[0, at(7, 30)]])
+    const moved = new Map([[1, at(14, 45)]])
+    expect(adjustedMealTimes(TIMES, DAY, given, moved)).toEqual([at(7, 30), at(14, 45), at(19, 30)])
+  })
+
+  it('measures a moved bowl’s lateness against where it was moved to', () => {
+    // Lunch was moved to 14:45 and then given at 15:15 — 30 minutes late
+    // against its own new slot, so dinner follows by 30, not by 2h15.
+    const given = new Map([[1, at(15, 15)]])
+    const moved = new Map([[1, at(14, 45)]])
+    expect(adjustedMealTimes(TIMES, DAY, given, moved)).toEqual([at(7, 0), at(15, 15), at(19, 30)])
+  })
 })
 
 describe('daily totals', () => {

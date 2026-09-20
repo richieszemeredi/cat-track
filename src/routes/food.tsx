@@ -200,13 +200,10 @@ function FoodContent({ cat }: { cat: Cat }) {
       overrideByMeal.set(override.mealIndex, override)
     }
   }
-  // A nudged bowl becomes that bowl's slot for the day, so a later meal still
-  // paces off it — the cascade in adjustedMealTimes runs on top of the nudges.
-  const baseTimes = times.map((time, mealIndex) => {
-    const override = overrideByMeal.get(mealIndex)
-    return override === undefined ? time : format(override.overrideAt, 'HH:mm')
-  })
-  const adjustedTimes = adjustedMealTimes(baseTimes, day.start, givenAtByMeal)
+  const movedAtByMeal = new Map(
+    [...overrideByMeal].map(([mealIndex, override]) => [mealIndex, override.overrideAt]),
+  )
+  const adjustedTimes = adjustedMealTimes(times, day.start, givenAtByMeal, movedAtByMeal)
 
   async function toggleMeal(mealIndex: number): Promise<void> {
     if (plan === null || uid === null) return

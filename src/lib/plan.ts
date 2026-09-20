@@ -78,7 +78,10 @@ export function mealSpacingMinutes(
   return second <= first ? second + MINUTES_PER_DAY - first : second - first
 }
 
-/** mealIndex -> when that bowl was actually given, keyed against today's plan. */
+/**
+ * mealIndex -> a time that bowl actually has today, keyed against today's plan:
+ * when it was given, or when it was moved to.
+ */
 export type GivenAt = ReadonlyMap<number, Date>
 
 /**
@@ -90,16 +93,29 @@ export type GivenAt = ReadonlyMap<number, Date>
  * pacing holds even when the clock does not. The offset comes from the most
  * recently given meal before each slot, not a running total — catching back
  * up to schedule at meal 2 must not carry meal 1's lateness into meal 3.
+ *
+ * A bowl in `moved` was re-timed on purpose for today, so it stands exactly
+ * where it was put: shifting it by an earlier meal's lateness would slide it
+ * off the time someone deliberately typed. It still re-bases the offset for
+ * the meals after it, being that bowl's slot for the day — and the bowls after
+ * it keep whatever offset the day has run up, since moving one bowl says
+ * nothing about the rest.
  */
-export function adjustedMealTimes(times: readonly string[], day: Date, given: GivenAt): Date[] {
+export function adjustedMealTimes(
+  times: readonly string[],
+  day: Date,
+  given: GivenAt,
+  moved: GivenAt = new Map(),
+): Date[] {
   let offsetMinutes = 0
   return times.map((time, index) => {
-    const plannedAt = atTimeOn(day, time)
+    const plannedAt = moved.get(index) ?? atTimeOn(day, time)
     const actualAt = given.get(index)
     if (actualAt !== undefined) {
       offsetMinutes = differenceInMinutes(actualAt, plannedAt)
       return actualAt
     }
+    if (moved.has(index)) return plannedAt
     return addMinutes(plannedAt, offsetMinutes)
   })
 }
