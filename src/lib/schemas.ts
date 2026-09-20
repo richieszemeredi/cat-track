@@ -147,6 +147,27 @@ export const planSchema = z.object({
 })
 export type Plan = z.infer<typeof planSchema> & { id: string }
 
+/**
+ * A one-off nudge to when a planned bowl is due, for one day only.
+ *
+ * It cannot be a plan revision: a plan is never edited, and a new one would
+ * re-time every day after today too — "we're out this evening, feed her at
+ * 18:00" is about tonight, not about the regimen. One document per (plan,
+ * meal, day), replaced rather than edited, so two phones can't clobber.
+ */
+export const mealTimeOverrideSchema = z.object({
+  planId: z.string().min(1),
+  mealIndex: z
+    .number()
+    .int()
+    .min(0)
+    .max(MAX_MEALS_PER_DAY - 1),
+  overrideAt: timestampToDate,
+  createdBy: z.string().min(1),
+  createdAt: timestampToDate,
+})
+export type MealTimeOverride = z.infer<typeof mealTimeOverrideSchema> & { id: string }
+
 /** One food in the day's mix. Grams are per DAY; the serving is derived. */
 export const planItemSchema = z.object({
   foodId: z.string().min(1),

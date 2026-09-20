@@ -142,6 +142,16 @@ function planItem() {
   }
 }
 
+function mealTimeOverride(createdBy: string) {
+  return {
+    planId: 'p1',
+    mealIndex: 2,
+    overrideAt: ENTRY_DATE,
+    createdBy,
+    createdAt: CREATED_AT,
+  }
+}
+
 // ---------- lifecycle ----------
 
 beforeAll(async () => {
@@ -695,6 +705,92 @@ describe('feedings', () => {
   it('denies edits — feedings are append-only', async () => {
     await seedDoc(`${feedings}/fe1`, feeding('bob'))
     await assertFails(updateDoc(doc(authedDb('bob'), `${feedings}/fe1`), { kcal: 999 }))
+  })
+})
+
+// ---------- meal time overrides ----------
+
+describe('mealTimeOverrides', () => {
+  const overrides = `${C1}/mealTimeOverrides`
+
+  it('allows editors to nudge a planned bowl', async () => {
+    await assertSucceeds(addDoc(collection(authedDb('bob'), overrides), mealTimeOverride('bob')))
+  })
+
+  it('denies viewers nudging a planned bowl', async () => {
+    await assertFails(addDoc(collection(authedDb('vera'), overrides), mealTimeOverride('vera')))
+  })
+
+  it('denies createdBy that is not the caller', async () => {
+    await assertFails(addDoc(collection(authedDb('bob'), overrides), mealTimeOverride('alice')))
+  })
+
+  it('denies a mealIndex outside 0..5', async () => {
+    await assertFails(
+      addDoc(collection(authedDb('bob'), overrides), { ...mealTimeOverride('bob'), mealIndex: -1 }),
+    )
+    await assertFails(
+      addDoc(collection(authedDb('bob'), overrides), { ...mealTimeOverride('bob'), mealIndex: 6 }),
+    )
+  })
+
+  it('denies a fractional mealIndex', async () => {
+    await assertFails(
+      addDoc(collection(authedDb('bob'), overrides), {
+        ...mealTimeOverride('bob'),
+        mealIndex: 1.5,
+      }),
+    )
+  })
+
+  it('denies an empty planId', async () => {
+    await assertFails(
+      addDoc(collection(authedDb('bob'), overrides), { ...mealTimeOverride('bob'), planId: '' }),
+    )
+  })
+
+  it('denies an overrideAt that is not a timestamp', async () => {
+    await assertFails(
+      addDoc(collection(authedDb('bob'), overrides), {
+        ...mealTimeOverride('bob'),
+        overrideAt: '18:00',
+      }),
+    )
+  })
+
+  it('denies a missing field', async () => {
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars -- excluded via rest spread
+    const { mealIndex, ...partial } = mealTimeOverride('bob')
+    await assertFails(addDoc(collection(authedDb('bob'), overrides), partial))
+  })
+
+  it('denies an unknown extra field', async () => {
+    await assertFails(
+      addDoc(collection(authedDb('bob'), overrides), { ...mealTimeOverride('bob'), note: 'why' }),
+    )
+  })
+
+  it('allows members to read overrides', async () => {
+    await seedDoc(`${overrides}/o1`, mealTimeOverride('bob'))
+    await assertSucceeds(getDoc(doc(authedDb('vera'), `${overrides}/o1`)))
+  })
+
+  // The write path is delete-and-recreate in one batch: an override is
+  // replaced, never edited, so two phones can't half-merge one bowl's time.
+  it('allows an editor to replace an override in one batch', async () => {
+    await seedDoc(`${overrides}/o1`, mealTimeOverride('bob'))
+    const bobDb = authedDb('bob')
+    const batch = writeBatch(bobDb)
+    batch.delete(doc(bobDb, `${overrides}/o1`))
+    batch.set(doc(collection(bobDb, overrides)), mealTimeOverride('bob'))
+    await assertSucceeds(batch.commit())
+  })
+
+  it('denies edits — overrides are replaced, not updated', async () => {
+    await seedDoc(`${overrides}/o1`, mealTimeOverride('bob'))
+    await assertFails(
+      updateDoc(doc(authedDb('bob'), `${overrides}/o1`), { overrideAt: ENTRY_DATE }),
+    )
   })
 })
 

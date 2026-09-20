@@ -27,6 +27,7 @@ import {
   catSchema,
   feedingSchema,
   foodSchema,
+  mealTimeOverrideSchema,
   memberSchema,
   planItemSchema,
   planSchema,
@@ -37,6 +38,7 @@ import {
   type FoodAnalysis,
   type FoodType,
   type LifeStage,
+  type MealTimeOverride,
   type Plan,
   type PlanItem,
   type Role,
@@ -98,6 +100,9 @@ function feedingsRef(hid: string, catId: string): CollectionReference {
 }
 function plansRef(hid: string, catId: string): CollectionReference {
   return collection(db, 'households', hid, 'cats', catId, 'plans')
+}
+function mealTimeOverridesRef(hid: string, catId: string): CollectionReference {
+  return collection(db, 'households', hid, 'cats', catId, 'mealTimeOverrides')
 }
 function planItemsRef(hid: string, catId: string, planId: string): CollectionReference {
   return collection(db, 'households', hid, 'cats', catId, 'plans', planId, 'items')
@@ -336,6 +341,98 @@ export function useFeedingsForDayLive(
       ),
     [hid, catId, startMs, endMs, qc],
   )
+}
+
+// ---------- meal time overrides ----------
+
+/** Today's one-off nudges to planned meal times, within [dayStart, dayEnd). */
+export function mealTimeOverridesForDayQueryOptions(
+  hid: string,
+  catId: string,
+  dayStart: Date,
+  dayEnd: Date,
+) {
+  return queryOptions({
+    queryKey: ['mealTimeOverrides', hid, catId, dayStart.toISOString()] as const,
+    queryFn: async () =>
+      parseDocs(
+        mealTimeOverrideSchema,
+        await getDocs(
+          query(
+            mealTimeOverridesRef(hid, catId),
+            where('overrideAt', '>=', Timestamp.fromDate(dayStart)),
+            where('overrideAt', '<', Timestamp.fromDate(dayEnd)),
+            orderBy('overrideAt', 'asc'),
+          ),
+        ),
+      ),
+    staleTime: Infinity,
+  })
+}
+
+export function useMealTimeOverridesForDayLive(
+  hid: string,
+  catId: string,
+  dayStart: Date,
+  dayEnd: Date,
+): void {
+  const qc = useQueryClient()
+  const startMs = dayStart.getTime()
+  const endMs = dayEnd.getTime()
+  useEffect(
+    () =>
+      onSnapshot(
+        query(
+          mealTimeOverridesRef(hid, catId),
+          where('overrideAt', '>=', Timestamp.fromMillis(startMs)),
+          where('overrideAt', '<', Timestamp.fromMillis(endMs)),
+          orderBy('overrideAt', 'asc'),
+        ),
+        (snap) => {
+          qc.setQueryData(
+            mealTimeOverridesForDayQueryOptions(hid, catId, new Date(startMs), new Date(endMs))
+              .queryKey,
+            parseDocs(mealTimeOverrideSchema, snap),
+          )
+        },
+        onListenError(
+          qc,
+          mealTimeOverridesForDayQueryOptions(hid, catId, new Date(startMs), new Date(endMs))
+            .queryKey,
+        ),
+      ),
+    [hid, catId, startMs, endMs, qc],
+  )
+}
+
+export interface MealTimeOverrideInput {
+  planId: string
+  mealIndex: number
+  overrideAt: Date
+}
+
+/**
+ * Move one of today's planned bowls. Overrides are replaced, not edited (rules
+ * deny `update`, as everywhere else), and the replacement goes in the same
+ * batch as the delete so a network drop can never leave the bowl with two
+ * times or none.
+ */
+export function setMealTimeOverride(
+  hid: string,
+  catId: string,
+  uid: string,
+  input: MealTimeOverrideInput,
+  replacedIds: readonly string[] = [],
+): Promise<unknown> {
+  const batch = writeBatch(db)
+  for (const id of replacedIds) batch.delete(doc(mealTimeOverridesRef(hid, catId), id))
+  batch.set(doc(mealTimeOverridesRef(hid, catId)), {
+    ...input,
+    overrideAt: Timestamp.fromDate(input.overrideAt),
+    createdBy: uid,
+    createdAt: serverTimestamp(),
+  })
+  return batch.commit()
 }
 
 // ---------- plans ----------
@@ -721,4 +818,4 @@ export function retimeFeedings(
 }
 
 // Re-exported so feature code can type cache data without importing schemas.
-export type { Cat, Feeding, Food, Plan, PlanItem, WeightEntry }
+export type { Cat, Feeding, Food, MealTimeOverride, Plan, PlanItem, WeightEntry }

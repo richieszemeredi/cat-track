@@ -284,6 +284,27 @@ service cloud.firestore {
           allow update: if false;
           allow delete: if isEditor(hid);
         }
+
+        // ---------- meal time overrides (one day's nudge to a planned bowl) ----------
+        // Moving tonight's 19:00 bowl to 18:00 cannot be a plan revision: plans
+        // are never edited, and a new one would re-time every day after this
+        // one too. Replaced rather than updated, like everything else here.
+        match /mealTimeOverrides/{overrideId} {
+          allow read: if isMember(hid);
+          allow create: if isEditor(hid) &&
+            request.resource.data.keys().hasOnly([
+              'planId', 'mealIndex', 'overrideAt', 'createdBy', 'createdAt'
+            ]) &&
+            validString(request.resource.data.planId, 200) &&
+            request.resource.data.mealIndex is int &&
+            request.resource.data.mealIndex >= 0 &&
+            request.resource.data.mealIndex <= 5 &&
+            request.resource.data.overrideAt is timestamp &&
+            request.resource.data.createdAt is timestamp &&
+            request.resource.data.createdBy == request.auth.uid;
+          allow update: if false;
+          allow delete: if isEditor(hid);
+        }
       }
     }
 
