@@ -136,29 +136,62 @@ describe('adjustedMealTimes', () => {
     expect(adjustedMealTimes(TIMES, DAY, given)[0]).toEqual(at(7, 30))
   })
 
-  it('puts a moved bowl exactly where it was moved to', () => {
-    const moved = new Map([[1, at(14, 45)]])
-    expect(adjustedMealTimes(TIMES, DAY, new Map(), moved)).toEqual([
-      at(7, 0),
-      at(14, 45),
-      at(19, 0),
-    ])
-  })
-
   it('does not slide a moved bowl by an earlier meal’s lateness', () => {
     // The whole point of typing a time is that it is the time: breakfast
     // running 30 minutes late must not turn a 14:45 lunch into 15:15.
     const given = new Map([[0, at(7, 30)]])
     const moved = new Map([[1, at(14, 45)]])
-    expect(adjustedMealTimes(TIMES, DAY, given, moved)).toEqual([at(7, 30), at(14, 45), at(19, 30)])
+    expect(adjustedMealTimes(TIMES, DAY, given, moved)[1]).toEqual(at(14, 45))
   })
 
-  it('measures a moved bowl’s lateness against where it was moved to', () => {
-    // Lunch was moved to 14:45 and then given at 15:15 — 30 minutes late
-    // against its own new slot, so dinner follows by 30, not by 2h15.
+  it('lets a given bowl win over a move — what happened, happened', () => {
     const given = new Map([[1, at(15, 15)]])
     const moved = new Map([[1, at(14, 45)]])
-    expect(adjustedMealTimes(TIMES, DAY, given, moved)).toEqual([at(7, 0), at(15, 15), at(19, 30)])
+    expect(adjustedMealTimes(TIMES, DAY, given, moved)[1]).toEqual(at(15, 15))
+  })
+})
+
+// The day keeps the gaps the plan sets: a bowl moved by half an hour takes
+// every bowl after it along, exactly as a bowl given half an hour late does.
+describe('adjustedMealTimes holds the plan’s spacing across a move', () => {
+  const TIMES = mealTimes(5, '07:00', '19:00') // 07:00 / 10:00 / 13:00 / 16:00 / 19:00
+
+  function moveTo(moved: Map<number, Date>): string[] {
+    return adjustedMealTimes(TIMES, DAY, new Map(), moved).map((date) =>
+      date.toTimeString().slice(0, 5),
+    )
+  }
+
+  it('moves the whole day when the first bowl moves', () => {
+    expect(moveTo(new Map([[0, at(7, 30)]]))).toEqual(['07:30', '10:30', '13:30', '16:30', '19:30'])
+  })
+
+  it('leaves the bowls before a moved one alone', () => {
+    expect(moveTo(new Map([[2, at(13, 30)]]))).toEqual([
+      '07:00',
+      '10:00',
+      '13:30',
+      '16:30',
+      '19:30',
+    ])
+  })
+
+  it('pulls the rest of the day earlier when a bowl moves earlier', () => {
+    expect(moveTo(new Map([[2, at(12, 45)]]))).toEqual([
+      '07:00',
+      '10:00',
+      '12:45',
+      '15:45',
+      '18:45',
+    ])
+  })
+
+  it('composes two moves, each from where the day then stood', () => {
+    const moved = new Map([
+      [1, at(9, 45)],
+      [3, at(16, 15)],
+    ])
+    expect(moveTo(moved)).toEqual(['07:00', '09:45', '12:45', '16:15', '19:15'])
   })
 })
 

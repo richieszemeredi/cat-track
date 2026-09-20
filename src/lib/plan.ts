@@ -94,12 +94,11 @@ export type GivenAt = ReadonlyMap<number, Date>
  * recently given meal before each slot, not a running total — catching back
  * up to schedule at meal 2 must not carry meal 1's lateness into meal 3.
  *
- * A bowl in `moved` was re-timed on purpose for today, so it stands exactly
- * where it was put: shifting it by an earlier meal's lateness would slide it
- * off the time someone deliberately typed. It still re-bases the offset for
- * the meals after it, being that bowl's slot for the day — and the bowls after
- * it keep whatever offset the day has run up, since moving one bowl says
- * nothing about the rest.
+ * A bowl in `moved` was re-timed on purpose for today, and counts exactly as a
+ * given one does: it lands on the time someone typed, and the bowls after it
+ * follow by the same delta, so 07:00/10:00/13:00 with lunch moved to 13:30
+ * runs 07:00/10:00/13:30 — the gaps the plan sets are what the day keeps. A
+ * bowl already given wins over a move: what happened, happened.
  */
 export function adjustedMealTimes(
   times: readonly string[],
@@ -109,13 +108,12 @@ export function adjustedMealTimes(
 ): Date[] {
   let offsetMinutes = 0
   return times.map((time, index) => {
-    const plannedAt = moved.get(index) ?? atTimeOn(day, time)
-    const actualAt = given.get(index)
-    if (actualAt !== undefined) {
-      offsetMinutes = differenceInMinutes(actualAt, plannedAt)
-      return actualAt
+    const plannedAt = atTimeOn(day, time)
+    const setAt = given.get(index) ?? moved.get(index)
+    if (setAt !== undefined) {
+      offsetMinutes = differenceInMinutes(setAt, plannedAt)
+      return setAt
     }
-    if (moved.has(index)) return plannedAt
     return addMinutes(plannedAt, offsetMinutes)
   })
 }

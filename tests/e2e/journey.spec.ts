@@ -111,16 +111,21 @@ test('full household journey', async ({ page, context }, testInfo) => {
     WAIT,
   )
 
-  // ---- g3. move tonight's bowl without touching the plan ----
+  // ---- g3. move a bowl without touching the plan ----
   // A plan is never edited, so "feed her an hour early today" is an override
-  // both phones read. It lands on the time typed and nowhere else: the 30
-  // minutes breakfast ran late must not slide it to 18:30.
-  await page.getByTestId('meal-time-2').click()
-  await page.getByTestId('meal-time-input-2').fill('18:00')
-  await page.getByTestId('meal-time-save-2').click()
-  const eveningMeal = page.getByRole('listitem').filter({ hasText: 'Planned 19:00' })
-  await expect(eveningMeal).toContainText('18:00', WAIT)
-  await expect(eveningMeal).not.toContainText('18:30')
+  // both phones read. It lands on the time typed and nowhere else — the 30
+  // minutes breakfast ran late must not slide 12:00 to 12:30 — and the bowls
+  // after it follow by that same hour, so the day keeps the plan's spacing.
+  await page.getByTestId('meal-time-1').click()
+  await page.getByTestId('meal-time-input-1').fill('12:00')
+  await page.getByTestId('meal-time-save-1').click()
+  const middayMeal = page.getByRole('listitem').filter({ hasText: 'Planned 13:00' })
+  await expect(middayMeal).toContainText('12:00', WAIT)
+  await expect(middayMeal).not.toContainText('12:30')
+  await expect(page.getByRole('listitem').filter({ hasText: 'Planned 19:00' })).toContainText(
+    '18:00',
+    WAIT,
+  )
 
   // ---- h. the dashboard leads with the same figure ----
   await tabBar(page).getByRole('link', { name: 'Home' }).click()
@@ -145,7 +150,7 @@ test('full household journey', async ({ page, context }, testInfo) => {
   // the offline tick must still be there.
   await expect(tabBar(page)).toBeVisible({ timeout: 30_000 })
   await expect(page.getByTestId('today-meals')).toHaveText('2 of 3', { timeout: 30_000 })
-  // The nudged bowl came from Firestore, not from this tab's state — which is
+  // The moved bowl came from Firestore, not from this tab's state — which is
   // what makes it visible on the household's other phone.
-  await expect(eveningMeal).toContainText('18:00', { timeout: 30_000 })
+  await expect(middayMeal).toContainText('12:00', { timeout: 30_000 })
 })
