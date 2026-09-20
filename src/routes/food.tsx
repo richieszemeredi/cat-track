@@ -841,6 +841,10 @@ function MealRow({
     (total, line) => total + line.grams * (kcalPerGram.get(line.foodId) ?? 0),
     0,
   )
+  // A bowl of one food IS its own total, and printing both says 23 g twice per
+  // row, ten times down a five-meal day. The meal total only earns its line
+  // when there is more than one food to add up.
+  const isSingleFood = lines.length === 1
   const isGiven = given.length > 0
   // One time per row: when the bowl happened if it has, when it is due if it
   // hasn't. Both come from adjustedAt, which already resolves to the feeding's
@@ -916,9 +920,11 @@ function MealRow({
               {shownTime}
             </span>
           )}
-          <span className="shrink-0 text-sm text-ink-soft tabular-nums">
-            {roundGrams(grams)} g · {roundKcal(kcal)} kcal
-          </span>
+          {isSingleFood ? null : (
+            <span className="shrink-0 text-sm text-ink-soft tabular-nums">
+              {roundGrams(grams)} g · {roundKcal(kcal)} kcal
+            </span>
+          )}
         </div>
         {/* One line per food. Two lines is what a flavour switch looks like. */}
         {lines.map((line) => (
@@ -927,7 +933,9 @@ function MealRow({
             className="flex items-baseline justify-between gap-2 text-sm text-ink-soft"
           >
             <span className="min-w-0 truncate">{line.name}</span>
-            <span className="shrink-0 tabular-nums">{roundGrams(line.grams)} g</span>
+            <span className="shrink-0 tabular-nums">
+              {roundGrams(line.grams)} g{isSingleFood ? ` · ${String(roundKcal(kcal))} kcal` : ''}
+            </span>
           </div>
         ))}
         {editingTime ? (
