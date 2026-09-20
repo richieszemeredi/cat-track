@@ -98,6 +98,16 @@ test('full household journey', async ({ page, context }, testInfo) => {
   await page.getByTestId('meal-tick-0').click()
   await expect(page.getByTestId('today-meals')).toHaveText('1 of 3', WAIT)
 
+  // ---- g2. move tonight's bowl without touching the plan ----
+  // A plan is never edited, so "feed her an hour early today" is an override
+  // both phones read — the row leads with the new time and keeps the plan's
+  // own as a footnote.
+  await page.getByTestId('meal-time-2').click()
+  await page.getByTestId('meal-time-input-2').fill('18:00')
+  await page.getByTestId('meal-time-save-2').click()
+  const eveningMeal = page.getByRole('listitem').filter({ hasText: 'Planned 19:00' })
+  await expect(eveningMeal).toContainText('18:00', WAIT)
+
   // ---- h. the dashboard leads with the same figure ----
   await tabBar(page).getByRole('link', { name: 'Home' }).click()
   await expect(page.getByTestId('dash-meals-today')).toHaveText('1 of 3', WAIT)
@@ -121,4 +131,7 @@ test('full household journey', async ({ page, context }, testInfo) => {
   // the offline tick must still be there.
   await expect(tabBar(page)).toBeVisible({ timeout: 30_000 })
   await expect(page.getByTestId('today-meals')).toHaveText('2 of 3', { timeout: 30_000 })
+  // The nudged bowl came from Firestore, not from this tab's state — which is
+  // what makes it visible on the household's other phone.
+  await expect(eveningMeal).toContainText('18:00', { timeout: 30_000 })
 })

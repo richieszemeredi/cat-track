@@ -24,12 +24,15 @@ import {
   deletePlan,
   feedingsForDayQueryOptions,
   foodsQueryOptions,
+  mealTimeOverridesForDayQueryOptions,
   planItemsQueryOptions,
   plansQueryOptions,
   retimeFeedings,
+  setMealTimeOverride,
   updateFood,
   useFeedingsForDayLive,
   useFoodsLive,
+  useMealTimeOverridesForDayLive,
   usePlanItemsLive,
   usePlansLive,
   useWeightsLive,
@@ -37,6 +40,7 @@ import {
   type Cat,
   type Feeding,
   type Food,
+  type MealTimeOverride,
   type Plan,
   type PlanItem,
 } from '../lib/db'
@@ -120,6 +124,10 @@ function FoodContent({ cat }: { cat: Cat }) {
   useFeedingsForDayLive(householdId, cat.id, day.start, day.end)
   const plansQuery = useQuery(plansQueryOptions(householdId, cat.id))
   usePlansLive(householdId, cat.id)
+  const overridesQuery = useQuery(
+    mealTimeOverridesForDayQueryOptions(householdId, cat.id, day.start, day.end),
+  )
+  useMealTimeOverridesForDayLive(householdId, cat.id, day.start, day.end)
 
   const plans = plansQuery.data ?? []
   // Plans come back newest first and are never edited, so [0] is the one in
@@ -178,7 +186,27 @@ function FoodContent({ cat }: { cat: Cat }) {
     const first = entries[0]
     if (first !== undefined) givenAtByMeal.set(mealIndex, first.datetime)
   }
-  const adjustedTimes = adjustedMealTimes(times, day.start, givenAtByMeal)
+
+  // Today's nudges to the plan's clock, keyed like the feedings above: an
+  // override only counts for the plan it was written against, since a revision
+  // re-times every bowl anyway and its meal 2 need not be the old meal 2.
+  const overridesForDay = overridesQuery.data ?? []
+  const overrideByMeal = new Map<number, MealTimeOverride>()
+  for (const override of overridesForDay) {
+    if (override.planId !== plan?.id) continue
+    const existing = overrideByMeal.get(override.mealIndex)
+    // Two phones nudging the same bowl at once leaves two docs; newest wins.
+    if (existing === undefined || override.createdAt > existing.createdAt) {
+      overrideByMeal.set(override.mealIndex, override)
+    }
+  }
+  // A nudged bowl becomes that bowl's slot for the day, so a later meal still
+  // paces off it — the cascade in adjustedMealTimes runs on top of the nudges.
+  const baseTimes = times.map((time, mealIndex) => {
+    const override = overrideByMeal.get(mealIndex)
+    return override === undefined ? time : format(override.overrideAt, 'HH:mm')
+  })
+  const adjustedTimes = adjustedMealTimes(baseTimes, day.start, givenAtByMeal)
 
   async function toggleMeal(mealIndex: number): Promise<void> {
     if (plan === null || uid === null) return
@@ -230,13 +258,12 @@ function FoodContent({ cat }: { cat: Cat }) {
     }
   }
 
-  // Shift a ticked bowl to when it actually happened — the tick itself logs
-  // the meal's own due time so a fast tap needs no immediate correction, but
-  // a genuinely early or late feeding still wants recording as such.
-  async function fixMealTime(mealIndex: number, timeStr: string): Promise<void> {
-    if (uid === null) return
-    const already = givenByMeal.get(mealIndex)
-    if (already === undefined || already.length === 0) return
+  // One control, two destinations. A bowl already ticked off is a logged fact,
+  // so re-timing it rewrites its feedings; a bowl still owed is a plan for the
+  // rest of the day, so it writes an override both phones can see — the plan
+  // itself stays untouched either way.
+  async function setMealTime(mealIndex: number, timeStr: string): Promise<void> {
+    if (plan === null || uid === null) return
     const datetime = parse(timeStr, 'HH:mm', day.start)
     if (!isValid(datetime)) {
       setMealError('Pick a valid time.')
@@ -245,8 +272,23 @@ function FoodContent({ cat }: { cat: Cat }) {
     setMealError(null)
     setBusyMeal(mealIndex)
     try {
+      const already = givenByMeal.get(mealIndex) ?? []
       // 'confirmed' and 'queued' both count as success (offline-first).
-      await awaitOrQueued(retimeFeedings(householdId, cat.id, uid, already, datetime))
+      if (already.length > 0) {
+        await awaitOrQueued(retimeFeedings(householdId, cat.id, uid, already, datetime))
+        return
+      }
+      await awaitOrQueued(
+        setMealTimeOverride(
+          householdId,
+          cat.id,
+          uid,
+          { planId: plan.id, mealIndex, overrideAt: datetime },
+          overridesForDay
+            .filter((entry) => entry.planId === plan.id && entry.mealIndex === mealIndex)
+            .map((entry) => entry.id),
+        ),
+      )
     } catch (err) {
       setMealError(err instanceof Error ? err.message : 'Could not update the time.')
     } finally {
@@ -400,8 +442,8 @@ function FoodContent({ cat }: { cat: Cat }) {
                     onToggle={() => {
                       void toggleMeal(mealIndex)
                     }}
-                    onFixTime={(timeStr) => {
-                      void fixMealTime(mealIndex, timeStr)
+                    onSetTime={(timeStr) => {
+                      void setMealTime(mealIndex, timeStr)
                     }}
                   />
                 ))}
@@ -777,10 +819,11 @@ function MealRow({
   busy,
   canEdit,
   onToggle,
-  onFixTime,
+  onSetTime,
 }: {
+  /** The plan's own clock for this bowl, before today's nudges and cascades. */
   time: string
-  /** When this bowl is actually next due, after any earlier lateness cascades. */
+  /** When this bowl is due — or, once ticked, when it actually happened. */
   adjustedAt: Date
   mealIndex: number
   plan: Plan
@@ -790,7 +833,7 @@ function MealRow({
   busy: boolean
   canEdit: boolean
   onToggle: () => void
-  onFixTime: (timeStr: string) => void
+  onSetTime: (timeStr: string) => void
 }) {
   const lines = mealComposition({ mealsPerDay: plan.mealsPerDay }, items)
   const grams = lines.reduce((total, line) => total + line.grams, 0)
@@ -799,14 +842,13 @@ function MealRow({
     0,
   )
   const isGiven = given.length > 0
-  const by = given[0]
-  const shiftedTime = format(adjustedAt, 'HH:mm')
-  const isShifted = !isGiven && shiftedTime !== time
+  // One time per row: when the bowl happened if it has, when it is due if it
+  // hasn't. Both come from adjustedAt, which already resolves to the feeding's
+  // own datetime once a bowl is ticked.
+  const shownTime = format(adjustedAt, 'HH:mm')
 
   const [editingTime, setEditingTime] = useState(false)
-  const [timeValue, setTimeValue] = useState(() =>
-    by === undefined ? time : format(by.datetime, 'HH:mm'),
-  )
+  const [timeValue, setTimeValue] = useState(shownTime)
 
   // The tick is the whole point of keeping a daily record: one bowl goes down,
   // and the other phone can see that it did.
@@ -837,7 +879,7 @@ function MealRow({
         <button
           type="button"
           data-testid={`meal-tick-${String(mealIndex)}`}
-          aria-label={isGiven ? `Undo the ${time} meal` : `Mark the ${time} meal given`}
+          aria-label={isGiven ? `Undo the ${shownTime} meal` : `Mark the ${shownTime} meal given`}
           aria-pressed={isGiven}
           disabled={busy}
           onClick={onToggle}
@@ -853,9 +895,27 @@ function MealRow({
 
       <div className="flex min-w-0 flex-1 flex-col gap-1">
         <div className="flex items-baseline justify-between gap-2">
-          <span className={`font-medium tabular-nums ${isGiven ? 'text-ink-soft' : ''}`}>
-            {isGiven ? time : shiftedTime}
-          </span>
+          {canEdit && !editingTime ? (
+            <button
+              type="button"
+              data-testid={`meal-time-${String(mealIndex)}`}
+              disabled={busy}
+              onClick={() => {
+                setTimeValue(shownTime)
+                setEditingTime(true)
+              }}
+              className="-mx-2 -my-1 flex min-h-9 shrink-0 items-baseline gap-1.5 rounded px-2 py-1 active:bg-sand disabled:opacity-60"
+            >
+              <span className={`font-medium tabular-nums ${isGiven ? 'text-ink-soft' : ''}`}>
+                {shownTime}
+              </span>
+              <span className="text-xs text-ink-soft">edit</span>
+            </button>
+          ) : (
+            <span className={`font-medium tabular-nums ${isGiven ? 'text-ink-soft' : ''}`}>
+              {shownTime}
+            </span>
+          )}
           <span className="shrink-0 text-sm text-ink-soft tabular-nums">
             {roundGrams(grams)} g · {roundKcal(kcal)} kcal
           </span>
@@ -870,59 +930,48 @@ function MealRow({
             <span className="shrink-0 tabular-nums">{roundGrams(line.grams)} g</span>
           </div>
         ))}
-        {/* A late (or early) earlier bowl pushes this one too, to keep the
-            pacing between meals — see plan.ts's adjustedMealTimes. */}
-        {isShifted ? (
-          <span className="text-xs text-ink-soft">Usually {time}, pushed by an earlier meal</span>
-        ) : null}
-        {isGiven && by !== undefined ? (
-          editingTime ? (
-            <form
-              className="flex flex-wrap items-center gap-2"
-              onSubmit={(e: SubmitEvent<HTMLFormElement>) => {
-                e.preventDefault()
-                onFixTime(timeValue)
+        {editingTime ? (
+          <form
+            className="flex flex-wrap items-center gap-2"
+            onSubmit={(e: SubmitEvent<HTMLFormElement>) => {
+              e.preventDefault()
+              onSetTime(timeValue)
+              setEditingTime(false)
+            }}
+          >
+            <input
+              type="time"
+              required
+              data-testid={`meal-time-input-${String(mealIndex)}`}
+              value={timeValue}
+              onChange={(e) => {
+                setTimeValue(e.target.value)
+              }}
+              className="field w-auto"
+            />
+            <button
+              type="submit"
+              data-testid={`meal-time-save-${String(mealIndex)}`}
+              className="btn-chip"
+            >
+              Save
+            </button>
+            <button
+              type="button"
+              className="btn-chip"
+              onClick={() => {
                 setEditingTime(false)
               }}
             >
-              <input
-                type="time"
-                required
-                value={timeValue}
-                onChange={(e) => {
-                  setTimeValue(e.target.value)
-                }}
-                className="field w-auto"
-              />
-              <button type="submit" className="btn-chip">
-                Save
-              </button>
-              <button
-                type="button"
-                className="btn-chip"
-                onClick={() => {
-                  setEditingTime(false)
-                }}
-              >
-                Cancel
-              </button>
-            </form>
-          ) : canEdit ? (
-            <button
-              type="button"
-              disabled={busy}
-              onClick={() => {
-                setTimeValue(format(by.datetime, 'HH:mm'))
-                setEditingTime(true)
-              }}
-              className="-mx-2 flex min-h-9 w-fit items-center rounded px-2 text-xs text-ink-soft active:bg-sand disabled:opacity-60"
-            >
-              Given {format(by.datetime, 'HH:mm')} · edit
+              Cancel
             </button>
-          ) : (
-            <span className="text-xs text-ink-soft">Given {format(by.datetime, 'HH:mm')}</span>
-          )
-        ) : null}
+          </form>
+        ) : shownTime === time ? null : (
+          // The row leads with the time that applies today — early, late or
+          // moved on purpose. This is the plan's own clock, kept as a footnote
+          // so a day that ran off schedule still says what it ran off from.
+          <span className="text-xs text-ink-soft">Planned {time}</span>
+        )}
       </div>
     </li>
   )
