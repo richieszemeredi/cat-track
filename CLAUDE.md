@@ -170,7 +170,10 @@ is the first place a layout regression will show.
 where a real iPhone sizes them from the native picker and ignores `width:100%` — that
 bug reached a phone with a green suite. `@layer base` in `index.css` neutralises it with
 `appearance: none`, and anything else found only on a device belongs in the layout spec
-as an explicit assertion rather than as trust in the emulated engine.
+as an explicit assertion rather than as trust in the emulated engine. Same story for
+iOS 27's Liquid Glass blur over the top of an installed web app: it is suppressed by
+`.status-bar-backdrop` (a fixed, full-width, cream strip in `index.html`, as tall as the
+status bar), which the emulator can't show — the layout spec pins its geometry and colour.
 
 ## Conventions & gotchas
 

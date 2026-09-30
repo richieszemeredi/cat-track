@@ -77,6 +77,26 @@
     padding-top: env(safe-area-inset-top);
   }
 
+  /* iOS 27 paints its Liquid Glass scroll-edge blur over the top of an
+     installed web app, reaching well below the status bar and smearing the
+     page title. WebKit skips that blur when a fixed, full-width box touches
+     the top edge, and fills the status bar with that box's colour instead.
+     This is that box: the cream the page already sits on, exactly as tall as
+     the status bar, so content scrolls under a solid bar. It lives in
+     index.html outside #root so the splash and sign-in screens get it too.
+     Playwright's WebKit neither draws the blur nor has a notch (the height is
+     0 there), so layout.spec.ts pins the geometry and colour rather than the
+     effect — check a real phone after touching this. */
+  .status-bar-backdrop {
+    position: fixed;
+    top: 0;
+    right: 0;
+    left: 0;
+    z-index: 50;
+    height: env(safe-area-inset-top);
+    background-color: var(--color-cream);
+  }
+
   /* iOS Safari zooms the page when a focused input is under 16px. */
   input,
   select,

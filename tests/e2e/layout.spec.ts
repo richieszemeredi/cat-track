@@ -423,3 +423,47 @@ test('the sign-in screen fits the viewport', async ({ page }, testInfo) => {
   expect(await overflowingElements(page), 'sign-in has elements past the viewport').toEqual([])
   expect(await documentScrollsSideways(page), 'sign-in scrolls sideways').toBe(false)
 })
+
+/**
+ * iOS 27 blurs the top of an installed web app unless a fixed, full-width box
+ * sits against the top edge (see .status-bar-backdrop in index.css). Neither
+ * the blur nor a notch exists in Playwright, so this pins what WebKit looks
+ * for: fixed at the very top, the full width, in the page's own colour — in
+ * both themes, because the status bar takes that colour.
+ */
+for (const colorScheme of ['light', 'dark'] as const) {
+  test(`the status bar sits on a solid ${colorScheme} backdrop`, async ({ page }) => {
+    await page.emulateMedia({ colorScheme })
+    await page.goto('/')
+    await expect(page.getByRole('heading', { name: 'CatTrack' })).toBeVisible(WAIT)
+
+    const backdrop = await page.evaluate(() => {
+      const g = globalThis as unknown as {
+        innerWidth: number
+        document: { body: DomElement; querySelector: (selector: string) => DomElement | null }
+        getComputedStyle: (el: DomElement) => {
+          position: string
+          top: string
+          backgroundColor: string
+        }
+      }
+      const el = g.document.querySelector('.status-bar-backdrop')
+      if (el === null) return null
+      const style = g.getComputedStyle(el)
+      return {
+        position: style.position,
+        top: style.top,
+        width: el.getBoundingClientRect().width,
+        viewport: g.innerWidth,
+        colour: style.backgroundColor,
+        page: g.getComputedStyle(g.document.body).backgroundColor,
+      }
+    })
+
+    expect(backdrop, 'no .status-bar-backdrop in the page').not.toBeNull()
+    expect(backdrop?.position).toBe('fixed')
+    expect(backdrop?.top).toBe('0px')
+    expect(backdrop?.width).toBe(backdrop?.viewport)
+    expect(backdrop?.colour, 'the status bar would not match the page').toBe(backdrop?.page)
+  })
+}
