@@ -79,5 +79,8 @@
     "*.{css,md,json,html}": [
       "prettier --write"
     ]
+  },
+  "overrides": {
+    "@grpc/grpc-js": "^1.14.5"
   }
 }
