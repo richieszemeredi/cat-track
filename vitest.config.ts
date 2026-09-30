@@ -7,6 +7,9 @@ export default defineConfig({
     environment: 'jsdom',
     setupFiles: ['tests/component/setup.ts'],
     include: ['tests/unit/**/*.test.ts', 'tests/component/**/*.test.tsx'],
+    // Vitest blanks every CSS import, `?raw` included, unless it is listed
+    // here. theme.test.ts reads the palette straight out of the stylesheet.
+    css: { include: [/src\/index\.css/] },
     // CI has no .env.local, so a test that transitively imports firebase.ts
     // dies there on auth/invalid-api-key while passing on a dev machine whose
     // real config happens to be sitting in the environment. Blanking the vars

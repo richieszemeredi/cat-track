@@ -20,6 +20,10 @@
   /* coral dark enough for small TEXT on white/cream (>= 4.5:1) */
   --color-coral-ink: #b8401c;
   --color-coral-soft: #ffe7dc;
+  /* Text and marks sitting ON a coral fill. Not ink: ink turns light in dark
+     mode, and light-on-coral is about 2:1. Coral stays coral in both themes,
+     so what sits on it stays dark in both. */
+  --color-on-coral: #2f2320;
 
   --color-positive: #1f7a57;
   --color-danger: #b3261e;
@@ -28,9 +32,39 @@
   --shadow-squishy: 0 1px 2px rgb(47 35 32 / 0.04), 0 10px 24px -14px rgb(47 35 32 / 0.16);
 }
 
+/* Dark mode follows the phone's own setting — no toggle, nothing stored. It is
+   the same palette at night, not a different design: a warm near-black canvas
+   instead of cream, raised cards a step lighter, and coral unchanged, because
+   coral is the one colour that means something. Only the tokens change here;
+   every component reads them, so nothing below needs a dark: variant.
+   Every text pair clears WCAG AA (4.5:1), which tests/unit/theme.test.ts
+   checks against this block — re-run it after touching a value. */
+@media (prefers-color-scheme: dark) {
+  :root {
+    --color-cream: #1a1412;
+    --color-surface: #251d1a;
+    --color-sand: #3a2e29;
+    --color-sand-deep: #54443d;
+    --color-ink: #f6ece5;
+    --color-ink-soft: #b39d93;
+
+    /* On a dark canvas the small-text coral goes LIGHTER, not darker, and the
+       tint behind the outgrown-plan card becomes a deep ember. */
+    --color-coral-ink: #ff9b7f;
+    --color-coral-soft: #40251d;
+
+    --color-positive: #5cc99a;
+    --color-danger: #ff8a7a;
+
+    --shadow-squishy: 0 1px 2px rgb(0 0 0 / 0.3), 0 10px 24px -14px rgb(0 0 0 / 0.7);
+  }
+}
+
 @layer base {
   html {
     height: 100%;
+    /* Native controls (pickers, checkboxes, scrollbars) follow the theme. */
+    color-scheme: light dark;
   }
 
   body {
@@ -107,7 +141,7 @@
   }
 
   .btn-primary {
-    @apply rounded-full bg-coral px-5 py-3 text-center font-semibold text-ink;
+    @apply rounded-full bg-coral px-5 py-3 text-center font-semibold text-on-coral;
     @apply active:scale-[0.98] disabled:opacity-60;
   }
 

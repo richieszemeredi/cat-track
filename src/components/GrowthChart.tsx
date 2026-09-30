@@ -115,22 +115,22 @@ export function GrowthChart({ cat, entries }: { cat: Cat; entries: WeightEntry[]
       <div className="relative">
         <ResponsiveContainer width="100%" height={240}>
           <ComposedChart data={data} margin={{ top: 8, right: 12, bottom: 0, left: 0 }}>
-            <CartesianGrid strokeDasharray="2 4" stroke="#e3d3c6" vertical={false} />
+            <CartesianGrid strokeDasharray="2 4" stroke="var(--color-sand-deep)" vertical={false} />
             <XAxis
               dataKey="age"
               type="number"
               domain={[0, maxAxis]}
               ticks={ticks}
               tickFormatter={(value: number) => `${String(Math.round(value))}${unit}`}
-              tick={{ fontSize: 12, fill: '#8a7168' }}
-              stroke="#e3d3c6"
+              tick={{ fontSize: 12, fill: 'var(--color-ink-soft)' }}
+              stroke="var(--color-sand-deep)"
             />
             {/* width 44 wrapped "1.65 kg" onto two lines on a 375pt screen. */}
             <YAxis
               unit=" kg"
               width={58}
-              tick={{ fontSize: 12, fill: '#8a7168' }}
-              stroke="#e3d3c6"
+              tick={{ fontSize: 12, fill: 'var(--color-ink-soft)' }}
+              stroke="var(--color-sand-deep)"
             />
             {/* No animation: since it now hides at every band-only sample,
                 a touch sweeping across dots would otherwise fade in and out
@@ -140,7 +140,7 @@ export function GrowthChart({ cat, entries }: { cat: Cat; entries: WeightEntry[]
               dataKey="band"
               name="Expected range"
               stroke="none"
-              fill="#ffe7dc"
+              fill="var(--color-coral-soft)"
               fillOpacity={1}
               isAnimationActive={false}
               activeDot={false}
@@ -149,9 +149,12 @@ export function GrowthChart({ cat, entries }: { cat: Cat; entries: WeightEntry[]
               dataKey="kg"
               name="Actual"
               type="monotone"
-              stroke="#e0522f"
+              stroke="var(--color-coral-deep)"
               strokeWidth={2.5}
-              dot={{ r: 4 }}
+              // Recharts paints dots white by default, which glares on a dark
+              // card: hollow them with the card's own colour instead.
+              dot={{ r: 4, fill: 'var(--color-surface)' }}
+              activeDot={{ stroke: 'var(--color-surface)' }}
               connectNulls
               isAnimationActive={false}
             />

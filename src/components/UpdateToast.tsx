@@ -43,7 +43,7 @@ export function UpdateToast() {
         </button>
         <button
           type="button"
-          className="rounded-full bg-coral px-4 py-1.5 text-sm font-semibold text-ink active:scale-[0.98]"
+          className="rounded-full bg-coral px-4 py-1.5 text-sm font-semibold text-on-coral active:scale-[0.98]"
           onClick={() => {
             void updateServiceWorker(true)
           }}

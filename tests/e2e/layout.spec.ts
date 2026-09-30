@@ -333,6 +333,84 @@ test('a two-food bowl shows both foods and holds its layout', async ({ page }, t
   expect(await textColumnMisalignments(page), 'a ragged text column').toEqual([])
 })
 
+/**
+ * Elements whose own background is still a light colour. In dark mode every
+ * surface comes from a token, so a light box here is a hard-coded colour that
+ * never learnt about the dark palette (a stray bg-white, a library default).
+ */
+async function lightBackgrounds(page: Page): Promise<string[]> {
+  return page.evaluate(() => {
+    const g = globalThis as unknown as {
+      document: { querySelectorAll: (selector: string) => Iterable<DomElement> }
+      getComputedStyle: (el: DomElement) => { backgroundColor: string }
+    }
+    const out: string[] = []
+    for (const el of g.document.querySelectorAll('body, body *')) {
+      const r = el.getBoundingClientRect()
+      if (r.width === 0 && r.height === 0) continue
+      const match = /rgba?\((\d+), (\d+), (\d+)(?:, ([\d.]+))?\)/.exec(
+        g.getComputedStyle(el).backgroundColor,
+      )
+      if (match === null) continue
+      const [, red = '0', green = '0', blue = '0', alpha = '1'] = match
+      if (Number(alpha) < 0.5) continue
+      // Relative luminance, roughly: anything past mid-grey is a light box.
+      // Coral fills (buttons, ticked bowls) are the accent and stay coral.
+      const lum = (0.2126 * Number(red) + 0.7152 * Number(green) + 0.0722 * Number(blue)) / 255
+      const isCoral = Number(red) > 200 && Number(green) < 160
+      if (lum > 0.5 && !isCoral) {
+        const cls = typeof el.className === 'string' ? el.className.slice(0, 60) : ''
+        out.push(`<${el.tagName.toLowerCase()} class="${cls}"> ${match[0]}`)
+      }
+    }
+    return out.slice(0, 5)
+  })
+}
+
+// Dark mode follows the phone's setting, so both iPhones will show it the
+// moment either owner switches theirs. Same sweep, dark palette.
+test.describe('in dark mode', () => {
+  test.use({ colorScheme: 'dark' })
+
+  test('every screen is dark, with nothing left on a light surface', async ({
+    page,
+    request,
+  }, testInfo) => {
+    test.setTimeout(180_000)
+
+    const tag = `dark-${testInfo.project.name}`
+    await seedHousehold(page, { tag })
+    await seedPreviousPlan(request, tag)
+    await seedLastWeeksWeighIn(request, tag)
+
+    for (const name of PAGES) {
+      await tabBar(page).getByRole('link', { name }).click()
+      await expect(page.getByRole('heading', { level: 1 })).toBeVisible(WAIT)
+      await page.waitForTimeout(500)
+
+      await page.screenshot({
+        path: `test-results/screenshots/${testInfo.project.name}-${name.toLowerCase()}-dark.png`,
+        fullPage: true,
+      })
+
+      expect(await lightBackgrounds(page), `${name} has a light surface in dark mode`).toEqual([])
+      expect(await overflowingElements(page), `${name} has elements past the viewport`).toEqual([])
+    }
+  })
+
+  test('the sign-in screen is dark', async ({ page }, testInfo) => {
+    await page.goto('/')
+    await expect(page.getByRole('heading', { name: 'CatTrack' })).toBeVisible(WAIT)
+
+    await page.screenshot({
+      path: `test-results/screenshots/${testInfo.project.name}-signin-dark.png`,
+      fullPage: true,
+    })
+
+    expect(await lightBackgrounds(page), 'sign-in has a light surface in dark mode').toEqual([])
+  })
+})
+
 test('the sign-in screen fits the viewport', async ({ page }, testInfo) => {
   await page.goto('/')
   await expect(page.getByRole('heading', { name: 'CatTrack' })).toBeVisible(WAIT)

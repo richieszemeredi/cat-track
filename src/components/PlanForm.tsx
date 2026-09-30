@@ -188,7 +188,7 @@ export function PlanForm({
                   setMealsPerDay(count)
                 }}
                 className={`min-h-11 flex-1 rounded-full text-base font-semibold tabular-nums active:scale-[0.98] ${
-                  selected ? 'bg-coral' : 'border border-sand-deep bg-surface'
+                  selected ? 'bg-coral text-on-coral' : 'border border-sand-deep bg-surface'
                 }`}
               >
                 {count}

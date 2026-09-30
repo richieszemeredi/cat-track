@@ -113,11 +113,7 @@ function DevSignInForm({ onError }: { onError: (message: string | null) => void 
           data-testid="dev-password"
         />
       </label>
-      <button
-        type="submit"
-        className="mt-1 rounded-full bg-ink px-4 py-2 font-semibold text-cream active:scale-[0.98]"
-        data-testid="dev-submit"
-      >
+      <button type="submit" className="btn-secondary mt-1" data-testid="dev-submit">
         Dev sign in
       </button>
     </form>

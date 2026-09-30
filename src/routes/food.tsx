@@ -857,7 +857,7 @@ function MealRow({
     <span
       aria-hidden="true"
       className={`flex h-7 w-7 items-center justify-center rounded-full ${
-        isGiven ? 'bg-coral' : 'border-2 border-sand-deep'
+        isGiven ? 'bg-coral text-on-coral' : 'border-2 border-sand-deep'
       }`}
     >
       {isGiven ? (

@@ -193,6 +193,14 @@ component classes (`gutter`, `page-title`, `section-label`, `surface`, `field`,
 reach for raw Tailwind only for layout. Prettier sorts Tailwind classes. UI language is
 English.
 
+Dark mode is automatic (`prefers-color-scheme`, no toggle) and lives entirely in one
+`@media` block in `index.css` that re-points the same tokens — never a `dark:` variant in
+a component. So a colour must come from a token, never a hex or `white`: that includes
+Recharts props (`stroke="var(--color-sand-deep)"`) and its defaults, which paint dots
+`#fff`. Text on a coral fill is `text-on-coral`, not `text-ink` (ink turns light at night).
+`tests/unit/theme.test.ts` checks AA contrast for both palettes straight from the
+stylesheet, and the layout spec's dark pass fails on any light background left behind.
+
 Five rules keep it from drifting back into generic-app territory:
 
 1. **One accent.** Coral on cream and ink. `positive` (green) and `danger` (red) are
