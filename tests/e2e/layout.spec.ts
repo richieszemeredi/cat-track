@@ -173,6 +173,46 @@ async function textColumnMisalignments(page: Page): Promise<string[]> {
   })
 }
 
+/** Narrower than this and a column is tighter than a card on the 12 mini. */
+const MIN_COLUMN_WIDTH = 343
+/** The width pages split into two columns at (Tailwind `md`). */
+const TWO_COLUMNS_FROM = 768
+
+/**
+ * From 768pt every screen splits into two columns side by side, each at least
+ * as wide as a card on the narrowest phone; below that they stack, left edges
+ * together, which is the phone layout unchanged. Checked both ways so a
+ * screen that silently falls back to one long column on an iPad fails too.
+ */
+async function columnProblems(page: Page): Promise<string[]> {
+  const viewport = page.viewportSize()
+  if (viewport === null) return ['no viewport']
+  const columns = await page.evaluate(() => {
+    const g = globalThis as unknown as {
+      document: { querySelectorAll: (selector: string) => Iterable<DomElement> }
+    }
+    return [...g.document.querySelectorAll('.page-column')].map((el) => {
+      const r = el.getBoundingClientRect()
+      return { left: Math.round(r.left), width: Math.round(r.width) }
+    })
+  })
+  const out: string[] = []
+  if (columns.length !== 2) return [`expected 2 .page-column, found ${String(columns.length)}`]
+  const [first, second] = columns
+  if (first === undefined || second === undefined) return out
+  if (viewport.width >= TWO_COLUMNS_FROM) {
+    if (second.left <= first.left) out.push('the columns are stacked, not side by side')
+    for (const column of columns) {
+      if (column.width < MIN_COLUMN_WIDTH) {
+        out.push(`a column is ${String(column.width)}pt, under ${String(MIN_COLUMN_WIDTH)}`)
+      }
+    }
+  } else if (second.left !== first.left) {
+    out.push(`the columns sit side by side on a ${String(viewport.width)}pt phone`)
+  }
+  return out
+}
+
 async function documentScrollsSideways(page: Page): Promise<boolean> {
   return page.evaluate(() => {
     const g = globalThis as unknown as {
@@ -217,6 +257,7 @@ test('every screen fits the viewport without sideways scroll', async ({
     expect(await controlsOutsideTheirCard(page), `${name} has controls escaping a card`).toEqual([])
     expect(await smallTouchTargets(page), `${name} has under-sized tap targets`).toEqual([])
     expect(await textColumnMisalignments(page), `${name} has a ragged text column`).toEqual([])
+    expect(await columnProblems(page), `${name} columns`).toEqual([])
   }
 })
 
