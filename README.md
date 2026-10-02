@@ -16,7 +16,7 @@ food bowl. Built for exactly one household, one cat, and a lot of love.
 - [Tailwind CSS v4](https://tailwindcss.com) with custom warm/playful design tokens
 - [Zod](https://zod.dev) validation at every Firestore read boundary
 - Vitest (unit + component), `@firebase/rules-unit-testing` (security rules), Playwright (e2e on
-  Safari iPhone 14 Pro + Chrome, layout pass also on iPhone 12 Mini and desktop), all against the
+  Safari iPhone 14 Pro + Chrome, layout pass also on iPhone 12 Mini, two iPads and desktop), all against the
   Firebase emulators
 - PWA via `vite-plugin-pwa` — installable on iPhone home screens
 
@@ -163,8 +163,9 @@ Dependabot keeps npm dependencies (weekly, minor+patch grouped) and GitHub Actio
 - **Membership lookup uses a members collection-group query** — the security rule scopes it to
   your own docs, but any future collection literally named `members` would inherit that rule;
   rename or re-scope if one ever appears.
-- **Install tips target iPhone Safari** — iPadOS detection (it masquerades as macOS) and
-  non-Safari iOS browsers aren't special-cased.
+- **Install tips target iOS Safari** — iPhones and iPads (an iPad reporting a Mac user agent
+  is told apart by its touch points); non-Safari iOS browsers and desktop browsers get no
+  install tip.
 - **No error-reporting service** — errors log to the console only; Sentry/GlitchTip slot into
   `react-error-boundary`'s `onError` when wanted.
 
