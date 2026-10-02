@@ -73,8 +73,14 @@
     color: var(--color-ink);
     font-family: var(--font-sans);
     -webkit-font-smoothing: antialiased;
-    /* iOS standalone: keep content out of the notch / home indicator */
+    /* iOS standalone: keep content out of the notch / home indicator. The
+       sides matter once a phone is turned sideways — the Dynamic Island then
+       sits on the left or right edge, and the wider layouts start at
+       landscape-phone widths. Fixed bars (TabBar) can't inherit this and pad
+       themselves the same way. */
     padding-top: env(safe-area-inset-top);
+    padding-right: env(safe-area-inset-right);
+    padding-left: env(safe-area-inset-left);
   }
 
   /* iOS 27 paints its Liquid Glass scroll-edge blur over the top of an
