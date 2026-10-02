@@ -22,6 +22,7 @@ import {
 } from 'firebase/firestore'
 import { useEffect } from 'react'
 import { type z } from 'zod'
+import { displayNameFor } from './display-name'
 import { db } from './firebase'
 import {
   catSchema,
@@ -572,7 +573,7 @@ export async function createHouseholdWithOwner(name: string, user: User): Promis
     uid: user.uid,
     role: 'owner',
     joinedAt: serverTimestamp(),
-    displayName: user.displayName ?? user.email ?? 'Owner',
+    displayName: displayNameFor(user, 'Owner'),
   })
   await batch.commit()
   return householdRef.id
