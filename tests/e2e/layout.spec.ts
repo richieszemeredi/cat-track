@@ -576,3 +576,32 @@ for (const colorScheme of ['light', 'dark'] as const) {
     expect(backdrop?.colour, 'the status bar would not match the page').toBe(backdrop?.page)
   })
 }
+
+/**
+ * On a desktop (or an iPad with a keyboard) Tab has to show where it landed.
+ * Only one ring style exists — :focus-visible in index.css — so checking the
+ * first stop on the sign-in screen pins it for every button and link.
+ */
+test('a keyboard focus is visible', async ({ page, browserName }) => {
+  // WebKit, like Safari, skips buttons and links on Tab unless the user has
+  // turned on full keyboard access, so this is Chromium's to check.
+  test.skip(browserName === 'webkit', 'WebKit does not Tab to buttons by default')
+  await page.goto('/')
+  await expect(page.getByRole('heading', { name: 'CatTrack' })).toBeVisible(WAIT)
+
+  await page.keyboard.press('Tab')
+  const outline = await page.evaluate(() => {
+    const g = globalThis as unknown as {
+      document: { activeElement: DomElement | null }
+      getComputedStyle: (el: DomElement) => { outlineStyle: string; outlineWidth: string }
+    }
+    const el = g.document.activeElement
+    if (el === null) return null
+    const style = g.getComputedStyle(el)
+    return { tag: el.tagName.toLowerCase(), style: style.outlineStyle, width: style.outlineWidth }
+  })
+
+  expect(outline, 'Tab focused nothing').not.toBeNull()
+  expect(outline?.style, `no focus ring on the focused <${outline?.tag ?? ''}>`).not.toBe('none')
+  expect(outline?.width).not.toBe('0px')
+})

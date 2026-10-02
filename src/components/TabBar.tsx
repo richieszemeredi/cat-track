@@ -29,8 +29,11 @@ export function TabBar() {
           <Link
             key={tab.to}
             to={tab.to}
-            className="flex flex-1 flex-col items-center gap-0.5 py-2 text-xs font-medium text-ink-soft lg:flex-none lg:py-3"
-            activeProps={{ className: 'text-coral-ink font-semibold', 'aria-current': 'page' }}
+            className="flex flex-1 flex-col items-center gap-0.5 rounded-xl py-2 text-xs font-medium text-ink-soft hover:text-ink lg:flex-none lg:py-3"
+            activeProps={{
+              className: 'text-coral-ink hover:text-coral-ink font-semibold',
+              'aria-current': 'page',
+            }}
             activeOptions={{ exact: tab.to === '/' }}
           >
             <span aria-hidden="true" className="text-xl leading-none">
