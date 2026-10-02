@@ -80,7 +80,7 @@ function MembershipGate({ user }: { user: User }) {
 
 function AppShell() {
   return (
-    <div className="mx-auto min-h-dvh max-w-lg pb-24">
+    <div className="mx-auto min-h-dvh max-w-lg pb-24 md:max-w-5xl">
       <OfflineBanner />
       <InstallPrompt />
       <ErrorBoundary

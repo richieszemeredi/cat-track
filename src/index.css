@@ -145,6 +145,28 @@
     @apply px-4;
   }
 
+  /* From 768pt a screen splits into two columns. Each one is a contiguous
+     run of the phone's own order — today's figures and tasks on the left,
+     records and reference on the right — so on a phone the two simply stack
+     and the screen is exactly what it was. At 768 a column is still 356pt,
+     wider than a card on the 375pt iPhone 12 mini, so nothing is ever laid
+     out narrower than a width the phones already prove. Flex columns rather
+     than a grid of sections, so a long list on one side never stretches a
+     row on the other. */
+  .page-columns {
+    @apply flex flex-col gap-7 md:grid md:grid-cols-2 md:items-start md:gap-x-6;
+  }
+
+  .page-column {
+    @apply flex min-w-0 flex-col gap-7;
+  }
+
+  /* A lone card (loading, no cat yet) on a two-column screen takes the left
+     column's width instead of one long bar across both. */
+  .page-solo {
+    @apply md:w-[calc((100%-1.5rem)/2)];
+  }
+
   .page-title {
     @apply text-3xl font-bold tracking-tight;
   }

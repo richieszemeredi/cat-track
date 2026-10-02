@@ -41,32 +41,40 @@ function ProfilePage() {
     <main className="flex flex-col gap-7 p-4">
       <h1 className="page-title gutter">Profile</h1>
 
-      {catsLoading ? (
-        <CatSkeleton />
-      ) : activeCat === null ? (
-        <NoCatCard canEdit={canEdit} hid={householdId} uid={user.uid} />
-      ) : (
-        <CatCard cat={activeCat} canEdit={canEdit} hid={householdId} uid={user.uid} />
-      )}
+      <div className="page-columns">
+        {/* Her. */}
+        <div className="page-column">
+          {catsLoading ? (
+            <CatSkeleton />
+          ) : activeCat === null ? (
+            <NoCatCard canEdit={canEdit} hid={householdId} uid={user.uid} />
+          ) : (
+            <CatCard cat={activeCat} canEdit={canEdit} hid={householdId} uid={user.uid} />
+          )}
+        </div>
 
-      <HouseholdCard hid={householdId} role={role} />
+        {/* Who shares her, and what this phone does about it. */}
+        <div className="page-column">
+          <HouseholdCard hid={householdId} role={role} />
 
-      <RemindersCard {...reminders} />
+          <RemindersCard {...reminders} />
 
-      {/* A real footer rather than a stray word: the page ends on a full-width
+          {/* A real footer rather than a stray word: the page ends on a full-width
           action and a version line, so it reads as finished. */}
-      <footer className="flex flex-col items-center gap-3 border-t border-sand pt-6">
-        <button
-          type="button"
-          onClick={() => {
-            void signOutUser()
-          }}
-          className="btn-secondary w-full"
-        >
-          Sign out
-        </button>
-        <p className="text-xs text-ink-soft">CatTrack v{__APP_VERSION__}</p>
-      </footer>
+          <footer className="flex flex-col items-center gap-3 border-t border-sand pt-6">
+            <button
+              type="button"
+              onClick={() => {
+                void signOutUser()
+              }}
+              className="btn-secondary w-full"
+            >
+              Sign out
+            </button>
+            <p className="text-xs text-ink-soft">CatTrack v{__APP_VERSION__}</p>
+          </footer>
+        </div>
+      </div>
     </main>
   )
 }

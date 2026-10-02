@@ -30,7 +30,7 @@ function WeightPage() {
     <main className="flex flex-col gap-7 p-4">
       <h1 className="page-title gutter">Weight</h1>
       {catsLoading ? (
-        <div className="h-24 animate-pulse rounded-squishy bg-sand" />
+        <div className="page-solo h-24 animate-pulse rounded-squishy bg-sand" />
       ) : activeCat === null ? (
         <NoCatCard />
       ) : (
@@ -56,7 +56,9 @@ function WeightBody({
   const [deleteError, setDeleteError] = useState<string | null>(null)
   const [historyShown, setHistoryShown] = useState(HISTORY_PAGE_SIZE)
 
-  if (weightsQuery.isLoading) return <div className="h-24 animate-pulse rounded-squishy bg-sand" />
+  if (weightsQuery.isLoading) {
+    return <div className="page-solo h-24 animate-pulse rounded-squishy bg-sand" />
+  }
   if (weightsQuery.isError) {
     return (
       <ErrorCard
@@ -110,101 +112,109 @@ function WeightBody({
   }
 
   return (
-    <>
-      {/* The one number this screen leads with. */}
-      <section className="gutter flex flex-col gap-2">
-        <h2 className="section-label">Latest</h2>
-        <p className="flex items-baseline gap-2">
-          <span
-            data-testid="weight-latest"
-            className="text-5xl font-bold tracking-tight tabular-nums"
-          >
-            {latest === undefined ? '—' : formatWeightKg(latest.weightKg)}
-          </span>
-        </p>
-        <p className="text-sm text-ink-soft">
-          {latest === undefined ? (
-            'No weigh-ins yet'
-          ) : change === null ? (
-            format(latest.date, 'MMM d')
+    <div className="page-columns">
+      {/* How she is doing: the latest weight and the curve it sits on. */}
+      <div className="page-column">
+        {/* The one number this screen leads with. */}
+        <section className="gutter flex flex-col gap-2">
+          <h2 className="section-label">Latest</h2>
+          <p className="flex items-baseline gap-2">
+            <span
+              data-testid="weight-latest"
+              className="text-5xl font-bold tracking-tight tabular-nums"
+            >
+              {latest === undefined ? '—' : formatWeightKg(latest.weightKg)}
+            </span>
+          </p>
+          <p className="text-sm text-ink-soft">
+            {latest === undefined ? (
+              'No weigh-ins yet'
+            ) : change === null ? (
+              format(latest.date, 'MMM d')
+            ) : (
+              <>
+                {format(latest.date, 'MMM d')} ·{' '}
+                <span
+                  className={
+                    change.delta > 0 && isKitten ? 'font-semibold text-positive' : undefined
+                  }
+                >
+                  {change.delta >= 0 ? '+' : ''}
+                  {formatWeightKg(change.delta)}
+                </span>{' '}
+                {change.suffix}
+              </>
+            )}
+          </p>
+          {nudge === null ? null : <p className="text-sm text-coral-ink">{nudge}</p>}
+        </section>
+
+        <section data-testid="weight-chart" className="flex flex-col gap-3">
+          <h2 className="section-label gutter">Growth</h2>
+          <div className="surface p-4">
+            <GrowthChart cat={cat} entries={entries} />
+          </div>
+          <p className="gutter text-xs text-ink-soft">
+            Estimates only — always confirm with your vet.
+          </p>
+        </section>
+      </div>
+
+      {/* Logging a weigh-in, and every one logged so far. */}
+      <div className="page-column">
+        {canEdit && uid !== null ? (
+          <section className="flex flex-col gap-3">
+            <h2 className="section-label gutter">Add weigh-in</h2>
+            <div className="surface p-4">
+              <WeighForm hid={hid} catId={cat.id} uid={uid} />
+            </div>
+          </section>
+        ) : null}
+
+        <section className="flex flex-col gap-3">
+          <h2 className="section-label gutter">History</h2>
+          {deleteError === null ? null : (
+            <p role="alert" className="gutter text-sm font-semibold text-danger">
+              {deleteError}
+            </p>
+          )}
+          {entries.length === 0 ? (
+            <p className="gutter text-sm text-ink-soft">No weigh-ins yet.</p>
           ) : (
             <>
-              {format(latest.date, 'MMM d')} ·{' '}
-              <span
-                className={change.delta > 0 && isKitten ? 'font-semibold text-positive' : undefined}
-              >
-                {change.delta >= 0 ? '+' : ''}
-                {formatWeightKg(change.delta)}
-              </span>{' '}
-              {change.suffix}
+              <ul className="surface divide-y divide-sand">
+                {[...entries]
+                  .reverse()
+                  .slice(0, historyShown)
+                  .map((entry) => (
+                    <HistoryRow
+                      key={entry.id}
+                      entry={entry}
+                      canEdit={canEdit}
+                      onDelete={() => {
+                        if (window.confirm('Delete this weigh-in?')) {
+                          handleDelete(entry.id)
+                        }
+                      }}
+                    />
+                  ))}
+              </ul>
+              {entries.length > historyShown ? (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setHistoryShown((shown) => shown + HISTORY_PAGE_SIZE)
+                  }}
+                  className="btn-chip gutter self-start"
+                >
+                  Show older ({entries.length - historyShown} more)
+                </button>
+              ) : null}
             </>
           )}
-        </p>
-        {nudge === null ? null : <p className="text-sm text-coral-ink">{nudge}</p>}
-      </section>
-
-      <section data-testid="weight-chart" className="flex flex-col gap-3">
-        <h2 className="section-label gutter">Growth</h2>
-        <div className="surface p-4">
-          <GrowthChart cat={cat} entries={entries} />
-        </div>
-        <p className="gutter text-xs text-ink-soft">
-          Estimates only — always confirm with your vet.
-        </p>
-      </section>
-
-      {canEdit && uid !== null ? (
-        <section className="flex flex-col gap-3">
-          <h2 className="section-label gutter">Add weigh-in</h2>
-          <div className="surface p-4">
-            <WeighForm hid={hid} catId={cat.id} uid={uid} />
-          </div>
         </section>
-      ) : null}
-
-      <section className="flex flex-col gap-3">
-        <h2 className="section-label gutter">History</h2>
-        {deleteError === null ? null : (
-          <p role="alert" className="gutter text-sm font-semibold text-danger">
-            {deleteError}
-          </p>
-        )}
-        {entries.length === 0 ? (
-          <p className="gutter text-sm text-ink-soft">No weigh-ins yet.</p>
-        ) : (
-          <>
-            <ul className="surface divide-y divide-sand">
-              {[...entries]
-                .reverse()
-                .slice(0, historyShown)
-                .map((entry) => (
-                  <HistoryRow
-                    key={entry.id}
-                    entry={entry}
-                    canEdit={canEdit}
-                    onDelete={() => {
-                      if (window.confirm('Delete this weigh-in?')) {
-                        handleDelete(entry.id)
-                      }
-                    }}
-                  />
-                ))}
-            </ul>
-            {entries.length > historyShown ? (
-              <button
-                type="button"
-                onClick={() => {
-                  setHistoryShown((shown) => shown + HISTORY_PAGE_SIZE)
-                }}
-                className="btn-chip gutter self-start"
-              >
-                Show older ({entries.length - historyShown} more)
-              </button>
-            ) : null}
-          </>
-        )}
-      </section>
-    </>
+      </div>
+    </div>
   )
 }
 
@@ -239,7 +249,7 @@ function HistoryRow({
 
 function NoCatCard() {
   return (
-    <div className="surface flex flex-col items-start gap-3 p-5">
+    <div className="surface page-solo flex flex-col items-start gap-3 p-5">
       <p className="font-semibold">No cat set up yet.</p>
       <Link to="/profile" className="btn-primary">
         Add your cat

@@ -13,7 +13,7 @@ export function InstallPrompt() {
   if (dismissed || !isIos() || isStandalone()) return null
 
   return (
-    <div className="surface mx-4 mb-4 p-4">
+    <div className="surface mx-4 mb-4 p-4 md:max-w-lg">
       <div className="flex items-start justify-between gap-2">
         <h2 className="font-semibold">Put CatTrack on your Home Screen</h2>
         <button

@@ -85,7 +85,9 @@ function FoodPage() {
     return (
       <main className="flex flex-col gap-6 p-4">
         <h1 className="page-title gutter">Food</h1>
-        <Skeleton />
+        <div className="page-solo">
+          <Skeleton />
+        </div>
       </main>
     )
   }
@@ -94,7 +96,7 @@ function FoodPage() {
     return (
       <main className="flex flex-col gap-6 p-4">
         <h1 className="page-title gutter">Food</h1>
-        <div className="surface flex flex-col items-start gap-3 p-5">
+        <div className="surface page-solo flex flex-col items-start gap-3 p-5">
           <p className="font-semibold">No cat set up yet.</p>
           <Link to="/profile" className="btn-primary">
             Add your cat
@@ -316,7 +318,9 @@ function FoodContent({ cat }: { cat: Cat }) {
 
   if (editingPlan && canEdit && uid !== null) {
     return (
-      <main className="flex flex-col gap-7 p-4">
+      // A form, not a dashboard: it keeps the phone's width on a wide screen
+      // rather than stretching every field across both columns.
+      <main className="mx-auto flex w-full max-w-lg flex-col gap-7 p-4">
         <h1 className="page-title gutter">{plan === null ? 'Set her plan' : 'Edit plan'}</h1>
         <div className="gutter">
           <PlanForm
@@ -341,372 +345,386 @@ function FoodContent({ cat }: { cat: Cat }) {
     <main className="flex flex-col gap-7 p-4">
       <h1 className="page-title gutter">Food</h1>
 
-      {/* 1. Progress through today's plan — the one figure this screen leads
+      <div className="page-columns">
+        {/* Today: how far through the plan she is, and what is left to give. */}
+        <div className="page-column">
+          {/* 1. Progress through today's plan — the one figure this screen leads
           with. Not calories: with a fixed regimen the only thing that changes
           during a day is which bowl is still owed. */}
-      <section className="gutter flex flex-col gap-3">
-        <h2 className="section-label">Today</h2>
-        {plansQuery.isLoading || feedingsQuery.isLoading ? (
-          <Skeleton />
-        ) : plansQuery.isError || feedingsQuery.isError ? (
-          <SectionError label="Couldn't load today — please try again." />
-        ) : plan === null ? (
-          <div className="flex flex-col gap-3">
-            <p className="text-sm text-ink-soft">
-              No feeding plan yet. Set how many meals she gets, when, and how much a day — the app
-              works out the rest.
-            </p>
-            {canEdit && uid !== null ? (
-              <button
-                type="button"
-                data-testid="plan-setup"
-                onClick={() => {
-                  setEditingPlan(true)
-                }}
-                className="btn-primary self-start"
-              >
-                Set her plan
-              </button>
-            ) : null}
-          </div>
-        ) : (
-          <TodayProgress
-            given={givenCount}
-            total={times.length}
-            eatenKcal={eatenKcal}
-            planKcal={planDailyKcalValue}
-          />
-        )}
-      </section>
+          <section className="gutter flex flex-col gap-3">
+            <h2 className="section-label">Today</h2>
+            {plansQuery.isLoading || feedingsQuery.isLoading ? (
+              <Skeleton />
+            ) : plansQuery.isError || feedingsQuery.isError ? (
+              <SectionError label="Couldn't load today — please try again." />
+            ) : plan === null ? (
+              <div className="flex flex-col gap-3">
+                <p className="text-sm text-ink-soft">
+                  No feeding plan yet. Set how many meals she gets, when, and how much a day — the
+                  app works out the rest.
+                </p>
+                {canEdit && uid !== null ? (
+                  <button
+                    type="button"
+                    data-testid="plan-setup"
+                    onClick={() => {
+                      setEditingPlan(true)
+                    }}
+                    className="btn-primary self-start"
+                  >
+                    Set her plan
+                  </button>
+                ) : null}
+              </div>
+            ) : (
+              <TodayProgress
+                given={givenCount}
+                total={times.length}
+                eatenKcal={eatenKcal}
+                planKcal={planDailyKcalValue}
+              />
+            )}
+          </section>
 
-      {/* 1b. A kitten outgrows a plan on her own, without anyone editing
+          {/* 1b. A kitten outgrows a plan on her own, without anyone editing
           anything — this is the only thing the app knows that you don't. */}
-      {plan !== null && target !== null && isOutgrown(planDailyKcalValue, target) ? (
-        <OutgrownNudge
-          plan={plan}
-          items={planItems}
-          kcalPerGram={kcalPerGram}
-          dailyKcal={planDailyKcalValue}
-          targetKcal={target}
-          latestWeightKg={latestWeightKg}
-          canEdit={canEdit}
-          onBump={() => {
-            setEditingPlan(true)
-          }}
-        />
-      ) : null}
+          {plan !== null && target !== null && isOutgrown(planDailyKcalValue, target) ? (
+            <OutgrownNudge
+              plan={plan}
+              items={planItems}
+              kcalPerGram={kcalPerGram}
+              dailyKcal={planDailyKcalValue}
+              targetKcal={target}
+              latestWeightKg={latestWeightKg}
+              canEdit={canEdit}
+              onBump={() => {
+                setEditingPlan(true)
+              }}
+            />
+          ) : null}
 
-      {/* 2. Today's plan as a checklist. One tap per bowl. */}
-      {plan !== null ? (
-        <section className="flex flex-col gap-3">
-          <div className="gutter flex items-center justify-between gap-2">
-            <h2 className="section-label">Today&apos;s plan</h2>
-            {canEdit && uid !== null ? (
-              <button
-                type="button"
-                data-testid="plan-edit"
-                onClick={() => {
-                  setEditingPlan(true)
-                }}
-                className="btn-chip"
-              >
-                Edit plan
-              </button>
-            ) : null}
-          </div>
-
-          {planItemsQuery.isLoading ? (
-            <Skeleton />
-          ) : planItems.length === 0 ? (
-            <p className="gutter text-sm text-ink-soft">
-              This plan has no foods on it — edit it to add one.
-            </p>
-          ) : (
-            <>
-              <ul className="surface divide-y divide-sand">
-                {times.map((time, mealIndex) => (
-                  <MealRow
-                    key={time + String(mealIndex)}
-                    time={time}
-                    adjustedAt={adjustedTimes[mealIndex] ?? day.start}
-                    mealIndex={mealIndex}
-                    plan={plan}
-                    items={planItems}
-                    kcalPerGram={kcalPerGram}
-                    given={givenByMeal.get(mealIndex) ?? []}
-                    busy={busyMeal === mealIndex}
-                    canEdit={canEdit}
-                    onToggle={() => {
-                      void toggleMeal(mealIndex)
+          {/* 2. Today's plan as a checklist. One tap per bowl. */}
+          {plan !== null ? (
+            <section className="flex flex-col gap-3">
+              <div className="gutter flex items-center justify-between gap-2">
+                <h2 className="section-label">Today&apos;s plan</h2>
+                {canEdit && uid !== null ? (
+                  <button
+                    type="button"
+                    data-testid="plan-edit"
+                    onClick={() => {
+                      setEditingPlan(true)
                     }}
-                    onSetTime={(timeStr) => {
-                      void setMealTime(mealIndex, timeStr)
-                    }}
-                  />
-                ))}
-                <li className="flex items-center justify-between gap-3 px-4 py-3">
-                  <span className="text-sm text-ink-soft tabular-nums">
-                    {roundGrams(planDailyGrams(planItems))} g · {roundKcal(planDailyKcalValue)} kcal
-                    a day
-                  </span>
-                  {ratio === null ? null : (
-                    <span
-                      data-testid="plan-ratio"
-                      className={`text-sm font-semibold tabular-nums ${
-                        isOutgrown(planDailyKcalValue, target) ? 'text-coral-ink' : 'text-positive'
-                      }`}
-                    >
-                      {Math.round(ratio * 100)}% of target
-                    </span>
-                  )}
-                </li>
-              </ul>
-            </>
-          )}
-          {mealError === null ? null : <SectionError label={mealError} />}
-        </section>
-      ) : null}
+                    className="btn-chip"
+                  >
+                    Edit plan
+                  </button>
+                ) : null}
+              </div>
 
-      {/* 3. Anything off-plan: a treat, a stolen bite, a tin that wasn't on
+              {planItemsQuery.isLoading ? (
+                <Skeleton />
+              ) : planItems.length === 0 ? (
+                <p className="gutter text-sm text-ink-soft">
+                  This plan has no foods on it — edit it to add one.
+                </p>
+              ) : (
+                <>
+                  <ul className="surface divide-y divide-sand">
+                    {times.map((time, mealIndex) => (
+                      <MealRow
+                        key={time + String(mealIndex)}
+                        time={time}
+                        adjustedAt={adjustedTimes[mealIndex] ?? day.start}
+                        mealIndex={mealIndex}
+                        plan={plan}
+                        items={planItems}
+                        kcalPerGram={kcalPerGram}
+                        given={givenByMeal.get(mealIndex) ?? []}
+                        busy={busyMeal === mealIndex}
+                        canEdit={canEdit}
+                        onToggle={() => {
+                          void toggleMeal(mealIndex)
+                        }}
+                        onSetTime={(timeStr) => {
+                          void setMealTime(mealIndex, timeStr)
+                        }}
+                      />
+                    ))}
+                    <li className="flex items-center justify-between gap-3 px-4 py-3">
+                      <span className="text-sm text-ink-soft tabular-nums">
+                        {roundGrams(planDailyGrams(planItems))} g · {roundKcal(planDailyKcalValue)}{' '}
+                        kcal a day
+                      </span>
+                      {ratio === null ? null : (
+                        <span
+                          data-testid="plan-ratio"
+                          className={`text-sm font-semibold tabular-nums ${
+                            isOutgrown(planDailyKcalValue, target)
+                              ? 'text-coral-ink'
+                              : 'text-positive'
+                          }`}
+                        >
+                          {Math.round(ratio * 100)}% of target
+                        </span>
+                      )}
+                    </li>
+                  </ul>
+                </>
+              )}
+              {mealError === null ? null : <SectionError label={mealError} />}
+            </section>
+          ) : null}
+
+          {/* 3. Anything off-plan: a treat, a stolen bite, a tin that wasn't on
           the plan. Typed, because by definition it isn't predictable. */}
-      <section className="flex flex-col gap-3">
-        <div className="gutter flex items-center justify-between gap-2">
-          <h2 className="section-label">Anything else</h2>
-          {canEdit && uid !== null && activeFoods.length > 0 ? (
-            <button
-              type="button"
-              data-testid="off-plan-open"
-              onClick={() => {
-                setShowOffPlanForm((v) => !v)
-              }}
-              className="btn-chip"
-            >
-              {showOffPlanForm ? 'Close' : 'Add'}
-            </button>
-          ) : null}
+          <section className="flex flex-col gap-3">
+            <div className="gutter flex items-center justify-between gap-2">
+              <h2 className="section-label">Anything else</h2>
+              {canEdit && uid !== null && activeFoods.length > 0 ? (
+                <button
+                  type="button"
+                  data-testid="off-plan-open"
+                  onClick={() => {
+                    setShowOffPlanForm((v) => !v)
+                  }}
+                  className="btn-chip"
+                >
+                  {showOffPlanForm ? 'Close' : 'Add'}
+                </button>
+              ) : null}
+            </div>
+
+            {showOffPlanForm && canEdit && uid !== null ? (
+              <div className="surface p-4">
+                <LogMealForm hid={householdId} catId={cat.id} uid={uid} foods={activeFoods} />
+              </div>
+            ) : null}
+
+            {offPlan.length === 0 ? (
+              <p className="gutter text-sm text-ink-soft">Nothing off-plan today.</p>
+            ) : (
+              <>
+                <ul className="surface divide-y divide-sand">
+                  {offPlan.map((entry) => (
+                    <li key={entry.id} className="flex items-center gap-3 px-4 py-3">
+                      <span className="text-sm text-ink-soft tabular-nums">
+                        {format(entry.datetime, 'HH:mm')}
+                      </span>
+                      <span className="min-w-0 flex-1 truncate font-medium">
+                        {entry.foodNameSnapshot}
+                      </span>
+                      <span className="shrink-0 text-sm text-ink-soft tabular-nums">
+                        {roundGrams(entry.amountG)} g · {roundKcal(entry.kcal)} kcal
+                      </span>
+                      {canEdit ? (
+                        <button
+                          type="button"
+                          aria-label="Delete meal"
+                          onClick={() => {
+                            void removeFeeding(entry)
+                          }}
+                          className="btn-icon"
+                        >
+                          ×
+                        </button>
+                      ) : null}
+                    </li>
+                  ))}
+                </ul>
+                <p className="gutter text-sm text-ink-soft tabular-nums">
+                  Total: {roundGrams(sumGrams(offPlan))} g · {roundKcal(sumKcal(offPlan))} kcal
+                </p>
+              </>
+            )}
+          </section>
         </div>
 
-        {showOffPlanForm && canEdit && uid !== null ? (
-          <div className="surface p-4">
-            <LogMealForm hid={householdId} catId={cat.id} uid={uid} foods={activeFoods} />
-          </div>
-        ) : null}
+        {/* The catalog and the reference material behind the plan. */}
+        <div className="page-column">
+          {/* 4. Food catalog */}
+          <section className="flex flex-col gap-3">
+            <div className="gutter flex items-center justify-between gap-2">
+              <h2 className="section-label">Food catalog</h2>
+              {canEdit && uid !== null ? (
+                <button
+                  type="button"
+                  data-testid="food-add-open"
+                  onClick={() => {
+                    setShowAddFood((v) => !v)
+                  }}
+                  className="btn-chip"
+                >
+                  {showAddFood ? 'Close' : 'Add food'}
+                </button>
+              ) : null}
+            </div>
 
-        {offPlan.length === 0 ? (
-          <p className="gutter text-sm text-ink-soft">Nothing off-plan today.</p>
-        ) : (
-          <>
-            <ul className="surface divide-y divide-sand">
-              {offPlan.map((entry) => (
-                <li key={entry.id} className="flex items-center gap-3 px-4 py-3">
-                  <span className="text-sm text-ink-soft tabular-nums">
-                    {format(entry.datetime, 'HH:mm')}
-                  </span>
-                  <span className="min-w-0 flex-1 truncate font-medium">
-                    {entry.foodNameSnapshot}
-                  </span>
-                  <span className="shrink-0 text-sm text-ink-soft tabular-nums">
-                    {roundGrams(entry.amountG)} g · {roundKcal(entry.kcal)} kcal
-                  </span>
-                  {canEdit ? (
-                    <button
-                      type="button"
-                      aria-label="Delete meal"
-                      onClick={() => {
-                        void removeFeeding(entry)
-                      }}
-                      className="btn-icon"
-                    >
-                      ×
-                    </button>
-                  ) : null}
-                </li>
-              ))}
-            </ul>
-            <p className="gutter text-sm text-ink-soft tabular-nums">
-              Total: {roundGrams(sumGrams(offPlan))} g · {roundKcal(sumKcal(offPlan))} kcal
-            </p>
-          </>
-        )}
-      </section>
+            {showAddFood && canEdit && uid !== null ? (
+              <FoodForm
+                hid={householdId}
+                catId={cat.id}
+                uid={uid}
+                onDone={() => {
+                  setShowAddFood(false)
+                }}
+              />
+            ) : null}
 
-      {/* 4. Food catalog */}
-      <section className="flex flex-col gap-3">
-        <div className="gutter flex items-center justify-between gap-2">
-          <h2 className="section-label">Food catalog</h2>
-          {canEdit && uid !== null ? (
-            <button
-              type="button"
-              data-testid="food-add-open"
-              onClick={() => {
-                setShowAddFood((v) => !v)
-              }}
-              className="btn-chip"
-            >
-              {showAddFood ? 'Close' : 'Add food'}
-            </button>
-          ) : null}
-        </div>
-
-        {showAddFood && canEdit && uid !== null ? (
-          <FoodForm
-            hid={householdId}
-            catId={cat.id}
-            uid={uid}
-            onDone={() => {
-              setShowAddFood(false)
-            }}
-          />
-        ) : null}
-
-        {foodsQuery.isLoading ? (
-          <Skeleton />
-        ) : foodsQuery.isError ? (
-          <SectionError label="Couldn't load your foods — please try again." />
-        ) : activeFoods.length === 0 ? (
-          <p className="gutter text-sm text-ink-soft">
-            No foods yet — add one before setting her plan.
-          </p>
-        ) : (
-          <ul className="surface divide-y divide-sand">
-            {activeFoods.map((food) => (
-              <li key={food.id} className="flex flex-col gap-3 p-4">
-                {/* Actions sit on their own row rather than beside the text:
+            {foodsQuery.isLoading ? (
+              <Skeleton />
+            ) : foodsQuery.isError ? (
+              <SectionError label="Couldn't load your foods — please try again." />
+            ) : activeFoods.length === 0 ? (
+              <p className="gutter text-sm text-ink-soft">
+                No foods yet — add one before setting her plan.
+              </p>
+            ) : (
+              <ul className="surface divide-y divide-sand">
+                {activeFoods.map((food) => (
+                  <li key={food.id} className="flex flex-col gap-3 p-4">
+                    {/* Actions sit on their own row rather than beside the text:
                     squeezed next to two chips, a real food name wrapped onto
                     three lines and the energy figures broke mid-unit. */}
-                <div className="flex flex-col gap-3">
-                  {/* Name, then one metadata line. The type used to be an
+                    <div className="flex flex-col gap-3">
+                      {/* Name, then one metadata line. The type used to be an
                       inline pill after the name, which orphaned onto a line of
                       its own as soon as the name wrapped. */}
-                  <div className="flex min-w-0 flex-col gap-1">
-                    <p className="font-semibold">{food.name}</p>
-                    <p className="flex flex-wrap items-center gap-x-1.5 gap-y-1 text-sm text-ink-soft">
-                      <TypeBadge type={food.type} />
-                      {food.brand === null || food.brand === '' ? null : <span>{food.brand}</span>}
-                    </p>
-                    {/* Each figure stays whole: "100 g" wrapped mid-unit on a
+                      <div className="flex min-w-0 flex-col gap-1">
+                        <p className="font-semibold">{food.name}</p>
+                        <p className="flex flex-wrap items-center gap-x-1.5 gap-y-1 text-sm text-ink-soft">
+                          <TypeBadge type={food.type} />
+                          {food.brand === null || food.brand === '' ? null : (
+                            <span>{food.brand}</span>
+                          )}
+                        </p>
+                        {/* Each figure stays whole: "100 g" wrapped mid-unit on a
                         375pt screen. */}
-                    <p className="text-sm text-ink-soft tabular-nums">
-                      <span className="whitespace-nowrap">{food.kcalPerGram} kcal/g</span> ·{' '}
-                      <span className="whitespace-nowrap">
-                        {roundKcal(food.kcalPerGram * 100)} kcal / 100 g
-                      </span>
-                    </p>
-                  </div>
-                  {canEdit && uid !== null ? (
-                    <div className="flex justify-end gap-2">
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setEditingFoodId((prev) => (prev === food.id ? null : food.id))
-                        }}
-                        className="btn-chip"
-                      >
-                        Edit
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          void setFoodArchived(food, true)
-                        }}
-                        className="btn-chip"
-                      >
-                        Archive
-                      </button>
+                        <p className="text-sm text-ink-soft tabular-nums">
+                          <span className="whitespace-nowrap">{food.kcalPerGram} kcal/g</span> ·{' '}
+                          <span className="whitespace-nowrap">
+                            {roundKcal(food.kcalPerGram * 100)} kcal / 100 g
+                          </span>
+                        </p>
+                      </div>
+                      {canEdit && uid !== null ? (
+                        <div className="flex justify-end gap-2">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setEditingFoodId((prev) => (prev === food.id ? null : food.id))
+                            }}
+                            className="btn-chip"
+                          >
+                            Edit
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              void setFoodArchived(food, true)
+                            }}
+                            className="btn-chip"
+                          >
+                            Archive
+                          </button>
+                        </div>
+                      ) : null}
                     </div>
-                  ) : null}
-                </div>
-                {editingFoodId === food.id && canEdit && uid !== null ? (
-                  <FoodForm
-                    hid={householdId}
-                    catId={cat.id}
-                    uid={uid}
-                    existing={food}
-                    onDone={() => {
-                      setEditingFoodId(null)
-                    }}
-                  />
-                ) : null}
-              </li>
-            ))}
-          </ul>
-        )}
-
-        {archivedFoods.length > 0 ? (
-          <div className="flex flex-col gap-2">
-            <button
-              type="button"
-              onClick={() => {
-                setShowArchived((v) => !v)
-              }}
-              className="gutter self-start text-sm font-semibold text-coral-ink underline underline-offset-2"
-            >
-              {showArchived ? 'Hide archived' : `Show archived (${String(archivedFoods.length)})`}
-            </button>
-            {showArchived ? (
-              <ul className="surface divide-y divide-sand">
-                {archivedFoods.map((food) => (
-                  <li key={food.id} className="flex items-center gap-3 px-4 py-3">
-                    <span className="min-w-0 flex-1 truncate text-sm text-ink-soft">
-                      {food.name}
-                    </span>
-                    {canEdit ? (
-                      <button
-                        type="button"
-                        onClick={() => {
-                          void setFoodArchived(food, false)
+                    {editingFoodId === food.id && canEdit && uid !== null ? (
+                      <FoodForm
+                        hid={householdId}
+                        catId={cat.id}
+                        uid={uid}
+                        existing={food}
+                        onDone={() => {
+                          setEditingFoodId(null)
                         }}
-                        className="btn-chip"
-                      >
-                        Unarchive
-                      </button>
+                      />
                     ) : null}
                   </li>
                 ))}
               </ul>
+            )}
+
+            {archivedFoods.length > 0 ? (
+              <div className="flex flex-col gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowArchived((v) => !v)
+                  }}
+                  className="gutter self-start text-sm font-semibold text-coral-ink underline underline-offset-2"
+                >
+                  {showArchived
+                    ? 'Hide archived'
+                    : `Show archived (${String(archivedFoods.length)})`}
+                </button>
+                {showArchived ? (
+                  <ul className="surface divide-y divide-sand">
+                    {archivedFoods.map((food) => (
+                      <li key={food.id} className="flex items-center gap-3 px-4 py-3">
+                        <span className="min-w-0 flex-1 truncate text-sm text-ink-soft">
+                          {food.name}
+                        </span>
+                        {canEdit ? (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              void setFoodArchived(food, false)
+                            }}
+                            className="btn-chip"
+                          >
+                            Unarchive
+                          </button>
+                        ) : null}
+                      </li>
+                    ))}
+                  </ul>
+                ) : null}
+              </div>
             ) : null}
-          </div>
-        ) : null}
 
-        {catalogError === null ? null : <SectionError label={catalogError} />}
-      </section>
+            {catalogError === null ? null : <SectionError label={catalogError} />}
+          </section>
 
-      {/* 5. What she has been eating. Folded away, and its reads only happen
+          {/* 5. What she has been eating. Folded away, and its reads only happen
           once it is opened. */}
-      {plans.length > 1 ? (
-        <details
-          className="surface px-4"
-          onToggle={(e) => {
-            setHistoryOpen(e.currentTarget.open)
-          }}
-        >
-          <summary className="disclosure">Plan history</summary>
-          <div className="pb-4">
-            {historyOpen ? (
-              <PlanHistory
-                hid={householdId}
-                catId={cat.id}
-                plans={plans}
-                kcalPerGram={kcalPerGram}
-                canEdit={canEdit}
-              />
-            ) : null}
-          </div>
-        </details>
-      ) : null}
+          {plans.length > 1 ? (
+            <details
+              className="surface px-4"
+              onToggle={(e) => {
+                setHistoryOpen(e.currentTarget.open)
+              }}
+            >
+              <summary className="disclosure">Plan history</summary>
+              <div className="pb-4">
+                {historyOpen ? (
+                  <PlanHistory
+                    hid={householdId}
+                    catId={cat.id}
+                    plans={plans}
+                    kcalPerGram={kcalPerGram}
+                    canEdit={canEdit}
+                  />
+                ) : null}
+              </div>
+            </details>
+          ) : null}
 
-      {/* 6. RER / MER explainer — reference material, folded away by default */}
-      <details className="surface px-4">
-        <summary className="disclosure">How the target works</summary>
-        <div className="flex flex-col gap-2 pb-4">
-          {weightsQuery.isLoading ? (
-            <Skeleton />
-          ) : (
-            <RerMerMath cat={cat} latestWeightKg={latestWeightKg} now={now} />
-          )}
-          <p className="text-xs text-ink-soft">{DISCLAIMER}</p>
+          {/* 6. RER / MER explainer — reference material, folded away by default */}
+          <details className="surface px-4">
+            <summary className="disclosure">How the target works</summary>
+            <div className="flex flex-col gap-2 pb-4">
+              {weightsQuery.isLoading ? (
+                <Skeleton />
+              ) : (
+                <RerMerMath cat={cat} latestWeightKg={latestWeightKg} now={now} />
+              )}
+              <p className="text-xs text-ink-soft">{DISCLAIMER}</p>
+            </div>
+          </details>
         </div>
-      </details>
+      </div>
     </main>
   )
 }
