@@ -1,11 +1,7 @@
 import { useState } from 'react'
-import { isStandalone } from '../lib/standalone'
+import { isIos, isStandalone } from '../lib/standalone'
 
 const DISMISS_KEY = 'cattrack.installPromptDismissed'
-
-function isIos(): boolean {
-  return /iphone|ipad|ipod/i.test(navigator.userAgent)
-}
 
 /**
  * iOS never auto-prompts for PWA install, so show the Add-to-Home-Screen
