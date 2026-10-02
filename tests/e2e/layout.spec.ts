@@ -3,7 +3,8 @@ import { seedHousehold, seedLastWeeksWeighIn, seedPreviousPlan, tabBar, WAIT } f
 
 /**
  * Layout pass on the two phones this household uses (iPhone 14 Pro, 393pt and
- * iPhone 12 mini, 375pt — see playwright.config.ts).
+ * iPhone 12 mini, 375pt), two iPads (768pt portrait, 1194pt landscape) and a
+ * desktop — see playwright.config.ts.
  *
  * Every screen is checked for horizontal overflow and screenshotted into
  * test-results/screenshots/, so a change that squeezes a control off-screen
@@ -109,42 +110,64 @@ async function smallTouchTargets(page: Page): Promise<string[]> {
 }
 
 /**
- * One text column. `.gutter` elements sit exactly one card-padding inside the
- * cards, so page labels line up with the text inside cards instead of leaving
- * a ragged left edge down the screen.
+ * One text column per page column. `.gutter` elements sit exactly one
+ * card-padding inside the cards, so page labels line up with the text inside
+ * cards instead of leaving a ragged left edge down the screen. From 768pt the
+ * pages split into two `.page-column`s, each its own text column; anything
+ * outside a column (the page title, a full-width footer) belongs to the
+ * leftmost one.
  */
 async function textColumnMisalignments(page: Page): Promise<string[]> {
   return page.evaluate(() => {
     const CARD_PADDING = 16
     const g = globalThis as unknown as {
       document: { querySelectorAll: (selector: string) => Iterable<DomElement> }
-    }
-    // getBoundingClientRect().left is the BORDER edge; the gutter's indent is
-    // padding, which lives inside it. Measure where the text actually starts.
-    const gg = globalThis as unknown as {
+      // getBoundingClientRect().left is the BORDER edge; the gutter's indent
+      // is padding, which lives inside it. Measure where the text starts.
       getComputedStyle: (el: DomElement) => { paddingLeft: string }
     }
+    const columnLefts = [...g.document.querySelectorAll('.page-column')]
+      .map((el) => el.getBoundingClientRect())
+      .filter((r) => r.width > 0 || r.height > 0)
+      .map((r) => Math.round(r.left))
+    const leftmost = columnLefts.length === 0 ? 0 : Math.min(...columnLefts)
+    const columnOf = (el: DomElement) => {
+      const column = el.closest('.page-column')
+      return column === null ? leftmost : Math.round(column.getBoundingClientRect().left)
+    }
     const lefts = (selector: string, withPadding: boolean) => {
-      const values = new Set<number>()
+      const byColumn = new Map<number, Set<number>>()
       for (const el of g.document.querySelectorAll(selector)) {
         const r = el.getBoundingClientRect()
         if (r.width === 0 && r.height === 0) continue
-        const pad = withPadding ? parseFloat(gg.getComputedStyle(el).paddingLeft) : 0
+        const pad = withPadding ? parseFloat(g.getComputedStyle(el).paddingLeft) : 0
+        const key = columnOf(el)
+        const values = byColumn.get(key) ?? new Set<number>()
         values.add(Math.round(r.left + pad))
+        byColumn.set(key, values)
       }
-      return [...values]
+      return byColumn
     }
     const gutters = lefts('.gutter', true)
     const cards = lefts('.surface', false)
     const out: string[] = []
-    if (gutters.length > 1) out.push(`.gutter text at several x: ${gutters.join(', ')}`)
-    if (cards.length > 1) out.push(`.surface elements at several x: ${cards.join(', ')}`)
-    const gutter = gutters[0]
-    const card = cards[0]
-    if (gutter !== undefined && card !== undefined && gutter - card !== CARD_PADDING) {
-      out.push(
-        `gutter x=${String(gutter)} is not ${String(CARD_PADDING)}px inside card x=${String(card)}`,
-      )
+    for (const column of new Set([...gutters.keys(), ...cards.keys()])) {
+      const where = `column at x=${String(column)}`
+      const columnGutters = [...(gutters.get(column) ?? [])]
+      const columnCards = [...(cards.get(column) ?? [])]
+      if (columnGutters.length > 1) {
+        out.push(`${where}: .gutter text at several x: ${columnGutters.join(', ')}`)
+      }
+      if (columnCards.length > 1) {
+        out.push(`${where}: .surface elements at several x: ${columnCards.join(', ')}`)
+      }
+      const gutter = columnGutters[0]
+      const card = columnCards[0]
+      if (gutter !== undefined && card !== undefined && gutter - card !== CARD_PADDING) {
+        out.push(
+          `${where}: gutter x=${String(gutter)} is not ${String(CARD_PADDING)}px inside card x=${String(card)}`,
+        )
+      }
     }
     return out
   })

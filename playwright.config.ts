@@ -1,8 +1,9 @@
 import { defineConfig, devices } from '@playwright/test'
 
-// The app is opened in two places: Safari on the household's iPhones, and
-// Chrome on a desktop. Both engines are covered here — Playwright's `iPhone`
-// devices are WebKit, `Desktop Chrome`/`Pixel 7` are Chromium.
+// The app is opened in three places: Safari on the household's iPhones,
+// Safari on an iPad, and Chrome on a desktop. Both engines are covered here —
+// Playwright's `iPhone`/`iPad` devices are WebKit, `Desktop Chrome`/`Pixel 7`
+// are Chromium.
 //
 // Caveat worth knowing: Playwright's WebKit is NOT iOS Safari. It sizes
 // `input[type=date|time]` correctly where a real iPhone does not, so form
@@ -33,6 +34,19 @@ export default defineConfig({
     {
       name: 'safari-iphone-12-mini',
       use: { ...devices['iPhone 12 Mini'] },
+      testMatch: LAYOUT_ONLY,
+    },
+    // The two iPad layouts, at the width each one starts. 768 is the
+    // narrowest screen that gets two columns (the tablet's "12 mini"); the
+    // landscape Pro is past 1024, where the tab bar becomes a side rail.
+    {
+      name: 'safari-ipad-mini',
+      use: { ...devices['iPad Mini'] },
+      testMatch: LAYOUT_ONLY,
+    },
+    {
+      name: 'safari-ipad-pro-landscape',
+      use: { ...devices['iPad Pro 11 landscape'] },
       testMatch: LAYOUT_ONLY,
     },
     // Chrome, at a phone width and on the desktop. Full suite on the phone
