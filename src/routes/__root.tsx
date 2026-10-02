@@ -80,16 +80,21 @@ function MembershipGate({ user }: { user: User }) {
 
 function AppShell() {
   return (
-    <div className="mx-auto min-h-dvh max-w-lg pb-24 md:max-w-5xl">
-      <OfflineBanner />
-      <InstallPrompt />
-      <ErrorBoundary
-        fallbackRender={({ error, resetErrorBoundary }) => (
-          <ErrorCard error={error} onRetry={resetErrorBoundary} />
-        )}
-      >
-        <Outlet />
-      </ErrorBoundary>
+    // The outer box clears the tab bar: below it on a phone, beside it once
+    // it becomes a rail at 1024pt. The inner one centres the content in
+    // what is left, so the rail never overlaps a centred column.
+    <div className="min-h-dvh pb-24 lg:pb-8 lg:pl-24">
+      <div className="mx-auto max-w-lg md:max-w-5xl">
+        <OfflineBanner />
+        <InstallPrompt />
+        <ErrorBoundary
+          fallbackRender={({ error, resetErrorBoundary }) => (
+            <ErrorCard error={error} onRetry={resetErrorBoundary} />
+          )}
+        >
+          <Outlet />
+        </ErrorBoundary>
+      </div>
       <TabBar />
     </div>
   )
