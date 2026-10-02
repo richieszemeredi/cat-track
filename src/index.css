@@ -103,6 +103,15 @@
     background-color: var(--color-cream);
   }
 
+  /* A keyboard on a desktop (or an iPad's) needs to see where it is. Only
+     on :focus-visible, so a tap or a click never leaves a ring behind;
+     coral-ink rather than coral, which is under 3:1 against cream. Fields
+     keep their own softer ring (.field), which overrides this one. */
+  :focus-visible {
+    outline: 2px solid var(--color-coral-ink);
+    outline-offset: 2px;
+  }
+
   /* iOS Safari zooms the page when a focused input is under 16px. */
   input,
   select,
@@ -188,33 +197,37 @@
     @apply focus:border-coral focus:ring-2 focus:ring-coral/25 focus:outline-none;
   }
 
+  /* hover: only fires where a pointer can hover (Tailwind wraps it in
+     @media (hover: hover)), so a phone never shows a stuck hover state after
+     a tap. Brighter rather than coral-deep: dark text on coral-deep drops
+     under AA. */
   .btn-primary {
     @apply rounded-full bg-coral px-5 py-3 text-center font-semibold text-on-coral;
-    @apply active:scale-[0.98] disabled:opacity-60;
+    @apply hover:brightness-105 active:scale-[0.98] disabled:opacity-60;
   }
 
   .btn-secondary {
     @apply rounded-full border border-sand-deep bg-surface px-5 py-3 text-center font-semibold text-ink;
-    @apply active:scale-[0.98] disabled:opacity-60;
+    @apply hover:bg-sand active:scale-[0.98] disabled:opacity-60;
   }
 
   /* Small inline action inside a list row. min-h keeps it a thumb-sized
      target rather than a 32px sliver. */
   .btn-chip {
     @apply flex min-h-10 items-center rounded-full border border-sand-deep bg-surface px-3 py-2;
-    @apply text-sm font-semibold text-ink active:scale-[0.98] disabled:opacity-60;
+    @apply text-sm font-semibold text-ink hover:bg-sand active:scale-[0.98] disabled:opacity-60;
   }
 
   /* A <details> header. Padded so the whole row is a thumb target rather
      than a 20px line of text. */
   .disclosure {
-    @apply flex min-h-12 cursor-pointer items-center text-sm font-semibold;
+    @apply flex min-h-12 cursor-pointer items-center text-sm font-semibold hover:text-coral-ink;
   }
 
   /* Destructive row action (the x). The negative margin keeps a 44px touch
      target from inflating the row it lives in. */
   .btn-icon {
     @apply -my-2 -mr-2 flex h-11 w-11 shrink-0 items-center justify-center rounded-full;
-    @apply text-xl leading-none text-ink-soft active:scale-95;
+    @apply text-xl leading-none text-ink-soft hover:bg-sand hover:text-ink active:scale-95;
   }
 }
