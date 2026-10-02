@@ -1,6 +1,7 @@
 import { type User } from 'firebase/auth'
 import { useEffect } from 'react'
 import { awaitOrQueued, updateMemberDisplayName } from './db'
+import { displayNameFor } from './display-name'
 
 // A member's display name is never typed or edited — it tracks their own
 // Firebase Auth profile automatically, so "I can't fix my name" is not a
@@ -23,7 +24,7 @@ export interface DisplayNameSyncTarget {
 export function useDisplayNameSync(user: User, target: DisplayNameSyncTarget | null): void {
   useEffect(() => {
     if (target === null) return
-    const wanted = user.displayName ?? user.email ?? 'You'
+    const wanted = displayNameFor({ displayName: user.displayName, email: user.email }, 'You')
     if (target.displayName === wanted) return
     awaitOrQueued(updateMemberDisplayName(target.householdId, user.uid, wanted)).catch(() => {
       // Best-effort — a stale name is cosmetic, never worth surfacing an error for.
