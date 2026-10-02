@@ -28,7 +28,7 @@ export function UpdateToast() {
   return (
     <div
       role="status"
-      className="surface fixed inset-x-4 bottom-[calc(6rem+env(safe-area-inset-bottom))] z-50 mx-auto flex max-w-md items-center justify-between gap-3 p-3 shadow-squishy"
+      className="surface fixed inset-x-4 bottom-[calc(6rem+env(safe-area-inset-bottom))] z-50 mx-auto flex max-w-md items-center justify-between gap-3 p-3 shadow-squishy lg:bottom-6"
     >
       <span className="text-sm font-medium">A new version is ready</span>
       <div className="flex gap-2">

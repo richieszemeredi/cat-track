@@ -213,6 +213,50 @@ async function columnProblems(page: Page): Promise<string[]> {
   return out
 }
 
+/** The width the tab bar stands up as a left rail at (Tailwind `lg`). */
+const RAIL_FROM = 1024
+
+/**
+ * Below 1024pt the main nav is a full-width bar along the bottom; from 1024pt
+ * it is a full-height rail down the left, and the page content starts to the
+ * right of it — a rail drawn over the first column would hide its text
+ * without overflowing anything, so the viewport checks alone cannot see it.
+ */
+async function navProblems(page: Page): Promise<string[]> {
+  const geometry = await page.evaluate(() => {
+    const g = globalThis as unknown as {
+      innerWidth: number
+      innerHeight: number
+      document: { querySelector: (selector: string) => DomElement | null }
+    }
+    const nav = g.document.querySelector('nav[aria-label="Main"]')
+    const main = g.document.querySelector('main')
+    if (nav === null || main === null) return null
+    const n = nav.getBoundingClientRect() as DomRect & { top: number; bottom: number }
+    return {
+      viewport: { width: g.innerWidth, height: g.innerHeight },
+      nav: { left: n.left, right: n.right, top: n.top, bottom: n.bottom, width: n.width },
+      mainLeft: main.getBoundingClientRect().left,
+    }
+  })
+  if (geometry === null) return ['no main nav or <main> on the page']
+  const { viewport, nav, mainLeft } = geometry
+  const out: string[] = []
+  const near = (a: number, b: number) => Math.abs(a - b) <= 1
+  if (viewport.width >= RAIL_FROM) {
+    if (!near(nav.left, 0) || !near(nav.top, 0) || !near(nav.bottom, viewport.height)) {
+      out.push(`the rail is not a full-height strip on the left: ${JSON.stringify(nav)}`)
+    }
+    if (nav.width > 140) out.push(`the rail is ${String(Math.round(nav.width))}pt wide`)
+    if (mainLeft < nav.right - 1) {
+      out.push(`content starts at x=${String(Math.round(mainLeft))}, under the rail`)
+    }
+  } else if (!near(nav.bottom, viewport.height) || !near(nav.width, viewport.width)) {
+    out.push(`the tab bar is not a full-width bar along the bottom: ${JSON.stringify(nav)}`)
+  }
+  return out
+}
+
 async function documentScrollsSideways(page: Page): Promise<boolean> {
   return page.evaluate(() => {
     const g = globalThis as unknown as {
@@ -258,6 +302,7 @@ test('every screen fits the viewport without sideways scroll', async ({
     expect(await smallTouchTargets(page), `${name} has under-sized tap targets`).toEqual([])
     expect(await textColumnMisalignments(page), `${name} has a ragged text column`).toEqual([])
     expect(await columnProblems(page), `${name} columns`).toEqual([])
+    expect(await navProblems(page), `${name} main nav`).toEqual([])
   }
 })
 
