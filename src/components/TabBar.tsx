@@ -29,7 +29,7 @@ export function TabBar() {
           <Link
             key={tab.to}
             to={tab.to}
-            className="group flex flex-1 flex-col items-center gap-0.5 rounded-xl py-2 text-xs font-medium text-ink-soft hover:text-ink data-[status=active]:font-semibold data-[status=active]:text-coral-ink lg:flex-none lg:py-3"
+            className="group flex flex-1 flex-col items-center gap-0.5 rounded-xl py-2 text-xs font-medium text-ink-soft hover:text-ink data-[status=active]:font-semibold data-[status=active]:text-coral-ink data-[status=active]:hover:text-coral-ink lg:flex-none lg:py-3"
             activeProps={{ 'aria-current': 'page' }}
             activeOptions={{ exact: tab.to === '/' }}
           >
