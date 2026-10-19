@@ -29,14 +29,14 @@ export function TabBar() {
           <Link
             key={tab.to}
             to={tab.to}
-            className="flex flex-1 flex-col items-center gap-0.5 rounded-xl py-2 text-xs font-medium text-ink-soft hover:text-ink lg:flex-none lg:py-3"
-            activeProps={{
-              className: 'text-coral-ink hover:text-coral-ink font-semibold',
-              'aria-current': 'page',
-            }}
+            className="group flex flex-1 flex-col items-center gap-0.5 rounded-xl py-2 text-xs font-medium text-ink-soft hover:text-ink data-[status=active]:font-semibold data-[status=active]:text-coral-ink lg:flex-none lg:py-3"
+            activeProps={{ 'aria-current': 'page' }}
             activeOptions={{ exact: tab.to === '/' }}
           >
-            <span aria-hidden="true" className="text-xl leading-none">
+            <span
+              aria-hidden="true"
+              className="rounded-full px-4 py-1 text-xl leading-none opacity-60 group-data-[status=active]:bg-coral-soft group-data-[status=active]:opacity-100"
+            >
               {tab.emoji}
             </span>
             {tab.label}
