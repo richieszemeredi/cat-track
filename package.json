@@ -82,6 +82,9 @@
   },
   "overrides": {
     "@grpc/grpc-js": "^1.14.5",
-    "basic-ftp": "^6.2.1"
+    "basic-ftp": "^6.2.1",
+    "firebase-tools": {
+      "chokidar": "^4.0.3"
+    }
   }
 }
