@@ -30,6 +30,14 @@ not in a pile-up.
 - This is standing authorization to commit without asking each time. Pushing and any
   Firestore rules/hosting deploy are separate, still-ask-first actions — a commit lands
   locally; it does not imply `git push` or `firebase deploy`.
+- **CI deploys Hosting; nothing else.** `.github/workflows/ci.yml` runs every gate (lint,
+  typecheck, unit, rules, e2e, build, audit) on each push and PR, and only then deploys: a push
+  to `main` goes live on Firebase Hosting, a PR gets a 30-day preview channel. So never run
+  `firebase deploy --only hosting` by hand — it skips the gates; a push is the deploy. CI does
+  **not** deploy `firestore.rules` or indexes. Those stay a manual, ask-first
+  `npx firebase deploy --only firestore:rules` (against the real `cattrack-8aa49`), and a
+  change that needs new rules must have them deployed before the push lands, or the live app
+  gets writes denied until they are.
 - When a chunk of work touches the same files for two different asks (e.g. two features
   both editing `plan.ts`), split by content, not just by file: stage only the hunks for the
   change being committed. A later ask's edits to an already-committed file are their own
