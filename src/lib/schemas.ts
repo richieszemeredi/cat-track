@@ -168,6 +168,21 @@ export const mealTimeOverrideSchema = z.object({
 })
 export type MealTimeOverride = z.infer<typeof mealTimeOverrideSchema> & { id: string }
 
+/**
+ * A litter box and when it last had a full clean-out. Household-level, not
+ * per cat: the boxes belong to the flat, not to a cat. Unlike the log
+ * collections this doc IS edited in place — "replaced today" is one field
+ * moving forward — and a lost race between two phones just means the later tap
+ * wins, which is what either person meant.
+ */
+export const litterBoxSchema = z.object({
+  location: z.string().min(1).max(60),
+  lastChangedAt: timestampToDate,
+  createdBy: z.string().min(1),
+  createdAt: timestampToDate,
+})
+export type LitterBox = z.infer<typeof litterBoxSchema> & { id: string }
+
 /** One food in the day's mix. Grams are per DAY; the serving is derived. */
 export const planItemSchema = z.object({
   foodId: z.string().min(1),

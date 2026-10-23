@@ -28,6 +28,7 @@ import {
   catSchema,
   feedingSchema,
   foodSchema,
+  litterBoxSchema,
   mealTimeOverrideSchema,
   memberSchema,
   planItemSchema,
@@ -39,6 +40,7 @@ import {
   type FoodAnalysis,
   type FoodType,
   type LifeStage,
+  type LitterBox,
   type MealTimeOverride,
   type Plan,
   type PlanItem,
@@ -104,6 +106,9 @@ function plansRef(hid: string, catId: string): CollectionReference {
 }
 function mealTimeOverridesRef(hid: string, catId: string): CollectionReference {
   return collection(db, 'households', hid, 'cats', catId, 'mealTimeOverrides')
+}
+function litterBoxesRef(hid: string): CollectionReference {
+  return collection(db, 'households', hid, 'litterBoxes')
 }
 function planItemsRef(hid: string, catId: string, planId: string): CollectionReference {
   return collection(db, 'households', hid, 'cats', catId, 'plans', planId, 'items')
@@ -527,6 +532,35 @@ export function usePlanItemsLive(hid: string, catId: string, planId: string | nu
   }, [hid, catId, planId, qc])
 }
 
+// ---------- litter boxes ----------
+
+export function litterBoxesQueryOptions(hid: string) {
+  return queryOptions({
+    queryKey: ['litterBoxes', hid] as const,
+    queryFn: async () =>
+      parseDocs(
+        litterBoxSchema,
+        await getDocs(query(litterBoxesRef(hid), orderBy('createdAt', 'asc'))),
+      ),
+    staleTime: Infinity,
+  })
+}
+
+export function useLitterBoxesLive(hid: string): void {
+  const qc = useQueryClient()
+  useEffect(
+    () =>
+      onSnapshot(
+        query(litterBoxesRef(hid), orderBy('createdAt', 'asc')),
+        (snap) => {
+          qc.setQueryData(litterBoxesQueryOptions(hid).queryKey, parseDocs(litterBoxSchema, snap))
+        },
+        onListenError(qc, litterBoxesQueryOptions(hid).queryKey),
+      ),
+    [hid, qc],
+  )
+}
+
 // ---------- offline-aware write helper ----------
 
 /**
@@ -666,6 +700,36 @@ export function updateFood(
   patch: Partial<FoodInput & { archived: boolean }>,
 ): Promise<unknown> {
   return updateDoc(doc(foodsRef(hid, catId), foodId), { ...patch })
+}
+
+export interface LitterBoxInput {
+  location: string
+  lastChangedAt: Date
+}
+
+export function addLitterBox(hid: string, uid: string, input: LitterBoxInput): Promise<unknown> {
+  return addDoc(litterBoxesRef(hid), {
+    location: input.location,
+    lastChangedAt: Timestamp.fromDate(input.lastChangedAt),
+    createdBy: uid,
+    createdAt: serverTimestamp(),
+  })
+}
+
+export function updateLitterBox(
+  hid: string,
+  boxId: string,
+  patch: Partial<LitterBoxInput>,
+): Promise<unknown> {
+  const data: Record<string, unknown> = { ...patch }
+  if (patch.lastChangedAt !== undefined) {
+    data['lastChangedAt'] = Timestamp.fromDate(patch.lastChangedAt)
+  }
+  return updateDoc(doc(litterBoxesRef(hid), boxId), data)
+}
+
+export function deleteLitterBox(hid: string, boxId: string): Promise<unknown> {
+  return deleteDoc(doc(litterBoxesRef(hid), boxId))
 }
 
 export interface PlanInput {
@@ -819,4 +883,4 @@ export function retimeFeedings(
 }
 
 // Re-exported so feature code can type cache data without importing schemas.
-export type { Cat, Feeding, Food, MealTimeOverride, Plan, PlanItem, WeightEntry }
+export type { Cat, Feeding, Food, LitterBox, MealTimeOverride, Plan, PlanItem, WeightEntry }

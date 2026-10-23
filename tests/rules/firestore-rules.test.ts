@@ -94,6 +94,15 @@ function weight(createdBy: string) {
   }
 }
 
+function litterBox(createdBy: string) {
+  return {
+    location: 'Bathroom',
+    lastChangedAt: ENTRY_DATE,
+    createdBy,
+    createdAt: CREATED_AT,
+  }
+}
+
 function food(createdBy: string) {
   return {
     name: 'Dry chow',
@@ -421,6 +430,77 @@ describe('cats', () => {
 })
 
 // ---------- weights ----------
+
+describe('litter boxes', () => {
+  const boxes = `${H1}/litterBoxes`
+
+  it('allows editors to create a valid litter box', async () => {
+    await assertSucceeds(addDoc(collection(authedDb('bob'), boxes), litterBox('bob')))
+  })
+
+  it('denies viewers creating one', async () => {
+    await assertFails(addDoc(collection(authedDb('vera'), boxes), litterBox('vera')))
+  })
+
+  it('denies an empty or over-long location', async () => {
+    await assertFails(
+      addDoc(collection(authedDb('bob'), boxes), { ...litterBox('bob'), location: '' }),
+    )
+    await assertFails(
+      addDoc(collection(authedDb('bob'), boxes), { ...litterBox('bob'), location: 'x'.repeat(61) }),
+    )
+  })
+
+  it('denies a lastChangedAt that is not a timestamp', async () => {
+    await assertFails(
+      addDoc(collection(authedDb('bob'), boxes), {
+        ...litterBox('bob'),
+        lastChangedAt: '2026-01-15',
+      }),
+    )
+  })
+
+  it('denies createdBy that is not the caller, and unknown fields', async () => {
+    await assertFails(addDoc(collection(authedDb('bob'), boxes), litterBox('alice')))
+    await assertFails(
+      addDoc(collection(authedDb('bob'), boxes), { ...litterBox('bob'), size: 'XL' }),
+    )
+  })
+
+  it('allows members to read, non-members not', async () => {
+    await seedDoc(`${boxes}/b1`, litterBox('bob'))
+    await assertSucceeds(getDoc(doc(authedDb('vera'), `${boxes}/b1`)))
+    await assertFails(getDoc(doc(authedDb('mallory'), `${boxes}/b1`)))
+  })
+
+  it('lets an editor move lastChangedAt forward ("replaced today")', async () => {
+    await seedDoc(`${boxes}/b1`, litterBox('bob'))
+    await assertSucceeds(
+      updateDoc(doc(authedDb('alice'), `${boxes}/b1`), {
+        lastChangedAt: Timestamp.fromDate(new Date('2026-02-01T00:00:00Z')),
+      }),
+    )
+  })
+
+  it('denies a viewer updating one', async () => {
+    await seedDoc(`${boxes}/b1`, litterBox('bob'))
+    await assertFails(
+      updateDoc(doc(authedDb('vera'), `${boxes}/b1`), { lastChangedAt: ENTRY_DATE }),
+    )
+  })
+
+  it('denies an update that rewrites createdBy or breaks validation', async () => {
+    await seedDoc(`${boxes}/b1`, litterBox('bob'))
+    await assertFails(updateDoc(doc(authedDb('alice'), `${boxes}/b1`), { createdBy: 'alice' }))
+    await assertFails(updateDoc(doc(authedDb('alice'), `${boxes}/b1`), { location: '' }))
+  })
+
+  it('allows editors to delete, viewers not', async () => {
+    await seedDoc(`${boxes}/b1`, litterBox('bob'))
+    await assertFails(deleteDoc(doc(authedDb('vera'), `${boxes}/b1`)))
+    await assertSucceeds(deleteDoc(doc(authedDb('bob'), `${boxes}/b1`)))
+  })
+})
 
 describe('weights', () => {
   const weights = `${C1}/weights`

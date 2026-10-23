@@ -123,6 +123,29 @@ service cloud.firestore {
           resource.data.role != 'owner';
       }
 
+      // ---------- litter boxes ----------
+      // Household-level: the boxes belong to the flat, not to one cat. Edited
+      // in place (a full clean just moves lastChangedAt forward), so unlike
+      // the logs below there is no append-only rule — only the same field
+      // validation on create and update, and createdBy pinned once written.
+      match /litterBoxes/{boxId} {
+        function validLitterBoxData() {
+          return request.resource.data.keys().hasOnly([
+              'location', 'lastChangedAt', 'createdBy', 'createdAt'
+            ]) &&
+            validString(request.resource.data.location, 60) &&
+            request.resource.data.lastChangedAt is timestamp &&
+            request.resource.data.createdAt is timestamp;
+        }
+        allow read: if isMember(hid);
+        allow create: if isEditor(hid) && validLitterBoxData() &&
+          request.resource.data.createdBy == request.auth.uid;
+        allow update: if isEditor(hid) && validLitterBoxData() &&
+          request.resource.data.createdBy == resource.data.createdBy &&
+          request.resource.data.createdAt == resource.data.createdAt;
+        allow delete: if isEditor(hid);
+      }
+
       // ---------- cats ----------
       match /cats/{catId} {
         // Every field is type-checked: the client's Zod read boundary skips
