@@ -13,7 +13,7 @@ import {
   type LitterBox,
 } from '../lib/db'
 import { useHousehold } from '../lib/household'
-import { LITTER_CHANGE_EVERY_WEEKS, litterAge, litterAgeLabel } from '../lib/litter'
+import { litterAge, litterAgeLabel, weeksLabel } from '../lib/litter'
 import { useToday } from '../lib/use-today'
 
 export const Route = createFileRoute('/litter')({
@@ -68,9 +68,6 @@ function LitterPage() {
                   ))}
                 </ul>
               )}
-              <p className="gutter text-xs text-ink-soft">
-                A full clean is due every {LITTER_CHANGE_EVERY_WEEKS} weeks.
-              </p>
             </section>
           </div>
 
@@ -105,7 +102,7 @@ function LitterBoxRow({
 }) {
   const [editing, setEditing] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const age = litterAge(box.lastChangedAt, today)
+  const age = litterAge(box.lastChangedAt, today, box.changeEveryWeeks)
 
   const handleReplacedToday = () => {
     setError(null)
@@ -124,6 +121,7 @@ function LitterBoxRow({
         <p className="text-sm text-ink-soft">
           {format(box.lastChangedAt, 'MMM d')}
           {age.days > 0 ? ` · ${String(age.days)} ${age.days === 1 ? 'day' : 'days'}` : null}
+          {` · every ${weeksLabel(box.changeEveryWeeks)}`}
         </p>
         {age.overdue ? (
           <p className="text-sm font-semibold text-danger">Due for a full clean</p>

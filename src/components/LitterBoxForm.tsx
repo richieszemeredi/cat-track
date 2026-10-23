@@ -7,10 +7,15 @@ import {
   updateLitterBox,
   type LitterBox,
 } from '../lib/db'
+import { DEFAULT_LITTER_CHANGE_EVERY_WEEKS, weeksLabel } from '../lib/litter'
 
 const FIELD_CLASS = 'field mt-1'
 
 const DATE_FORMAT = 'yyyy-MM-dd'
+
+// Twelve weeks covers every litter on the shelf; a box already saved with a
+// longer interval keeps it (see the extra option below), the rules allow 52.
+const INTERVAL_CHOICES = Array.from({ length: 12 }, (_, i) => i + 1)
 
 function todayStr(): string {
   return format(new Date(), DATE_FORMAT)
@@ -36,6 +41,9 @@ export function LitterBoxForm({
   const [dateStr, setDateStr] = useState(
     existing === undefined ? todayStr() : format(existing.lastChangedAt, DATE_FORMAT),
   )
+  const [everyWeeks, setEveryWeeks] = useState(
+    existing?.changeEveryWeeks ?? DEFAULT_LITTER_CHANGE_EVERY_WEEKS,
+  )
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -57,7 +65,7 @@ export function LitterBoxForm({
     }
 
     setBusy(true)
-    const input = { location: trimmed, lastChangedAt }
+    const input = { location: trimmed, lastChangedAt, changeEveryWeeks: everyWeeks }
     awaitOrQueued(
       existing === undefined
         ? addLitterBox(hid, uid, input)
@@ -67,6 +75,7 @@ export function LitterBoxForm({
         if (existing === undefined) {
           setLocation('')
           setDateStr(todayStr())
+          setEveryWeeks(DEFAULT_LITTER_CHANGE_EVERY_WEEKS)
         }
         onDone?.()
       })
@@ -126,6 +135,26 @@ export function LitterBoxForm({
           }}
           className={FIELD_CLASS}
         />
+      </label>
+      <label className="text-sm font-semibold">
+        Full clean every
+        <select
+          data-testid="litter-interval"
+          value={everyWeeks}
+          onChange={(event) => {
+            setEveryWeeks(Number(event.target.value))
+          }}
+          className={FIELD_CLASS}
+        >
+          {(INTERVAL_CHOICES.includes(everyWeeks)
+            ? INTERVAL_CHOICES
+            : [...INTERVAL_CHOICES, everyWeeks]
+          ).map((weeks) => (
+            <option key={weeks} value={weeks}>
+              {weeksLabel(weeks)}
+            </option>
+          ))}
+        </select>
       </label>
       <button type="submit" data-testid="litter-save" disabled={busy} className="btn-primary">
         {existing === undefined ? 'Add litter box' : 'Save changes'}

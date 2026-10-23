@@ -705,12 +705,14 @@ export function updateFood(
 export interface LitterBoxInput {
   location: string
   lastChangedAt: Date
+  changeEveryWeeks: number
 }
 
 export function addLitterBox(hid: string, uid: string, input: LitterBoxInput): Promise<unknown> {
   return addDoc(litterBoxesRef(hid), {
     location: input.location,
     lastChangedAt: Timestamp.fromDate(input.lastChangedAt),
+    changeEveryWeeks: input.changeEveryWeeks,
     createdBy: uid,
     createdAt: serverTimestamp(),
   })

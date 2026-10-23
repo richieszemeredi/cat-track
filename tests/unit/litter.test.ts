@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest'
-import { LITTER_CHANGE_EVERY_WEEKS, litterAge, litterAgeLabel } from '../../src/lib/litter'
+import {
+  DEFAULT_LITTER_CHANGE_EVERY_WEEKS,
+  litterAge,
+  litterAgeLabel,
+  weeksLabel,
+} from '../../src/lib/litter'
 
 const NOW = new Date(2026, 9, 23, 12, 0)
 
@@ -22,11 +27,18 @@ describe('litterAge', () => {
   })
 
   it('turns overdue on the day the interval is reached, not before', () => {
-    const interval = LITTER_CHANGE_EVERY_WEEKS * 7
+    const interval = DEFAULT_LITTER_CHANGE_EVERY_WEEKS * 7
     const dayBefore = new Date(2026, 9, 23 - (interval - 1))
     const onTheDay = new Date(2026, 9, 23 - interval)
     expect(litterAge(dayBefore, NOW).overdue).toBe(false)
     expect(litterAge(onTheDay, NOW).overdue).toBe(true)
+  })
+
+  it("uses the box's own interval", () => {
+    const twentyDaysAgo = new Date(2026, 9, 3)
+    expect(litterAge(twentyDaysAgo, NOW, 2).overdue).toBe(true) // 14-day litter
+    expect(litterAge(twentyDaysAgo, NOW, 3).overdue).toBe(false) // 21-day litter
+    expect(litterAge(twentyDaysAgo, NOW, 3).days).toBe(20)
   })
 
   it('counts correctly across a daylight-saving change', () => {
@@ -34,6 +46,13 @@ describe('litterAge', () => {
     // still be one calendar day.
     const age = litterAge(new Date(2026, 9, 24, 12, 0), new Date(2026, 9, 26, 12, 0))
     expect(age.days).toBe(2)
+  })
+})
+
+describe('weeksLabel', () => {
+  it('pluralises', () => {
+    expect(weeksLabel(1)).toBe('1 week')
+    expect(weeksLabel(6)).toBe('6 weeks')
   })
 })
 

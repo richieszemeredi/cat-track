@@ -27,6 +27,7 @@ const EXISTING: LitterBox = {
   id: 'box-1',
   location: 'Bathroom',
   lastChangedAt: new Date(2026, 8, 1),
+  changeEveryWeeks: 6,
   createdBy: 'user-1',
   createdAt: new Date(2026, 8, 1),
 }
@@ -60,6 +61,7 @@ describe('LitterBoxForm', () => {
     expect(input?.location).toBe('Hallway')
     // Local Feb 14 at midnight, not UTC midnight drifting a day.
     expectLocalDate(input?.lastChangedAt, 2026, 1, 14)
+    expect(input?.changeEveryWeeks).toBe(4) // the default, untouched
 
     expect(await screen.findByDisplayValue('')).toBe(screen.getByTestId('litter-location'))
   })
@@ -94,7 +96,10 @@ describe('LitterBoxForm', () => {
     expect(screen.getByTestId('litter-location')).toHaveValue('Bathroom')
     expect(screen.getByTestId('litter-date')).toHaveValue('2026-09-01')
 
+    expect(screen.getByTestId('litter-interval')).toHaveValue('6')
+
     setDate('2026-09-10')
+    await user.selectOptions(screen.getByTestId('litter-interval'), '8')
     await user.click(screen.getByTestId('litter-save'))
 
     expect(addLitterBoxMock).not.toHaveBeenCalled()
@@ -102,6 +107,7 @@ describe('LitterBoxForm', () => {
     expect(hid).toBe('hh-1')
     expect(boxId).toBe('box-1')
     expectLocalDate(patch?.lastChangedAt, 2026, 8, 10)
+    expect(patch?.changeEveryWeeks).toBe(8)
     expect(onDone).toHaveBeenCalledTimes(1)
   })
 

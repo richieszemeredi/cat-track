@@ -110,7 +110,7 @@ not in a pile-up.
   not under a cat): a `location` and one `lastChangedAt` date, nothing else. Unlike the log
   collections they are edited in place — "replaced today" just moves the date forward — and
   there is no history. Age is counted in calendar days and floored to weeks;
-  `LITTER_CHANGE_EVERY_WEEKS` (4) is one household-wide constant, not a per-box setting. No
+  each box carries its own `changeEveryWeeks` (default 4, max 52). No
   reminders: the screen is the reminder.
 - Data model: `households/{hid}/members/{uid}` (roles owner|editor|viewer, source of truth
   for access) and `households/{hid}/cats/{catId}/{weights|foods|feedings|plans}` — append-only

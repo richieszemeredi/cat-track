@@ -131,8 +131,13 @@ service cloud.firestore {
       match /litterBoxes/{boxId} {
         function validLitterBoxData() {
           return request.resource.data.keys().hasOnly([
-              'location', 'lastChangedAt', 'createdBy', 'createdAt'
+              'location', 'lastChangedAt', 'changeEveryWeeks', 'createdBy', 'createdAt'
             ]) &&
+            // get() with a default: boxes written before the interval was per
+            // box have no such key, and reading an absent key denies outright.
+            request.resource.data.get('changeEveryWeeks', 4) is int &&
+            request.resource.data.get('changeEveryWeeks', 4) >= 1 &&
+            request.resource.data.get('changeEveryWeeks', 4) <= 52 &&
             validString(request.resource.data.location, 60) &&
             request.resource.data.lastChangedAt is timestamp &&
             request.resource.data.createdAt is timestamp;

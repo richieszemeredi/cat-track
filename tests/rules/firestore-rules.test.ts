@@ -98,6 +98,7 @@ function litterBox(createdBy: string) {
   return {
     location: 'Bathroom',
     lastChangedAt: ENTRY_DATE,
+    changeEveryWeeks: 4,
     createdBy,
     createdAt: CREATED_AT,
   }
@@ -448,6 +449,23 @@ describe('litter boxes', () => {
     )
     await assertFails(
       addDoc(collection(authedDb('bob'), boxes), { ...litterBox('bob'), location: 'x'.repeat(61) }),
+    )
+  })
+
+  it.each([0, 53, 2.5, '4'])('denies a changeEveryWeeks of %s', async (changeEveryWeeks) => {
+    await assertFails(
+      addDoc(collection(authedDb('bob'), boxes), { ...litterBox('bob'), changeEveryWeeks }),
+    )
+  })
+
+  it('still lets a box from before the interval existed be marked replaced', async () => {
+    const legacy: Record<string, unknown> = litterBox('bob')
+    delete legacy['changeEveryWeeks']
+    await seedDoc(`${boxes}/old`, legacy)
+    await assertSucceeds(
+      updateDoc(doc(authedDb('alice'), `${boxes}/old`), {
+        lastChangedAt: Timestamp.fromDate(new Date('2026-02-01T00:00:00Z')),
+      }),
     )
   })
 

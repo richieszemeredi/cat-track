@@ -28,6 +28,13 @@ test('litter boxes show their age in weeks and can be re-dated', async ({ page }
   await expect(box.getByText('5 weeks ago')).toBeVisible(WAIT)
   await expect(box.getByText('Due for a full clean')).toBeVisible(WAIT)
 
+  // A slower litter: a 6-week interval makes five weeks old no longer due.
+  await box.getByRole('button', { name: 'Edit' }).click()
+  await box.getByTestId('litter-interval').selectOption('6')
+  await box.getByTestId('litter-save').click()
+  await expect(box.getByText('every 6 weeks')).toBeVisible(WAIT)
+  await expect(box.getByText('Due for a full clean')).toHaveCount(0)
+
   // One tap says it was done today.
   await box.getByRole('button', { name: 'Replaced today' }).click()
   await expect(box.getByText('Today', { exact: true })).toBeVisible(WAIT)

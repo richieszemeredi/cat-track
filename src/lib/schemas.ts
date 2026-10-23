@@ -7,6 +7,7 @@ import {
   type FoodType,
   type LifeStage,
 } from './catmath'
+import { DEFAULT_LITTER_CHANGE_EVERY_WEEKS, MAX_LITTER_CHANGE_EVERY_WEEKS } from './litter'
 import { MAX_MEALS_PER_DAY, MIN_MEALS_PER_DAY } from './plan'
 
 // Zod schemas validate every Firestore READ at the boundary (via safeParse in
@@ -178,6 +179,14 @@ export type MealTimeOverride = z.infer<typeof mealTimeOverrideSchema> & { id: st
 export const litterBoxSchema = z.object({
   location: z.string().min(1).max(60),
   lastChangedAt: timestampToDate,
+  // Absent on every box written before it was per box, hence the default
+  // rather than a bare required field — those docs must keep parsing.
+  changeEveryWeeks: z
+    .number()
+    .int()
+    .min(1)
+    .max(MAX_LITTER_CHANGE_EVERY_WEEKS)
+    .default(DEFAULT_LITTER_CHANGE_EVERY_WEEKS),
   createdBy: z.string().min(1),
   createdAt: timestampToDate,
 })

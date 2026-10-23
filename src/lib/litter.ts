@@ -1,12 +1,13 @@
 import { differenceInCalendarDays } from 'date-fns'
 
 /**
- * How often a box wants a full clean-out (all the litter out, box scrubbed).
- * One household-wide figure rather than a per-box setting: the question the
- * screen answers is "which one is due", and every box here gets the same
- * routine.
+ * How often a box wants a full clean-out (all the litter out, box scrubbed)
+ * unless it says otherwise. Per box, because litters differ — clumping clay
+ * is not tofu or pine pellets — so this is only the starting value.
  */
-export const LITTER_CHANGE_EVERY_WEEKS = 4
+export const DEFAULT_LITTER_CHANGE_EVERY_WEEKS = 4
+/** The longest interval a box may be set to; mirrored in the rules. */
+export const MAX_LITTER_CHANGE_EVERY_WEEKS = 52
 
 export interface LitterAge {
   /** Whole calendar days since the last full clean; never negative. */
@@ -22,18 +23,27 @@ export interface LitterAge {
  * anyone counting on a calendar would say. A date in the future (a mistyped
  * year, a clock set wrong) reads as today rather than as a negative age.
  */
-export function litterAge(changedAt: Date, now: Date): LitterAge {
+export function litterAge(
+  changedAt: Date,
+  now: Date,
+  everyWeeks: number = DEFAULT_LITTER_CHANGE_EVERY_WEEKS,
+): LitterAge {
   const days = Math.max(0, differenceInCalendarDays(now, changedAt))
   return {
     days,
     weeks: Math.floor(days / 7),
-    overdue: days >= LITTER_CHANGE_EVERY_WEEKS * 7,
+    overdue: days >= everyWeeks * 7,
   }
+}
+
+/** "1 week", "6 weeks". */
+export function weeksLabel(weeks: number): string {
+  return `${String(weeks)} ${weeks === 1 ? 'week' : 'weeks'}`
 }
 
 /** "Today", "This week", "1 week ago", "5 weeks ago". */
 export function litterAgeLabel(age: LitterAge): string {
   if (age.days === 0) return 'Today'
   if (age.weeks === 0) return 'This week'
-  return `${String(age.weeks)} ${age.weeks === 1 ? 'week' : 'weeks'} ago`
+  return `${weeksLabel(age.weeks)} ago`
 }
