@@ -30,6 +30,10 @@ not in a pile-up.
 - This is standing authorization to commit without asking each time. Pushing and any
   Firestore rules/hosting deploy are separate, still-ask-first actions — a commit lands
   locally; it does not imply `git push` or `firebase deploy`.
+- **Don't hand-run the suite before a push.** `.husky/pre-push` already runs lint, typecheck,
+  unit, rules and e2e, so a manual rerun right before `git push` (including after a rebase
+  onto an unrelated upstream commit) only duplicates it. Verifying before each _commit_ is
+  still on you: the pre-commit hook only runs lint-staged.
 - **CI deploys Hosting; nothing else.** `.github/workflows/ci.yml` runs every gate (lint,
   typecheck, unit, rules, e2e, build, audit) on each push and PR, and only then deploys: a push
   to `main` goes live on Firebase Hosting, a PR gets a 30-day preview channel. So never run
