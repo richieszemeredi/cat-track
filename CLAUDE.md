@@ -106,6 +106,12 @@ not in a pile-up.
   fires whenever the app next wakes, so anything more than `STALE_AFTER_MINUTES` late is
   dropped instead of announcing the wrong time. Notifications go out through
   `registration.showNotification` — on iOS the `Notification` constructor exists but throws.
+- `src/lib/litter.ts` + `/litter` — litter boxes are HOUSEHOLD-level (`households/{hid}/litterBoxes`,
+  not under a cat): a `location` and one `lastChangedAt` date, nothing else. Unlike the log
+  collections they are edited in place — "replaced today" just moves the date forward — and
+  there is no history. Age is counted in calendar days and floored to weeks;
+  `LITTER_CHANGE_EVERY_WEEKS` (4) is one household-wide constant, not a per-box setting. No
+  reminders: the screen is the reminder.
 - Data model: `households/{hid}/members/{uid}` (roles owner|editor|viewer, source of truth
   for access) and `households/{hid}/cats/{catId}/{weights|foods|feedings|plans}` — append-only
   log docs so two phones never clobber each other. `plans/{planId}/items/{itemId}` holds the
