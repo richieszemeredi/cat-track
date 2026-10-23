@@ -7,6 +7,7 @@ const TABS = [
   { to: '/', label: 'Home', emoji: '🏠' },
   { to: '/food', label: 'Food', emoji: '🍽️' },
   { to: '/weight', label: 'Weight', emoji: '⚖️' },
+  { to: '/litter', label: 'Litter', emoji: '🧺' },
   { to: '/profile', label: 'Profile', emoji: '🐱' },
 ] as const
 

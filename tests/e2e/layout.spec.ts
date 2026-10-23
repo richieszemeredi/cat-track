@@ -1,5 +1,12 @@
 import { expect, test, type Page } from '@playwright/test'
-import { seedHousehold, seedLastWeeksWeighIn, seedPreviousPlan, tabBar, WAIT } from './seed'
+import {
+  seedHousehold,
+  seedLastWeeksWeighIn,
+  seedLitterBoxes,
+  seedPreviousPlan,
+  tabBar,
+  WAIT,
+} from './seed'
 
 /**
  * Layout pass on the two phones this household uses (iPhone 14 Pro, 393pt and
@@ -13,7 +20,7 @@ import { seedHousehold, seedLastWeeksWeighIn, seedPreviousPlan, tabBar, WAIT } f
  * of on a 393pt screen — that is the class of bug this catches.
  */
 
-const PAGES = ['Home', 'Food', 'Weight', 'Profile'] as const
+const PAGES = ['Home', 'Food', 'Weight', 'Litter', 'Profile'] as const
 
 // tests/e2e compiles under the node tsconfig (no DOM lib), so the browser
 // globals used inside page.evaluate are typed structurally here — same
@@ -280,6 +287,8 @@ test('every screen fits the viewport without sideways scroll', async ({
   // A second weigh-in a week back, so Home and Weight lay out the per-week
   // change instead of the shorter first-weigh-in line.
   await seedLastWeeksWeighIn(request, tag)
+  // A fresh box and an overdue one, so Litter lays out both of its states.
+  await seedLitterBoxes(page)
 
   for (const name of PAGES) {
     await tabBar(page).getByRole('link', { name }).click()
@@ -491,6 +500,7 @@ test.describe('in dark mode', () => {
     await seedHousehold(page, { tag })
     await seedPreviousPlan(request, tag)
     await seedLastWeeksWeighIn(request, tag)
+    await seedLitterBoxes(page)
 
     for (const name of PAGES) {
       await tabBar(page).getByRole('link', { name }).click()

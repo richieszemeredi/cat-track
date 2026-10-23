@@ -73,6 +73,28 @@ export async function seedHousehold(page: Page, options: SeedOptions): Promise<v
   await expect(page.getByTestId('today-meals')).toHaveText('0 of 3', WAIT)
 }
 
+/**
+ * Two litter boxes — one fresh, one well past its four weeks — so the Litter
+ * page lays out both its states. Leaves the page on Litter.
+ */
+export async function seedLitterBoxes(page: Page): Promise<void> {
+  await tabBar(page).getByRole('link', { name: 'Litter' }).click()
+  await expect(page.getByTestId('litter-location')).toBeVisible(WAIT)
+
+  await page.getByTestId('litter-location').fill('Bathroom')
+  await page.getByTestId('litter-save').click()
+  await expect(page.getByText('Bathroom', { exact: true })).toBeVisible(WAIT)
+  // The box shows up the moment it is written, but the form only clears once
+  // the server acks — typing the next one before that would be wiped.
+  await expect(page.getByTestId('litter-location')).toHaveValue('', WAIT)
+
+  await page.getByTestId('litter-location').fill('Hallway behind the big wardrobe')
+  // 38 days is five weeks whichever side of midnight UTC the local day falls.
+  await page.getByTestId('litter-date').fill(daysAgoISO(38))
+  await page.getByTestId('litter-save').click()
+  await expect(page.getByText('5 weeks ago')).toBeVisible(WAIT)
+}
+
 // ---------- direct emulator writes ----------
 // A plan revision is always "from today" in the UI (by design), so the plan
 // history needs an older plan to show. Write it straight to the Firestore
@@ -87,8 +109,15 @@ interface RestDoc {
   fields?: Record<string, { stringValue?: string }>
 }
 
+// The REST list returns 20 documents unless asked for more, and every spec
+// run adds a household or two to the one shared emulator — past 20 the
+// household a spec just created would not be in the first page.
+const LIST_PAGE_SIZE = 300
+
 async function listDocs(request: APIRequestContext, path: string): Promise<RestDoc[]> {
-  const response = await request.get(`${EMULATOR}/${path}`, { headers: OWNER })
+  const response = await request.get(`${EMULATOR}/${path}?pageSize=${String(LIST_PAGE_SIZE)}`, {
+    headers: OWNER,
+  })
   expect(response.ok(), `emulator list ${path} failed`).toBe(true)
   const body = (await response.json()) as { documents?: RestDoc[] }
   return body.documents ?? []
