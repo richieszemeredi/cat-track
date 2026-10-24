@@ -103,22 +103,6 @@ not in a pile-up.
   overlapping date ranges. `db.sortPlans` breaks a same-day tie on `createdAt` — ordering on
   `effectiveFrom` alone let two revisions saved on one day fall back to document id, which
   could leave the FIRST one in force.
-- `src/lib/reminders.ts` — pure, unit-tested reminder math: two notifications per planned
-  meal, one `LEAD_MINUTES` (15) before the bowl and one when it is due. `decideReminders`
-  holds the whole policy — never show one twice (ids are `day:mealIndex:kind`, and a
-  lead-in is keyed to its MEAL's day, so 23:55's warning about tomorrow's 00:10 bowl is
-  tomorrow's), and stay quiet about a bowl the other phone already ticked off. Reminders
-  are **local**: the Spark tier has no Cloud Function to push from, so nothing arrives
-  while CatTrack is closed, and the profile card says exactly that rather than letting
-  anyone trust a reminder that cannot come.
-- `src/lib/use-reminders.tsx` is the glue: a device-local opt-in (localStorage, never
-  Firestore — notification permission is per browser, and one phone wanting a 06:45 nudge
-  says nothing about the other, so this feature touches neither the schema nor the rules)
-  plus a 30-second poll mounted at the root. It POLLS rather than arming `setTimeout`s
-  because iOS freezes a backgrounded PWA and its timers with it: a timer set for 06:45
-  fires whenever the app next wakes, so anything more than `STALE_AFTER_MINUTES` late is
-  dropped instead of announcing the wrong time. Notifications go out through
-  `registration.showNotification` — on iOS the `Notification` constructor exists but throws.
 - `src/lib/litter.ts` + `/litter` — litter boxes are HOUSEHOLD-level (`households/{hid}/litterBoxes`,
   not under a cat): a `location` and one `lastChangedAt` date, nothing else. Unlike the log
   collections they are edited in place — "replaced today" just moves the date forward — and

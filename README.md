@@ -153,7 +153,6 @@ Dependabot keeps npm dependencies (weekly, minor+patch grouped) and GitHub Actio
 - **M1** — Health schedule: vaccinations, deworming and vet visits with due dates
 - **M2** — Extra logs: water, litter and symptom tracking alongside food
 - **M3** — Photos & export: kitten photo timeline and CSV/JSON data export
-- **M4** — Push reminders: "dinner time!" nudges on both phones
 
 ## Known gaps (accepted for the MVP)
 

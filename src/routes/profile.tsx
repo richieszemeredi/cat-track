@@ -3,14 +3,12 @@ import { createFileRoute } from '@tanstack/react-router'
 import { useState, type ReactNode, type SubmitEvent } from 'react'
 import { CatForm } from '../components/CatForm'
 import { ErrorCard } from '../components/ErrorCard'
-import { RemindersCard } from '../components/RemindersCard'
 import { signOutUser, useAuth } from '../lib/auth'
 import { ageLabelLong, LIFE_STAGE_LABELS, MER_MULTIPLIERS } from '../lib/catmath'
 import { addMember, awaitOrQueued, membersQueryOptions, useMembersLive, type Cat } from '../lib/db'
 import { useHousehold } from '../lib/household'
 import { type Role, type Sex } from '../lib/schemas'
 import { effectiveLifeStage } from '../lib/target'
-import { useReminders } from '../lib/use-reminders'
 
 export const Route = createFileRoute('/profile')({
   component: ProfilePage,
@@ -32,7 +30,6 @@ const ROLE_BADGE =
 function ProfilePage() {
   const { user } = useAuth()
   const { householdId, role, canEdit, activeCat, catsLoading } = useHousehold()
-  const reminders = useReminders()
 
   // The app shell only renders routes for signed-in users.
   if (user === null) return null
@@ -53,11 +50,9 @@ function ProfilePage() {
           )}
         </div>
 
-        {/* Who shares her, and what this phone does about it. */}
+        {/* Who shares her. */}
         <div className="page-column">
           <HouseholdCard hid={householdId} role={role} />
-
-          <RemindersCard {...reminders} />
 
           {/* A real footer rather than a stray word: the page ends on a full-width
           action and a version line, so it reads as finished. */}
