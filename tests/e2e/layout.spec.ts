@@ -282,7 +282,9 @@ test('every screen fits the viewport without sideways scroll', async ({
 }, testInfo) => {
   test.setTimeout(180_000)
 
-  const tag = `layout-${testInfo.project.name}`
+  // Unique per attempt: the emulator REST seeding finds the household BY NAME,
+  // and a retry would otherwise find the one the failed attempt left behind.
+  const tag = `layout-${testInfo.project.name}-${String(testInfo.repeatEachIndex)}-${String(testInfo.retry)}`
   await seedHousehold(page, { tag })
   // A superseded plan, so the Food page renders its history section here.
   await seedPreviousPlan(request, tag)
@@ -512,7 +514,7 @@ test.describe('in dark mode', () => {
   }, testInfo) => {
     test.setTimeout(180_000)
 
-    const tag = `dark-${testInfo.project.name}`
+    const tag = `dark-${testInfo.project.name}-${String(testInfo.repeatEachIndex)}-${String(testInfo.retry)}`
     await seedHousehold(page, { tag })
     await seedPreviousPlan(request, tag)
     await seedLastWeeksWeighIn(request, tag)
