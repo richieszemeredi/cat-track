@@ -1,38 +1,24 @@
-import { useQuery } from '@tanstack/react-query'
 import { createFileRoute, Link } from '@tanstack/react-router'
-import { format } from 'date-fns'
-import { type ReactNode } from 'react'
+import { CatToday } from '../components/CatToday'
 import { ErrorCard } from '../components/ErrorCard'
-import { StatCard } from '../components/StatCard'
-import {
-  ageLabelLong,
-  formatWeightKg,
-  roundGrams,
-  roundKcal,
-  roundKg,
-  weeklyWeightTrend,
-} from '../lib/catmath'
-import {
-  feedingsForDayQueryOptions,
-  plansQueryOptions,
-  useFeedingsForDayLive,
-  usePlansLive,
-  useWeightsLive,
-  weightsQueryOptions,
-  type Cat,
-} from '../lib/db'
+import { LitterGlance } from '../components/LitterGlance'
+import { ageLabelLong } from '../lib/catmath'
 import { useHousehold } from '../lib/household'
-import { mealTimes } from '../lib/plan'
-import { dailyKcalTarget, effectiveLifeStage, sumGrams, sumKcal } from '../lib/target'
-import { useToday } from '../lib/use-today'
 
 export const Route = createFileRoute('/')({
   component: HomePage,
   errorComponent: ({ error, reset }) => <ErrorCard error={error} onRetry={reset} />,
 })
 
+/**
+ * What is worth knowing on opening the app: how today is going for each cat
+ * (left column) and what the household has to do (right). Everything else is
+ * one tap away on the tab bar, so there are no shortcuts and no food list here.
+ */
 function HomePage() {
-  const { activeCat, catsLoading } = useHousehold()
+  const { cats, catsLoading } = useHousehold()
+  const [only] = cats
+  const single = cats.length === 1 ? only : undefined
 
   if (catsLoading) {
     return (
@@ -43,268 +29,49 @@ function HomePage() {
     )
   }
 
-  if (activeCat === null) {
-    return (
-      <main className="flex flex-col gap-6 p-4">
-        <h1 className="page-title gutter">Home</h1>
-        <div className="surface page-solo flex flex-col items-start gap-3 p-5">
-          <p className="font-semibold">No cat set up yet.</p>
-          <Link to="/profile" className="btn-primary">
-            Add your cat
-          </Link>
-        </div>
-      </main>
-    )
-  }
-
-  return <Dashboard cat={activeCat} />
-}
-
-function Dashboard({ cat }: { cat: Cat }) {
-  const { householdId, canEdit } = useHousehold()
-  const now = new Date()
-  const { start, end } = useToday()
-
-  const weightsQuery = useQuery(weightsQueryOptions(householdId, cat.id))
-  useWeightsLive(householdId, cat.id)
-  const feedingsQuery = useQuery(feedingsForDayQueryOptions(householdId, cat.id, start, end))
-  useFeedingsForDayLive(householdId, cat.id, start, end)
-  const plansQuery = useQuery(plansQueryOptions(householdId, cat.id))
-  usePlansLive(householdId, cat.id)
-
-  const weights = weightsQuery.data ?? []
-  const feedings = feedingsQuery.data ?? []
-
-  // Only the plan's own meal count is needed here — how many bowls are owed
-  // today and how many have gone down. The composition lives on /food.
-  const plan = plansQuery.data?.[0] ?? null
-  const mealCount =
-    plan === null ? 0 : mealTimes(plan.mealsPerDay, plan.firstMealAt, plan.lastMealAt).length
-  const mealsGiven =
-    plan === null
-      ? 0
-      : new Set(
-          feedings
-            .filter(
-              (feeding) =>
-                feeding.planId === plan.id &&
-                feeding.mealIndex !== null &&
-                feeding.mealIndex < mealCount,
-            )
-            .map((feeding) => feeding.mealIndex),
-        ).size
-
-  // weights arrive ordered by date asc — latest is the last element.
-  const latest = weights.at(-1)
-  const previous = weights.at(-2)
-
-  const eatenKcal = sumKcal(feedings)
-  const gramsToday = sumGrams(feedings)
-  const target = dailyKcalTarget(cat, latest?.weightKg ?? null, now)
-  const overTarget = target !== null && eatenKcal > target
-
-  const stage = effectiveLifeStage(cat, now)
-  const isKitten = stage === 'kitten_0_4' || stage === 'kitten_4_12'
-
-  // Per week wherever a long enough span exists (catmath.weeklyWeightTrend);
-  // the raw change between the last two weigh-ins only while it doesn't. The
-  // sub-label always says which, so the tile is never ambiguous about what it
-  // divided by.
-  const trend = weeklyWeightTrend(weights)
-  const weightDelta =
-    trend !== null
-      ? trend.kgPerWeek
-      : latest !== undefined && previous !== undefined
-        ? latest.weightKg - previous.weightKg
-        : null
-  const weightSub: ReactNode =
-    latest === undefined ? 'No weigh-ins yet' : format(latest.date, 'MMM d')
-  const changeSub: ReactNode =
-    trend !== null
-      ? 'per week'
-      : weightDelta !== null
-        ? 'since the last weigh-in'
-        : latest === undefined
-          ? '—'
-          : 'First weigh-in'
-
-  const statsLoading = weightsQuery.isLoading || feedingsQuery.isLoading
-  const statsError = weightsQuery.error ?? feedingsQuery.error
-
   return (
     <main className="flex flex-col gap-7 p-4">
-      <header className="gutter">
-        <h1 className="page-title">{cat.name}</h1>
-        <p className="text-sm text-ink-soft">{ageLabelLong(cat.birthDate, now)}</p>
-      </header>
+      {single === undefined ? (
+        <h1 className="page-title gutter">Home</h1>
+      ) : (
+        <header className="gutter">
+          <h1 className="page-title">{single.name}</h1>
+          <p className="text-sm text-ink-soft">{ageLabelLong(single.birthDate, new Date())}</p>
+        </header>
+      )}
 
       <div className="page-columns">
-        {/* Where today stands: the big number and her weight. */}
+        {/* Where today stands. */}
         <div className="page-column">
-          {statsLoading ? (
-            <div className="h-24 animate-pulse rounded-squishy bg-sand" />
-          ) : statsError !== null ? (
-            <p role="alert" className="gutter text-sm font-semibold text-danger">
-              Couldn&apos;t load today&apos;s numbers. {statsError.message}
-            </p>
+          {cats.length === 0 ? (
+            <div className="surface flex flex-col items-start gap-3 p-5">
+              <p className="font-semibold">No cat set up yet.</p>
+              <Link to="/profile" className="btn-primary">
+                Add your cat
+              </Link>
+            </div>
           ) : (
-            <>
-              {/* The one number this screen exists to show. With a plan in force
-              that is how far through it she is — the calorie total is a
-              foregone conclusion by breakfast, the bowls are not. */}
-              <section className="gutter flex flex-col gap-3">
-                <h2 className="section-label">{plan === null ? 'Eaten today' : 'Today'}</h2>
-                {plan === null ? (
-                  <>
-                    <p className="flex items-baseline gap-2">
-                      <span
-                        data-testid="dash-kcal-today"
-                        className="text-5xl font-bold tracking-tight tabular-nums"
-                      >
-                        {roundKcal(eatenKcal)}
-                      </span>
-                      <span className="text-lg text-ink-soft">
-                        {target === null ? 'kcal' : `of ${String(roundKcal(target))} kcal`}
-                      </span>
-                    </p>
-                    {target === null ? (
-                      <p className="text-sm text-ink-soft">Log a weigh-in to get a daily target.</p>
-                    ) : (
-                      <>
-                        <Meter value={eatenKcal} max={target} />
-                        <p
-                          className={`text-sm ${overTarget ? 'font-semibold text-coral-ink' : 'text-ink-soft'}`}
-                        >
-                          {overTarget
-                            ? `${String(roundKcal(eatenKcal - target))} kcal over · ${String(roundGrams(gramsToday))} g fed`
-                            : `${String(roundKcal(target - eatenKcal))} kcal left · ${String(roundGrams(gramsToday))} g fed`}
-                        </p>
-                      </>
-                    )}
-                  </>
-                ) : (
-                  <>
-                    <p className="flex items-baseline gap-2">
-                      <span
-                        data-testid="dash-meals-today"
-                        className="text-5xl font-bold tracking-tight tabular-nums"
-                      >
-                        {mealsGiven} of {mealCount}
-                      </span>
-                      <span className="text-lg text-ink-soft">meals given</span>
-                    </p>
-                    <Meter value={mealsGiven} max={mealCount} />
-                    {/* "target" is load-bearing: /food counts the same kcal against
-                    what the PLAN delivers, and two denominators sharing one
-                    phrasing would read as a contradiction. */}
-                    <p data-testid="dash-kcal-today" className="text-sm text-ink-soft tabular-nums">
-                      {roundKcal(eatenKcal)}
-                      {target === null
-                        ? ' kcal'
-                        : ` of ${String(roundKcal(target))} kcal target`} · {roundGrams(gramsToday)}{' '}
-                      g fed
-                    </p>
-                  </>
-                )}
-              </section>
-
-              <section className="surface grid grid-cols-2 divide-x divide-sand">
-                <div className="p-4">
-                  <StatCard
-                    label="Weight"
-                    value={
-                      <span data-testid="dash-weight">
-                        {latest === undefined ? '—' : `${roundKg(latest.weightKg).toFixed(2)} kg`}
-                      </span>
-                    }
-                    sub={weightSub}
-                  />
-                </div>
-                <div className="p-4">
-                  <StatCard
-                    label="Change"
-                    tone={
-                      weightDelta !== null && weightDelta > 0 && isKitten ? 'positive' : 'plain'
-                    }
-                    value={
-                      weightDelta === null
-                        ? '—'
-                        : `${weightDelta >= 0 ? '+' : ''}${formatWeightKg(weightDelta)}`
-                    }
-                    sub={changeSub}
-                  />
-                </div>
-              </section>
-            </>
+            cats.map((cat) => (
+              <CatToday
+                key={cat.id}
+                cat={cat}
+                variant={single === undefined ? 'compact' : 'full'}
+              />
+            ))
           )}
         </div>
 
-        {/* What has gone down today, and the two things to do next. */}
+        {/* What the household has to do — not about any one cat. */}
         <div className="page-column">
-          <section className="flex flex-col gap-3">
-            <h2 className="section-label gutter">Today&apos;s meals</h2>
-            {feedingsQuery.isLoading ? (
-              <div className="h-16 animate-pulse rounded-squishy bg-sand" />
-            ) : feedingsQuery.error !== null ? (
-              <p role="alert" className="gutter text-sm font-semibold text-danger">
-                Couldn&apos;t load today&apos;s meals. {feedingsQuery.error.message}
-              </p>
-            ) : feedings.length === 0 ? (
-              <p className="gutter text-sm text-ink-soft">Nothing logged yet today.</p>
-            ) : (
-              <ul className="surface divide-y divide-sand">
-                {feedings.map((feeding) => (
-                  <li key={feeding.id} className="flex items-center gap-3 px-4 py-3">
-                    <span className="text-sm text-ink-soft tabular-nums">
-                      {format(feeding.datetime, 'HH:mm')}
-                    </span>
-                    <span className="min-w-0 flex-1 truncate font-medium">
-                      {feeding.foodNameSnapshot}
-                    </span>
-                    <span className="shrink-0 text-sm text-ink-soft tabular-nums">
-                      {roundGrams(feeding.amountG)} g · {roundKcal(feeding.kcal)} kcal
-                    </span>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </section>
-
-          {canEdit && (
-            <div className="flex gap-3">
-              <Link to="/food" className="btn-primary flex-1">
-                {plan === null ? 'Set her plan' : "Today's plan"}
-              </Link>
-              <Link to="/weight" className="btn-secondary flex-1">
-                Weigh in
-              </Link>
-            </div>
-          )}
+          <LitterGlance />
         </div>
       </div>
 
-      <p className="gutter text-xs text-ink-soft">Estimates only — always confirm with your vet.</p>
+      {cats.length === 0 ? null : (
+        <p className="gutter text-xs text-ink-soft">
+          Estimates only — always confirm with your vet.
+        </p>
+      )}
     </main>
-  )
-}
-
-/** Progress toward the daily target. Coral fills; over target it deepens. */
-function Meter({ value, max }: { value: number; max: number }) {
-  const pct = Math.min(100, Math.max(0, (value / max) * 100))
-  const over = value > max
-  return (
-    <div
-      role="progressbar"
-      aria-label="Today's calorie progress"
-      aria-valuemin={0}
-      aria-valuemax={roundKcal(max)}
-      aria-valuenow={roundKcal(Math.min(value, max))}
-      className="h-2 w-full overflow-hidden rounded-full bg-sand"
-    >
-      <div
-        className={`h-full rounded-full ${over ? 'bg-coral-deep' : 'bg-coral'}`}
-        style={{ width: `${String(pct)}%` }}
-      />
-    </div>
   )
 }
