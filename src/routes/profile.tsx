@@ -48,13 +48,16 @@ function ProfilePage() {
           ) : activeCat === null ? (
             <NoCatCard canEdit={canEdit} hid={householdId} uid={user.uid} />
           ) : (
-            <CatCard
-              key={activeCat.id}
-              cat={activeCat}
-              canEdit={canEdit}
-              hid={householdId}
-              uid={user.uid}
-            />
+            <>
+              <CatCard
+                key={activeCat.id}
+                cat={activeCat}
+                canEdit={canEdit}
+                hid={householdId}
+                uid={user.uid}
+              />
+              {canEdit ? <AddCatCard hid={householdId} uid={user.uid} /> : null}
+            </>
           )}
         </div>
 
@@ -109,6 +112,22 @@ function NoCatCard({ canEdit, hid, uid }: { canEdit: boolean; hid: string; uid: 
         </div>
       ) : null}
     </section>
+  )
+}
+
+/**
+ * A second (third…) cat. Collapsed because it is rare, and left open after a
+ * save so the form's own "Profile saved" line stays on screen; the new cat
+ * shows up as a chip in the switcher.
+ */
+function AddCatCard({ hid, uid }: { hid: string; uid: string }) {
+  return (
+    <details className="surface px-4">
+      <summary className="disclosure">Add another cat</summary>
+      <div className="pb-4">
+        <CatForm hid={hid} uid={uid} />
+      </div>
+    </details>
   )
 }
 
