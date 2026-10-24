@@ -2,6 +2,7 @@ import { createFileRoute, Link } from '@tanstack/react-router'
 import { CatToday } from '../components/CatToday'
 import { ErrorCard } from '../components/ErrorCard'
 import { LitterGlance } from '../components/LitterGlance'
+import { WaterGlance } from '../components/WaterGlance'
 import { ageLabelLong } from '../lib/catmath'
 import { useHousehold } from '../lib/household'
 
@@ -63,6 +64,7 @@ function HomePage() {
 
         {/* What the household has to do — not about any one cat. */}
         <div className="page-column">
+          <WaterGlance />
           <LitterGlance />
         </div>
       </div>

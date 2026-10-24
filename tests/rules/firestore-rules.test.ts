@@ -104,6 +104,15 @@ function litterBox(createdBy: string) {
   }
 }
 
+function waterBowl(createdBy: string) {
+  return {
+    location: 'Kitchen',
+    lastChangedAt: ENTRY_DATE,
+    createdBy,
+    createdAt: CREATED_AT,
+  }
+}
+
 function food(createdBy: string) {
   return {
     name: 'Dry chow',
@@ -517,6 +526,67 @@ describe('litter boxes', () => {
     await seedDoc(`${boxes}/b1`, litterBox('bob'))
     await assertFails(deleteDoc(doc(authedDb('vera'), `${boxes}/b1`)))
     await assertSucceeds(deleteDoc(doc(authedDb('bob'), `${boxes}/b1`)))
+  })
+})
+
+describe('water bowls', () => {
+  const bowls = `${H1}/waterBowls`
+
+  it('allows editors to create a valid water bowl, viewers not', async () => {
+    await assertSucceeds(addDoc(collection(authedDb('bob'), bowls), waterBowl('bob')))
+    await assertFails(addDoc(collection(authedDb('vera'), bowls), waterBowl('vera')))
+  })
+
+  it('denies an empty or over-long location', async () => {
+    await assertFails(
+      addDoc(collection(authedDb('bob'), bowls), { ...waterBowl('bob'), location: '' }),
+    )
+    await assertFails(
+      addDoc(collection(authedDb('bob'), bowls), { ...waterBowl('bob'), location: 'x'.repeat(61) }),
+    )
+  })
+
+  it('denies a lastChangedAt that is not a timestamp, createdBy that is not the caller, and unknown fields', async () => {
+    await assertFails(
+      addDoc(collection(authedDb('bob'), bowls), {
+        ...waterBowl('bob'),
+        lastChangedAt: '2026-01-15',
+      }),
+    )
+    await assertFails(addDoc(collection(authedDb('bob'), bowls), waterBowl('alice')))
+    await assertFails(
+      addDoc(collection(authedDb('bob'), bowls), { ...waterBowl('bob'), litres: 2 }),
+    )
+  })
+
+  it('allows members to read, non-members not', async () => {
+    await seedDoc(`${bowls}/b1`, waterBowl('bob'))
+    await assertSucceeds(getDoc(doc(authedDb('vera'), `${bowls}/b1`)))
+    await assertFails(getDoc(doc(authedDb('mallory'), `${bowls}/b1`)))
+  })
+
+  it('lets an editor move lastChangedAt forward, a viewer not', async () => {
+    await seedDoc(`${bowls}/b1`, waterBowl('bob'))
+    await assertSucceeds(
+      updateDoc(doc(authedDb('alice'), `${bowls}/b1`), {
+        lastChangedAt: Timestamp.fromDate(new Date('2026-02-01T08:00:00Z')),
+      }),
+    )
+    await assertFails(
+      updateDoc(doc(authedDb('vera'), `${bowls}/b1`), { lastChangedAt: ENTRY_DATE }),
+    )
+  })
+
+  it('denies an update that rewrites createdBy or breaks validation', async () => {
+    await seedDoc(`${bowls}/b1`, waterBowl('bob'))
+    await assertFails(updateDoc(doc(authedDb('alice'), `${bowls}/b1`), { createdBy: 'alice' }))
+    await assertFails(updateDoc(doc(authedDb('alice'), `${bowls}/b1`), { location: '' }))
+  })
+
+  it('allows editors to delete, viewers not', async () => {
+    await seedDoc(`${bowls}/b1`, waterBowl('bob'))
+    await assertFails(deleteDoc(doc(authedDb('vera'), `${bowls}/b1`)))
+    await assertSucceeds(deleteDoc(doc(authedDb('bob'), `${bowls}/b1`)))
   })
 })
 

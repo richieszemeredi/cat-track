@@ -151,6 +151,27 @@ service cloud.firestore {
         allow delete: if isEditor(hid);
       }
 
+      // ---------- water bowls ----------
+      // Same shape as litter boxes: household-level, edited in place ("water
+      // replaced" moves lastChangedAt forward), createdBy pinned once written.
+      match /waterBowls/{bowlId} {
+        function validWaterBowlData() {
+          return request.resource.data.keys().hasOnly([
+              'location', 'lastChangedAt', 'createdBy', 'createdAt'
+            ]) &&
+            validString(request.resource.data.location, 60) &&
+            request.resource.data.lastChangedAt is timestamp &&
+            request.resource.data.createdAt is timestamp;
+        }
+        allow read: if isMember(hid);
+        allow create: if isEditor(hid) && validWaterBowlData() &&
+          request.resource.data.createdBy == request.auth.uid;
+        allow update: if isEditor(hid) && validWaterBowlData() &&
+          request.resource.data.createdBy == resource.data.createdBy &&
+          request.resource.data.createdAt == resource.data.createdAt;
+        allow delete: if isEditor(hid);
+      }
+
       // ---------- cats ----------
       match /cats/{catId} {
         // Every field is type-checked: the client's Zod read boundary skips

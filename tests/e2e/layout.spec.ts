@@ -3,6 +3,7 @@ import {
   seedHousehold,
   seedLastWeeksWeighIn,
   seedLitterBoxes,
+  seedWaterBowls,
   seedPreviousPlan,
   seedSecondCat,
   tabBar,
@@ -21,7 +22,7 @@ import {
  * of on a 393pt screen — that is the class of bug this catches.
  */
 
-const PAGES = ['Home', 'Food', 'Weight', 'Litter', 'Profile'] as const
+const PAGES = ['Home', 'Food', 'Weight', 'Water', 'Litter', 'Profile'] as const
 
 // tests/e2e compiles under the node tsconfig (no DOM lib), so the browser
 // globals used inside page.evaluate are typed structurally here — same
@@ -290,6 +291,8 @@ test('every screen fits the viewport without sideways scroll', async ({
   await seedLastWeeksWeighIn(request, tag)
   // A fresh box and an overdue one, so Litter lays out both of its states.
   await seedLitterBoxes(page)
+  // A fresh bowl and a stale one, so Water lays out both of its states.
+  await seedWaterBowls(page, request, tag)
 
   const audit = async (name: (typeof PAGES)[number], shot: string) => {
     await tabBar(page).getByRole('link', { name }).click()
@@ -514,6 +517,7 @@ test.describe('in dark mode', () => {
     await seedPreviousPlan(request, tag)
     await seedLastWeeksWeighIn(request, tag)
     await seedLitterBoxes(page)
+    await seedWaterBowls(page, request, tag)
 
     for (const name of PAGES) {
       await tabBar(page).getByRole('link', { name }).click()

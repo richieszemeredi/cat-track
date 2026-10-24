@@ -117,6 +117,13 @@ not in a pile-up.
   there is no history. Age is counted in calendar days and floored to weeks;
   each box carries its own `changeEveryWeeks` (default 4, max 52). No
   reminders: the screen is the reminder.
+- `src/lib/water.ts` + `/water` — water bowls track when the water was last REPLACED, never what
+  a cat drank. Same shape as litter boxes (household-level `households/{hid}/waterBowls`, a
+  `location` and one `lastChangedAt`, edited in place, no history) with two deliberate
+  differences: it is a full timestamp and the age is ELAPSED HOURS (`useNow`, a minute tick —
+  `useToday` only moves at midnight), and the stale limit is one fixed 24 h, not per bowl.
+  The UI can only stamp "now" (or the creation time), so a backdated bowl is seeded through the
+  emulator REST API in the layout spec. No reminders: the screen is the reminder.
 - Data model: `households/{hid}/members/{uid}` (roles owner|editor|viewer, source of truth
   for access) and `households/{hid}/cats/{catId}/{weights|foods|feedings|plans}` — append-only
   log docs so two phones never clobber each other. `plans/{planId}/items/{itemId}` holds the

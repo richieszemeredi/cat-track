@@ -192,6 +192,20 @@ export const litterBoxSchema = z.object({
 })
 export type LitterBox = z.infer<typeof litterBoxSchema> & { id: string }
 
+/**
+ * A water bowl and when its water was last replaced — what the cats drank is
+ * not tracked, only whether the bowl has been forgotten. Household-level and
+ * edited in place, exactly like a litter box; `lastChangedAt` is a full
+ * timestamp because the age is counted in hours.
+ */
+export const waterBowlSchema = z.object({
+  location: z.string().min(1).max(60),
+  lastChangedAt: timestampToDate,
+  createdBy: z.string().min(1),
+  createdAt: timestampToDate,
+})
+export type WaterBowl = z.infer<typeof waterBowlSchema> & { id: string }
+
 /** One food in the day's mix. Grams are per DAY; the serving is derived. */
 export const planItemSchema = z.object({
   foodId: z.string().min(1),

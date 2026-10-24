@@ -121,6 +121,47 @@ export async function seedLitterBoxes(page: Page): Promise<void> {
   await expect(page.getByText('5 weeks ago')).toBeVisible(WAIT)
 }
 
+/**
+ * Two water bowls — one just filled, one left standing for two days — so the
+ * Water page lays out both its states. The stale one is written straight to
+ * the emulator: the UI only ever stamps "now". Leaves the page on Water.
+ */
+export async function seedWaterBowls(
+  page: Page,
+  request: APIRequestContext,
+  tag: string,
+): Promise<void> {
+  await tabBar(page).getByRole('link', { name: 'Water' }).click()
+  await expect(page.getByTestId('water-location')).toBeVisible(WAIT)
+
+  await page.getByTestId('water-location').fill('Kitchen')
+  await page.getByTestId('water-save').click()
+  await expect(page.getByText('Just now')).toBeVisible(WAIT)
+  await expect(page.getByTestId('water-location')).toHaveValue('', WAIT)
+
+  const household = (await listDocs(request, 'households')).find(
+    (d) => d.fields?.['name']?.stringValue === tag,
+  )
+  const householdPath = household?.name
+  if (householdPath === undefined) throw new Error(`no household named ${tag}`)
+  const relative = householdPath.slice(householdPath.indexOf('/documents/') + 11)
+
+  const twoDaysAgo = new Date(Date.now() - 49 * 3_600_000).toISOString()
+  const response = await request.post(`${EMULATOR}/${relative}/waterBowls`, {
+    headers: OWNER,
+    data: {
+      fields: {
+        location: { stringValue: 'Hallway behind the big wardrobe' },
+        lastChangedAt: { timestampValue: twoDaysAgo },
+        createdBy: { stringValue: 'seed' },
+        createdAt: { timestampValue: new Date().toISOString() },
+      },
+    },
+  })
+  expect(response.ok(), 'seeding a stale water bowl failed').toBe(true)
+  await expect(page.getByText('Time for fresh water')).toBeVisible(WAIT)
+}
+
 // ---------- direct emulator writes ----------
 // A plan revision is always "from today" in the UI (by design), so the plan
 // history needs an older plan to show. Write it straight to the Firestore

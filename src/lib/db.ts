@@ -29,6 +29,7 @@ import {
   feedingSchema,
   foodSchema,
   litterBoxSchema,
+  waterBowlSchema,
   mealTimeOverrideSchema,
   memberSchema,
   planItemSchema,
@@ -41,6 +42,7 @@ import {
   type FoodType,
   type LifeStage,
   type LitterBox,
+  type WaterBowl,
   type MealTimeOverride,
   type Plan,
   type PlanItem,
@@ -109,6 +111,9 @@ function mealTimeOverridesRef(hid: string, catId: string): CollectionReference {
 }
 function litterBoxesRef(hid: string): CollectionReference {
   return collection(db, 'households', hid, 'litterBoxes')
+}
+function waterBowlsRef(hid: string): CollectionReference {
+  return collection(db, 'households', hid, 'waterBowls')
 }
 function planItemsRef(hid: string, catId: string, planId: string): CollectionReference {
   return collection(db, 'households', hid, 'cats', catId, 'plans', planId, 'items')
@@ -561,6 +566,35 @@ export function useLitterBoxesLive(hid: string): void {
   )
 }
 
+// ---------- water bowls ----------
+
+export function waterBowlsQueryOptions(hid: string) {
+  return queryOptions({
+    queryKey: ['waterBowls', hid] as const,
+    queryFn: async () =>
+      parseDocs(
+        waterBowlSchema,
+        await getDocs(query(waterBowlsRef(hid), orderBy('createdAt', 'asc'))),
+      ),
+    staleTime: Infinity,
+  })
+}
+
+export function useWaterBowlsLive(hid: string): void {
+  const qc = useQueryClient()
+  useEffect(
+    () =>
+      onSnapshot(
+        query(waterBowlsRef(hid), orderBy('createdAt', 'asc')),
+        (snap) => {
+          qc.setQueryData(waterBowlsQueryOptions(hid).queryKey, parseDocs(waterBowlSchema, snap))
+        },
+        onListenError(qc, waterBowlsQueryOptions(hid).queryKey),
+      ),
+    [hid, qc],
+  )
+}
+
 // ---------- offline-aware write helper ----------
 
 /**
@@ -734,6 +768,36 @@ export function deleteLitterBox(hid: string, boxId: string): Promise<unknown> {
   return deleteDoc(doc(litterBoxesRef(hid), boxId))
 }
 
+export interface WaterBowlInput {
+  location: string
+  lastChangedAt: Date
+}
+
+export function addWaterBowl(hid: string, uid: string, input: WaterBowlInput): Promise<unknown> {
+  return addDoc(waterBowlsRef(hid), {
+    location: input.location,
+    lastChangedAt: Timestamp.fromDate(input.lastChangedAt),
+    createdBy: uid,
+    createdAt: serverTimestamp(),
+  })
+}
+
+export function updateWaterBowl(
+  hid: string,
+  bowlId: string,
+  patch: Partial<WaterBowlInput>,
+): Promise<unknown> {
+  const data: Record<string, unknown> = { ...patch }
+  if (patch.lastChangedAt !== undefined) {
+    data['lastChangedAt'] = Timestamp.fromDate(patch.lastChangedAt)
+  }
+  return updateDoc(doc(waterBowlsRef(hid), bowlId), data)
+}
+
+export function deleteWaterBowl(hid: string, bowlId: string): Promise<unknown> {
+  return deleteDoc(doc(waterBowlsRef(hid), bowlId))
+}
+
 export interface PlanInput {
   effectiveFrom: Date
   mealsPerDay: number
@@ -885,4 +949,14 @@ export function retimeFeedings(
 }
 
 // Re-exported so feature code can type cache data without importing schemas.
-export type { Cat, Feeding, Food, LitterBox, MealTimeOverride, Plan, PlanItem, WeightEntry }
+export type {
+  Cat,
+  Feeding,
+  Food,
+  LitterBox,
+  MealTimeOverride,
+  Plan,
+  PlanItem,
+  WaterBowl,
+  WeightEntry,
+}
