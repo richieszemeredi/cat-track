@@ -111,17 +111,18 @@ not in a pile-up.
   overlapping date ranges. `db.sortPlans` breaks a same-day tie on `createdAt` — ordering on
   `effectiveFrom` alone let two revisions saved on one day fall back to document id, which
   could leave the FIRST one in force.
-- `src/lib/litter.ts` + `/litter` — litter boxes are HOUSEHOLD-level (`households/{hid}/litterBoxes`,
+- `src/lib/litter.ts` + `LitterSection` — litter boxes are HOUSEHOLD-level (`households/{hid}/litterBoxes`,
   not under a cat): a `location` and one `lastChangedAt` date, nothing else. Unlike the log
   collections they are edited in place — "replaced today" just moves the date forward — and
   there is no history. Age is counted in calendar days and floored to weeks;
   each box carries its own `changeEveryWeeks` (default 4, max 52). No
   reminders: the screen is the reminder.
-- `src/lib/water.ts` + `/water` — water bowls track when the water was last REPLACED, never what
+- `src/lib/water.ts` + `WaterSection` — water bowls track when the water was last REPLACED, never what
   a cat drank. Same shape as litter boxes (household-level `households/{hid}/waterBowls`, a
   `location` and one `lastChangedAt`, edited in place, no history) with two deliberate
   differences: it is a full timestamp and the age is ELAPSED HOURS (`useNow`, a minute tick —
   `useToday` only moves at midnight), and the stale limit is one fixed 24 h, not per bowl.
+  Both live on ONE tab, `/chores` (a section per column from 768pt; the tab bar stayed at five).
   The UI can only stamp "now" (or the creation time), so a backdated bowl is seeded through the
   emulator REST API in the layout spec. No reminders: the screen is the reminder.
 - Data model: `households/{hid}/members/{uid}` (roles owner|editor|viewer, source of truth

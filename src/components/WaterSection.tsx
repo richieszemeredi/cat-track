@@ -1,9 +1,6 @@
 import { useQuery } from '@tanstack/react-query'
-import { createFileRoute } from '@tanstack/react-router'
 import { format } from 'date-fns'
 import { useState } from 'react'
-import { ErrorCard } from '../components/ErrorCard'
-import { WaterBowlForm } from '../components/WaterBowlForm'
 import { useAuth } from '../lib/auth'
 import {
   awaitOrQueued,
@@ -15,13 +12,14 @@ import {
 import { useHousehold } from '../lib/household'
 import { useNow } from '../lib/use-now'
 import { waterAge, waterAgeLabel } from '../lib/water'
+import { ErrorCard } from './ErrorCard'
+import { WaterBowlForm } from './WaterBowlForm'
 
-export const Route = createFileRoute('/water')({
-  component: WaterPage,
-  errorComponent: ({ error, reset }) => <ErrorCard error={error} onRetry={reset} />,
-})
-
-function WaterPage() {
+/**
+ * The bowls and the form that adds one: one column of the Chores page. On a
+ * phone the sections simply stack; from 768pt each takes a column.
+ */
+export function WaterSection() {
   const { householdId, canEdit } = useHousehold()
   const { user } = useAuth()
   const bowlsQuery = useQuery(waterBowlsQueryOptions(householdId))
@@ -30,58 +28,52 @@ function WaterPage() {
 
   const uid = user?.uid ?? null
 
+  if (bowlsQuery.isLoading) {
+    return <div className="page-solo h-24 animate-pulse rounded-squishy bg-sand" />
+  }
+  if (bowlsQuery.isError) {
+    return (
+      <ErrorCard
+        title="Couldn't load water bowls"
+        error={bowlsQuery.error}
+        onRetry={() => {
+          void bowlsQuery.refetch()
+        }}
+      />
+    )
+  }
+
   return (
-    <main className="flex flex-col gap-7 p-4">
-      <h1 className="page-title gutter">Water</h1>
+    <div className="page-column">
+      <section className="flex flex-col gap-3">
+        <h2 className="section-label gutter">Water bowls</h2>
+        {bowlsQuery.data === undefined || bowlsQuery.data.length === 0 ? (
+          <p className="gutter text-sm text-ink-soft">No water bowls yet.</p>
+        ) : (
+          <ul className="surface divide-y divide-sand">
+            {bowlsQuery.data.map((bowl) => (
+              <WaterBowlRow
+                key={bowl.id}
+                bowl={bowl}
+                now={now}
+                hid={householdId}
+                uid={uid}
+                canEdit={canEdit}
+              />
+            ))}
+          </ul>
+        )}
+      </section>
 
-      {bowlsQuery.isLoading ? (
-        <div className="page-solo h-24 animate-pulse rounded-squishy bg-sand" />
-      ) : bowlsQuery.isError ? (
-        <ErrorCard
-          title="Couldn't load water bowls"
-          error={bowlsQuery.error}
-          onRetry={() => {
-            void bowlsQuery.refetch()
-          }}
-        />
-      ) : (
-        <div className="page-columns">
-          {/* Where each bowl stands. */}
-          <div className="page-column">
-            <section className="flex flex-col gap-3">
-              <h2 className="section-label gutter">Bowls</h2>
-              {bowlsQuery.data === undefined || bowlsQuery.data.length === 0 ? (
-                <p className="gutter text-sm text-ink-soft">No water bowls yet.</p>
-              ) : (
-                <ul className="surface divide-y divide-sand">
-                  {bowlsQuery.data.map((bowl) => (
-                    <WaterBowlRow
-                      key={bowl.id}
-                      bowl={bowl}
-                      now={now}
-                      hid={householdId}
-                      uid={uid}
-                      canEdit={canEdit}
-                    />
-                  ))}
-                </ul>
-              )}
-            </section>
+      {canEdit && uid !== null ? (
+        <section className="flex flex-col gap-3">
+          <h2 className="section-label gutter">Add water bowl</h2>
+          <div className="surface p-4">
+            <WaterBowlForm hid={householdId} uid={uid} />
           </div>
-
-          {canEdit && uid !== null ? (
-            <div className="page-column">
-              <section className="flex flex-col gap-3">
-                <h2 className="section-label gutter">Add water bowl</h2>
-                <div className="surface p-4">
-                  <WaterBowlForm hid={householdId} uid={uid} />
-                </div>
-              </section>
-            </div>
-          ) : null}
-        </div>
-      )}
-    </main>
+        </section>
+      ) : null}
+    </div>
   )
 }
 

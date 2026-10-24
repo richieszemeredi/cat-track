@@ -11,7 +11,7 @@ const MAX_ROWS = 3
 /**
  * The litter boxes at a glance. They belong to the household, not to a cat, so
  * this sits outside every cat's block. Read-only: marking one replaced happens
- * on /litter, one tap away from any row.
+ * on Chores, one tap away from any row.
  */
 export function LitterGlance() {
   const { householdId, canEdit } = useHousehold()
@@ -47,7 +47,7 @@ export function LitterGlance() {
       {boxes.length === 0 ? (
         <div className="gutter flex flex-col items-start gap-3">
           <p className="text-sm text-ink-soft">No litter boxes yet.</p>
-          <Link to="/litter" className="btn-secondary">
+          <Link to="/chores" className="btn-secondary">
             Add a litter box
           </Link>
         </div>
@@ -59,7 +59,7 @@ export function LitterGlance() {
           {shown.map(({ box, age }) => (
             <li key={box.id}>
               <Link
-                to="/litter"
+                to="/chores"
                 className="flex min-h-12 items-baseline gap-3 px-4 py-3 hover:bg-sand"
               >
                 <span className="min-w-0 flex-1">
@@ -77,7 +77,7 @@ export function LitterGlance() {
           {hidden > 0 ? (
             <li>
               <Link
-                to="/litter"
+                to="/chores"
                 className="flex min-h-12 items-center px-4 py-3 text-sm text-ink-soft hover:bg-sand"
               >
                 {hidden} more {hidden === 1 ? 'box' : 'boxes'}

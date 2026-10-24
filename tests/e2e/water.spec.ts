@@ -10,7 +10,7 @@ test('water bowls show when the water was last replaced', async ({ page }, testI
   test.setTimeout(180_000)
 
   await seedHousehold(page, { tag: `water-${testInfo.project.name}` })
-  await tabBar(page).getByRole('link', { name: 'Water' }).click()
+  await tabBar(page).getByRole('link', { name: 'Chores' }).click()
   await expect(page.getByTestId('water-location')).toBeVisible(WAIT)
   await expect(page.getByText('No water bowls yet.')).toBeVisible(WAIT)
 
@@ -25,7 +25,7 @@ test('water bowls show when the water was last replaced', async ({ page }, testI
   const glance = page.getByRole('link', { name: /Kitchen/ })
   await expect(glance).toContainText('Just now', WAIT)
   await glance.click()
-  await expect(page.getByRole('heading', { name: 'Water', level: 1 })).toBeVisible(WAIT)
+  await expect(page.getByRole('heading', { name: 'Chores', level: 1 })).toBeVisible(WAIT)
 
   await bowl.getByRole('button', { name: 'Edit' }).click()
   await bowl.getByTestId('water-location').fill('Pantry')

@@ -10,10 +10,9 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as ChoresRouteImport } from './routes/chores'
 import { Route as FoodRouteImport } from './routes/food'
-import { Route as LitterRouteImport } from './routes/litter'
 import { Route as ProfileRouteImport } from './routes/profile'
-import { Route as WaterRouteImport } from './routes/water'
 import { Route as WeightRouteImport } from './routes/weight'
 
 const IndexRoute = IndexRouteImport.update({
@@ -21,24 +20,19 @@ const IndexRoute = IndexRouteImport.update({
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ChoresRoute = ChoresRouteImport.update({
+  id: '/chores',
+  path: '/chores',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const FoodRoute = FoodRouteImport.update({
   id: '/food',
   path: '/food',
   getParentRoute: () => rootRouteImport,
 } as any)
-const LitterRoute = LitterRouteImport.update({
-  id: '/litter',
-  path: '/litter',
-  getParentRoute: () => rootRouteImport,
-} as any)
 const ProfileRoute = ProfileRouteImport.update({
   id: '/profile',
   path: '/profile',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const WaterRoute = WaterRouteImport.update({
-  id: '/water',
-  path: '/water',
   getParentRoute: () => rootRouteImport,
 } as any)
 const WeightRoute = WeightRouteImport.update({
@@ -49,43 +43,39 @@ const WeightRoute = WeightRouteImport.update({
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/chores': typeof ChoresRoute
   '/food': typeof FoodRoute
-  '/litter': typeof LitterRoute
   '/profile': typeof ProfileRoute
-  '/water': typeof WaterRoute
   '/weight': typeof WeightRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/chores': typeof ChoresRoute
   '/food': typeof FoodRoute
-  '/litter': typeof LitterRoute
   '/profile': typeof ProfileRoute
-  '/water': typeof WaterRoute
   '/weight': typeof WeightRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/chores': typeof ChoresRoute
   '/food': typeof FoodRoute
-  '/litter': typeof LitterRoute
   '/profile': typeof ProfileRoute
-  '/water': typeof WaterRoute
   '/weight': typeof WeightRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/food' | '/litter' | '/profile' | '/water' | '/weight'
+  fullPaths: '/' | '/chores' | '/food' | '/profile' | '/weight'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/food' | '/litter' | '/profile' | '/water' | '/weight'
-  id: '__root__' | '/' | '/food' | '/litter' | '/profile' | '/water' | '/weight'
+  to: '/' | '/chores' | '/food' | '/profile' | '/weight'
+  id: '__root__' | '/' | '/chores' | '/food' | '/profile' | '/weight'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  ChoresRoute: typeof ChoresRoute
   FoodRoute: typeof FoodRoute
-  LitterRoute: typeof LitterRoute
   ProfileRoute: typeof ProfileRoute
-  WaterRoute: typeof WaterRoute
   WeightRoute: typeof WeightRoute
 }
 
@@ -98,6 +88,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/chores': {
+      id: '/chores'
+      path: '/chores'
+      fullPath: '/chores'
+      preLoaderRoute: typeof ChoresRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/food': {
       id: '/food'
       path: '/food'
@@ -105,25 +102,11 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof FoodRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/litter': {
-      id: '/litter'
-      path: '/litter'
-      fullPath: '/litter'
-      preLoaderRoute: typeof LitterRouteImport
-      parentRoute: typeof rootRouteImport
-    }
     '/profile': {
       id: '/profile'
       path: '/profile'
       fullPath: '/profile'
       preLoaderRoute: typeof ProfileRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/water': {
-      id: '/water'
-      path: '/water'
-      fullPath: '/water'
-      preLoaderRoute: typeof WaterRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/weight': {
@@ -138,10 +121,9 @@ declare module '@tanstack/react-router' {
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  ChoresRoute: ChoresRoute,
   FoodRoute: FoodRoute,
-  LitterRoute: LitterRoute,
   ProfileRoute: ProfileRoute,
-  WaterRoute: WaterRoute,
   WeightRoute: WeightRoute,
 }
 export const routeTree = rootRouteImport

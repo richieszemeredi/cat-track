@@ -1,9 +1,6 @@
 import { useQuery } from '@tanstack/react-query'
-import { createFileRoute } from '@tanstack/react-router'
 import { format, startOfDay } from 'date-fns'
 import { useState } from 'react'
-import { ErrorCard } from '../components/ErrorCard'
-import { LitterBoxForm } from '../components/LitterBoxForm'
 import { useAuth } from '../lib/auth'
 import {
   awaitOrQueued,
@@ -15,13 +12,14 @@ import {
 import { useHousehold } from '../lib/household'
 import { litterAge, litterAgeLabel, weeksLabel } from '../lib/litter'
 import { useToday } from '../lib/use-today'
+import { ErrorCard } from './ErrorCard'
+import { LitterBoxForm } from './LitterBoxForm'
 
-export const Route = createFileRoute('/litter')({
-  component: LitterPage,
-  errorComponent: ({ error, reset }) => <ErrorCard error={error} onRetry={reset} />,
-})
-
-function LitterPage() {
+/**
+ * The boxs and the form that adds one: one column of the Chores page. On a
+ * phone the sections simply stack; from 768pt each takes a column.
+ */
+export function LitterSection() {
   const { householdId, canEdit } = useHousehold()
   const { user } = useAuth()
   const boxesQuery = useQuery(litterBoxesQueryOptions(householdId))
@@ -32,58 +30,52 @@ function LitterPage() {
 
   const uid = user?.uid ?? null
 
+  if (boxesQuery.isLoading) {
+    return <div className="page-solo h-24 animate-pulse rounded-squishy bg-sand" />
+  }
+  if (boxesQuery.isError) {
+    return (
+      <ErrorCard
+        title="Couldn't load litter boxes"
+        error={boxesQuery.error}
+        onRetry={() => {
+          void boxesQuery.refetch()
+        }}
+      />
+    )
+  }
+
   return (
-    <main className="flex flex-col gap-7 p-4">
-      <h1 className="page-title gutter">Litter</h1>
+    <div className="page-column">
+      <section className="flex flex-col gap-3">
+        <h2 className="section-label gutter">Litter boxes</h2>
+        {boxesQuery.data === undefined || boxesQuery.data.length === 0 ? (
+          <p className="gutter text-sm text-ink-soft">No litter boxes yet.</p>
+        ) : (
+          <ul className="surface divide-y divide-sand">
+            {boxesQuery.data.map((box) => (
+              <LitterBoxRow
+                key={box.id}
+                box={box}
+                today={today}
+                hid={householdId}
+                uid={uid}
+                canEdit={canEdit}
+              />
+            ))}
+          </ul>
+        )}
+      </section>
 
-      {boxesQuery.isLoading ? (
-        <div className="page-solo h-24 animate-pulse rounded-squishy bg-sand" />
-      ) : boxesQuery.isError ? (
-        <ErrorCard
-          title="Couldn't load litter boxes"
-          error={boxesQuery.error}
-          onRetry={() => {
-            void boxesQuery.refetch()
-          }}
-        />
-      ) : (
-        <div className="page-columns">
-          {/* Where each box stands. */}
-          <div className="page-column">
-            <section className="flex flex-col gap-3">
-              <h2 className="section-label gutter">Boxes</h2>
-              {boxesQuery.data === undefined || boxesQuery.data.length === 0 ? (
-                <p className="gutter text-sm text-ink-soft">No litter boxes yet.</p>
-              ) : (
-                <ul className="surface divide-y divide-sand">
-                  {boxesQuery.data.map((box) => (
-                    <LitterBoxRow
-                      key={box.id}
-                      box={box}
-                      today={today}
-                      hid={householdId}
-                      uid={uid}
-                      canEdit={canEdit}
-                    />
-                  ))}
-                </ul>
-              )}
-            </section>
+      {canEdit && uid !== null ? (
+        <section className="flex flex-col gap-3">
+          <h2 className="section-label gutter">Add litter box</h2>
+          <div className="surface p-4">
+            <LitterBoxForm hid={householdId} uid={uid} />
           </div>
-
-          {canEdit && uid !== null ? (
-            <div className="page-column">
-              <section className="flex flex-col gap-3">
-                <h2 className="section-label gutter">Add litter box</h2>
-                <div className="surface p-4">
-                  <LitterBoxForm hid={householdId} uid={uid} />
-                </div>
-              </section>
-            </div>
-          ) : null}
-        </div>
-      )}
-    </main>
+        </section>
+      ) : null}
+    </div>
   )
 }
 

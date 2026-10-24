@@ -9,7 +9,7 @@ test('litter boxes show their age in weeks and can be re-dated', async ({ page }
   test.setTimeout(180_000)
 
   await seedHousehold(page, { tag: `litter-${testInfo.project.name}` })
-  await tabBar(page).getByRole('link', { name: 'Litter' }).click()
+  await tabBar(page).getByRole('link', { name: 'Chores' }).click()
   await expect(page.getByTestId('litter-location')).toBeVisible(WAIT)
   await expect(page.getByText('No litter boxes yet.')).toBeVisible(WAIT)
 
@@ -34,7 +34,7 @@ test('litter boxes show their age in weeks and can be re-dated', async ({ page }
   await expect(glance).toContainText('5 weeks ago', WAIT)
   await expect(glance).toContainText('Due for a full clean')
   await glance.click()
-  await expect(page.getByRole('heading', { name: 'Litter', level: 1 })).toBeVisible(WAIT)
+  await expect(page.getByRole('heading', { name: 'Chores', level: 1 })).toBeVisible(WAIT)
 
   // A slower litter: a 6-week interval makes five weeks old no longer due.
   await box.getByRole('button', { name: 'Edit' }).click()

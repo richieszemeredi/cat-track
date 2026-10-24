@@ -22,7 +22,7 @@ import {
  * of on a 393pt screen — that is the class of bug this catches.
  */
 
-const PAGES = ['Home', 'Food', 'Weight', 'Water', 'Litter', 'Profile'] as const
+const PAGES = ['Home', 'Food', 'Weight', 'Chores', 'Profile'] as const
 
 // tests/e2e compiles under the node tsconfig (no DOM lib), so the browser
 // globals used inside page.evaluate are typed structurally here — same
@@ -289,9 +289,9 @@ test('every screen fits the viewport without sideways scroll', async ({
   // A second weigh-in a week back, so Home and Weight lay out the per-week
   // change instead of the shorter first-weigh-in line.
   await seedLastWeeksWeighIn(request, tag)
-  // A fresh box and an overdue one, so Litter lays out both of its states.
+  // A fresh box and an overdue one, so Chores lays out both litter states.
   await seedLitterBoxes(page)
-  // A fresh bowl and a stale one, so Water lays out both of its states.
+  // A fresh bowl and a stale one, so Chores lays out both water states.
   await seedWaterBowls(page, request, tag)
 
   const audit = async (name: (typeof PAGES)[number], shot: string) => {

@@ -100,11 +100,11 @@ export async function seedSecondCat(page: Page, name: string): Promise<void> {
 }
 
 /**
- * Two litter boxes — one fresh, one well past its four weeks — so the Litter
- * page lays out both its states. Leaves the page on Litter.
+ * Two litter boxes — one fresh, one well past its four weeks — so the Chores
+ * page lays out both litter states. Leaves the page on Chores.
  */
 export async function seedLitterBoxes(page: Page): Promise<void> {
-  await tabBar(page).getByRole('link', { name: 'Litter' }).click()
+  await tabBar(page).getByRole('link', { name: 'Chores' }).click()
   await expect(page.getByTestId('litter-location')).toBeVisible(WAIT)
 
   await page.getByTestId('litter-location').fill('Bathroom')
@@ -123,15 +123,15 @@ export async function seedLitterBoxes(page: Page): Promise<void> {
 
 /**
  * Two water bowls — one just filled, one left standing for two days — so the
- * Water page lays out both its states. The stale one is written straight to
- * the emulator: the UI only ever stamps "now". Leaves the page on Water.
+ * Chores page lays out both water states. The stale one is written straight to
+ * the emulator: the UI only ever stamps "now". Leaves the page on Chores.
  */
 export async function seedWaterBowls(
   page: Page,
   request: APIRequestContext,
   tag: string,
 ): Promise<void> {
-  await tabBar(page).getByRole('link', { name: 'Water' }).click()
+  await tabBar(page).getByRole('link', { name: 'Chores' }).click()
   await expect(page.getByTestId('water-location')).toBeVisible(WAIT)
 
   await page.getByTestId('water-location').fill('Kitchen')

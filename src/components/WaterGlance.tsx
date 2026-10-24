@@ -11,7 +11,7 @@ const MAX_ROWS = 3
 /**
  * The water bowls at a glance. Household-level like the litter boxes, so it
  * sits outside every cat's block. Read-only: marking one replaced happens on
- * /water, one tap away from any row.
+ * Chores, one tap away from any row.
  */
 export function WaterGlance() {
   const { householdId, canEdit } = useHousehold()
@@ -47,7 +47,7 @@ export function WaterGlance() {
       {bowls.length === 0 ? (
         <div className="gutter flex flex-col items-start gap-3">
           <p className="text-sm text-ink-soft">No water bowls yet.</p>
-          <Link to="/water" className="btn-secondary">
+          <Link to="/chores" className="btn-secondary">
             Add a water bowl
           </Link>
         </div>
@@ -57,7 +57,7 @@ export function WaterGlance() {
           {shown.map(({ bowl, age }) => (
             <li key={bowl.id}>
               <Link
-                to="/water"
+                to="/chores"
                 className="flex min-h-12 items-baseline gap-3 px-4 py-3 hover:bg-sand"
               >
                 <span className="min-w-0 flex-1">
@@ -75,7 +75,7 @@ export function WaterGlance() {
           {hidden > 0 ? (
             <li>
               <Link
-                to="/water"
+                to="/chores"
                 className="flex min-h-12 items-center px-4 py-3 text-sm text-ink-soft hover:bg-sand"
               >
                 {hidden} more {hidden === 1 ? 'bowl' : 'bowls'}
