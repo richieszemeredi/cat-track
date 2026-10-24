@@ -12,6 +12,7 @@ import {
 import { useHousehold } from '../lib/household'
 import { litterAge, litterAgeLabel, weeksLabel } from '../lib/litter'
 import { useToday } from '../lib/use-today'
+import { AddDisclosure } from './AddDisclosure'
 import { ErrorCard } from './ErrorCard'
 import { LitterBoxForm } from './LitterBoxForm'
 
@@ -68,12 +69,13 @@ export function LitterSection() {
       </section>
 
       {canEdit && uid !== null ? (
-        <section className="flex flex-col gap-3">
-          <h2 className="section-label gutter">Add litter box</h2>
-          <div className="surface p-4">
-            <LitterBoxForm hid={householdId} uid={uid} />
-          </div>
-        </section>
+        <AddDisclosure
+          label="Add litter box"
+          testId="litter-add-toggle"
+          defaultOpen={boxesQuery.data === undefined || boxesQuery.data.length === 0}
+        >
+          {(close) => <LitterBoxForm hid={householdId} uid={uid} onDone={close} />}
+        </AddDisclosure>
       ) : null}
     </div>
   )

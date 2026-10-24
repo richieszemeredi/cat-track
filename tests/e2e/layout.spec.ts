@@ -1,5 +1,6 @@
 import { expect, test, type Page } from '@playwright/test'
 import {
+  openAddForm,
   seedHousehold,
   seedLastWeeksWeighIn,
   seedLitterBoxes,
@@ -331,6 +332,13 @@ test('every screen fits the viewport without sideways scroll', async ({
   for (const name of PAGES) {
     await audit(name, name.toLowerCase())
   }
+
+  // Chores is audited above with both add forms folded away; open them so
+  // the forms themselves are measured too.
+  await tabBar(page).getByRole('link', { name: 'Chores' }).click()
+  await openAddForm(page, 'litter')
+  await openAddForm(page, 'water')
+  await audit('Chores', 'chores-add-forms')
 })
 
 test('the weigh-in form fields each get a full-width row', async ({ page }, testInfo) => {

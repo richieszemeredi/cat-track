@@ -100,6 +100,16 @@ export async function seedSecondCat(page: Page, name: string): Promise<void> {
 }
 
 /**
+ * Opens a Chores add form if it is collapsed. It starts open while its list is
+ * empty and closes itself after each save, so the state depends on the moment.
+ */
+export async function openAddForm(page: Page, kind: 'litter' | 'water'): Promise<void> {
+  if (await page.getByTestId(`${kind}-location`).first().isVisible()) return
+  await page.getByTestId(`${kind}-add-toggle`).click()
+  await expect(page.getByTestId(`${kind}-location`).first()).toBeVisible(WAIT)
+}
+
+/**
  * Two litter boxes — one fresh, one well past its four weeks — so the Chores
  * page lays out both litter states. Leaves the page on Chores.
  */
@@ -114,6 +124,7 @@ export async function seedLitterBoxes(page: Page): Promise<void> {
   // the server acks — typing the next one before that would be wiped.
   await expect(page.getByTestId('litter-location')).toHaveValue('', WAIT)
 
+  await openAddForm(page, 'litter')
   await page.getByTestId('litter-location').fill('Hallway behind the big wardrobe')
   // 38 days is five weeks whichever side of midnight UTC the local day falls.
   await page.getByTestId('litter-date').fill(daysAgoISO(38))

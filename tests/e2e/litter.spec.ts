@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test'
-import { daysAgoISO, seedHousehold, tabBar, WAIT } from './seed'
+import { daysAgoISO, openAddForm, seedHousehold, tabBar, WAIT } from './seed'
 
 /**
  * Litter boxes end to end: add one, see how old its last clean is in weeks,
@@ -13,12 +13,19 @@ test('litter boxes show their age in weeks and can be re-dated', async ({ page }
   await expect(page.getByTestId('litter-location')).toBeVisible(WAIT)
   await expect(page.getByText('No litter boxes yet.')).toBeVisible(WAIT)
 
+  // The form is open while there is nothing yet, and folds away once saved.
+  await expect(page.getByTestId('litter-add-toggle')).toBeVisible(WAIT)
   // Added with the date left at today: cleaned today, nothing due.
   await page.getByTestId('litter-location').fill('Bathroom')
   await page.getByTestId('litter-save').click()
   const box = page.getByRole('listitem').filter({ hasText: 'Bathroom' })
   await expect(box.getByText('Today', { exact: true })).toBeVisible(WAIT)
   await expect(box.getByRole('button', { name: 'Replaced today' })).toBeDisabled()
+  await expect(page.getByTestId('litter-location')).toBeHidden()
+  await openAddForm(page, 'litter')
+  await expect(page.getByTestId('litter-location')).toBeVisible()
+  await page.getByTestId('litter-add-toggle').click()
+  await expect(page.getByTestId('litter-location')).toBeHidden()
   await expect(page.getByText('Due for a full clean')).toHaveCount(0)
 
   // A clean-out nobody logged: edit the date back to five weeks ago.

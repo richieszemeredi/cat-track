@@ -12,6 +12,7 @@ import {
 import { useHousehold } from '../lib/household'
 import { useNow } from '../lib/use-now'
 import { waterAge, waterAgeLabel } from '../lib/water'
+import { AddDisclosure } from './AddDisclosure'
 import { ErrorCard } from './ErrorCard'
 import { WaterBowlForm } from './WaterBowlForm'
 
@@ -66,12 +67,13 @@ export function WaterSection() {
       </section>
 
       {canEdit && uid !== null ? (
-        <section className="flex flex-col gap-3">
-          <h2 className="section-label gutter">Add water bowl</h2>
-          <div className="surface p-4">
-            <WaterBowlForm hid={householdId} uid={uid} />
-          </div>
-        </section>
+        <AddDisclosure
+          label="Add water bowl"
+          testId="water-add-toggle"
+          defaultOpen={bowlsQuery.data === undefined || bowlsQuery.data.length === 0}
+        >
+          {(close) => <WaterBowlForm hid={householdId} uid={uid} onDone={close} />}
+        </AddDisclosure>
       ) : null}
     </div>
   )

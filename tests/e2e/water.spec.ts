@@ -17,6 +17,8 @@ test('water bowls show when the water was last replaced', async ({ page }, testI
   await page.getByTestId('water-save').click()
   const bowl = page.getByRole('listitem').filter({ hasText: 'Kitchen' })
   await expect(bowl.getByText('Just now')).toBeVisible(WAIT)
+  // Once there is a bowl the add form folds away.
+  await expect(page.getByTestId('water-location')).toBeHidden(WAIT)
   await expect(page.getByText('Time for fresh water')).toHaveCount(0)
 
   // Home shows the same bowl at a glance, and a tap goes to Water.
