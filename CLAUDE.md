@@ -70,8 +70,14 @@ not in a pile-up.
   profile without a Cloud Function the Spark tier doesn't have — so `addMember` writes a
   placeholder name that self-corrects the moment the invited member's own client loads.
 - `src/lib/household.tsx` — `useHousehold()`: `householdId`, `role`, `canEdit`, `cats`,
-  `activeCat` (MVP is single-cat = first created). Viewers (`role: 'viewer'`) must not see
-  mutating UI.
+  `activeCat`, `selectCat`. Viewers (`role: 'viewer'`) must not see mutating UI.
+- Several cats per household: `activeCat` is the cat chosen on THIS device (localStorage per
+  household, `selected-cat.ts`; never Firestore — what one phone is looking at says nothing
+  about the other), else the first created. `/food`, `/weight` and `/profile` show it, with
+  a `CatSwitcher` of name chips that exists only from two cats, and key their body by cat
+  id so a half-typed form never carries over. Home is meant to show every cat, not the
+  selected one. Cats are added from Profile ("Add another cat"); removing one is not built
+  (it would orphan the cat's weights, foods and plans).
 - `src/lib/catmath.ts` — pure, unit-tested RER/MER/growth-band math. Sanity anchor:
   5 kg neutered adult → RER ≈ 234, MER ≈ 281 kcal/day. Any UI showing derived calories
   needs the "Estimates only — always confirm with your vet." disclaimer.
