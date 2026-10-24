@@ -57,6 +57,12 @@ export async function seedHousehold(page: Page, options: SeedOptions): Promise<v
 
   await tabBar(page).getByRole('link', { name: 'Food' }).click()
   await expect(page.getByTestId('food-add-open')).toBeVisible(WAIT)
+  // The button is there before the page has loaded, and it moves when the
+  // plan section fills in above it (a few lines of text and a button replace a
+  // short placeholder), so a press that lands in between hits empty space.
+  // The plan and the catalog resolve independently; wait for both.
+  await expect(page.getByTestId('plan-setup')).toBeVisible(WAIT)
+  await expect(page.getByText('No foods yet — add one before setting her plan.')).toBeVisible(WAIT)
   await page.getByTestId('food-add-open').click()
   await page.getByTestId('food-name').fill('Test Kibble with a fairly long name')
   await page.getByTestId('food-type').selectOption('dry')
