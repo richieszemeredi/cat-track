@@ -63,6 +63,11 @@ export async function seedHousehold(page: Page, options: SeedOptions): Promise<v
   await page.getByTestId('food-kcal-per-gram').fill('3.5')
   await page.getByTestId('food-save').click()
 
+  // The plan form only picks a food up if it is already in the catalog when it
+  // opens; one that arrives afterwards leaves "Pick a food" selected and the
+  // plan unsavable.
+  await expect(page.getByText('Test Kibble with a fairly long name')).toBeVisible(WAIT)
+
   // 69 g a day of a 3.5 kcal/g food is 242 kcal — near enough this kitten's
   // 237 kcal target that the "she's outgrown this" nudge stays quiet.
   await expect(page.getByTestId('plan-setup')).toBeVisible(WAIT)
