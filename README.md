@@ -126,7 +126,9 @@ reports and coverage are uploaded as artifacts.
 
 After a green quality job:
 
-- **push to `main`** → deploys to the **live** Hosting channel
+- **push to `main`** → deploys `firestore.rules`, then the **live** Hosting channel (indexes stay
+  manual). The service account needs the **Firebase Rules Admin** role (Cloud Console → IAM) on
+  top of what `init hosting:github` grants
 - **pull request** → deploys a **preview channel** (30-day expiry), URL commented on the PR
 
 The deploy jobs **fail until you configure the repo** (this is expected on a fresh clone):

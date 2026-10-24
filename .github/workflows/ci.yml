@@ -92,12 +92,42 @@ jobs:
           path: coverage/
           if-no-files-found: ignore
 
+  # Firestore rules go live BEFORE the Hosting bundle that relies on them, so a
+  # new field is never written against rules that still deny it. Rules only:
+  # indexes stay manual. The service account behind the secret needs the
+  # "Firebase Rules Admin" role on top of what Hosting deploys require.
+  deploy_rules:
+    name: Deploy Firestore rules
+    needs: quality
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Deploy rules
+        run: |
+          printf '%s' "$FIREBASE_SERVICE_ACCOUNT" > "$RUNNER_TEMP/sa.json"
+          GOOGLE_APPLICATION_CREDENTIALS="$RUNNER_TEMP/sa.json" \
+            npx firebase deploy --only firestore:rules --project cattrack-8aa49
+        env:
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_CATTRACK_8AA49 }}
+
   # Live deploy on every push to main. Secrets cannot be referenced in job-level
   # `if:` expressions, so this job simply fails until FIREBASE_SERVICE_ACCOUNT
   # and FIREBASE_PROJECT_ID are configured (documented in the README).
   deploy_live:
     name: Deploy to live channel
-    needs: quality
+    needs: [quality, deploy_rules]
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
     runs-on: ubuntu-latest
     continue-on-error: false

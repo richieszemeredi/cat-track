@@ -35,14 +35,13 @@ not in a pile-up.
   unit, the production build, rules and e2e, so a manual rerun right before `git push` (including after a rebase
   onto an unrelated upstream commit) only duplicates it. Verifying before each _commit_ is
   still on you: the pre-commit hook only runs lint-staged.
-- **CI deploys Hosting; nothing else.** `.github/workflows/ci.yml` runs every gate (lint,
-  typecheck, unit, rules, e2e, build, audit) on each push and PR, and only then deploys: a push
-  to `main` goes live on Firebase Hosting, a PR gets a 30-day preview channel. So never run
-  `firebase deploy --only hosting` by hand — it skips the gates; a push is the deploy. CI does
-  **not** deploy `firestore.rules` or indexes. Those stay a manual, ask-first
-  `npx firebase deploy --only firestore:rules` (against the real `cattrack-8aa49`), and a
-  change that needs new rules must have them deployed before the push lands, or the live app
-  gets writes denied until they are.
+- **CI deploys Firestore rules and Hosting; nothing else.** `.github/workflows/ci.yml` runs
+  every gate (lint, typecheck, unit, rules, e2e, build, audit) on each push and PR, and only then
+  deploys: a push to `main` deploys `firestore.rules` first, then goes live on Firebase Hosting; a
+  PR gets a 30-day Hosting preview channel (rules are never deployed from a PR). So never run
+  `firebase deploy` for rules or hosting by hand — it skips the gates; a push is the deploy.
+  CI does **not** deploy `firestore.indexes.json`; that stays a manual, ask-first
+  `npx firebase deploy --only firestore:indexes` (against the real `cattrack-8aa49`).
 - When a chunk of work touches the same files for two different asks (e.g. two features
   both editing `plan.ts`), split by content, not just by file: stage only the hunks for the
   change being committed. A later ask's edits to an already-committed file are their own
