@@ -290,22 +290,19 @@ test('every screen fits the viewport without sideways scroll', async ({
   await seedLastWeeksWeighIn(request, tag)
   // A fresh box and an overdue one, so Litter lays out both of its states.
   await seedLitterBoxes(page)
-  // A second cat with a long name, so the switcher chips are laid out — and
-  // measured by every check below — on the screens that carry them.
-  await seedSecondCat(page, 'Princess Fluffington the Third')
 
-  for (const name of PAGES) {
+  const audit = async (name: (typeof PAGES)[number], shot: string) => {
     await tabBar(page).getByRole('link', { name }).click()
     await expect(page.getByRole('heading', { level: 1 })).toBeVisible(WAIT)
     // Recharts measures its container on a frame; give the chart one.
     await page.waitForTimeout(500)
 
-    await testInfo.attach(`${testInfo.project.name}-${name}`, {
+    await testInfo.attach(`${testInfo.project.name}-${shot}`, {
       body: await page.screenshot({ fullPage: true }),
       contentType: 'image/png',
     })
     await page.screenshot({
-      path: `test-results/screenshots/${testInfo.project.name}-${name.toLowerCase()}.png`,
+      path: `test-results/screenshots/${testInfo.project.name}-${shot}.png`,
       fullPage: true,
     })
 
@@ -316,6 +313,18 @@ test('every screen fits the viewport without sideways scroll', async ({
     expect(await textColumnMisalignments(page), `${name} has a ragged text column`).toEqual([])
     expect(await columnProblems(page), `${name} columns`).toEqual([])
     expect(await navProblems(page), `${name} main nav`).toEqual([])
+  }
+
+  // Home with one cat is the big-number layout; with several it is one compact
+  // block each, so it is audited in both shapes.
+  await audit('Home', 'home-single')
+
+  // A second cat with a long name, so the switcher chips and the compact home
+  // blocks are laid out — and measured by every check — with the longest label.
+  await seedSecondCat(page, 'Princess Fluffington the Third')
+
+  for (const name of PAGES) {
+    await audit(name, name.toLowerCase())
   }
 })
 

@@ -28,6 +28,14 @@ test('litter boxes show their age in weeks and can be re-dated', async ({ page }
   await expect(box.getByText('5 weeks ago')).toBeVisible(WAIT)
   await expect(box.getByText('Due for a full clean')).toBeVisible(WAIT)
 
+  // Home shows the same box at a glance, overdue first, and a tap goes to Litter.
+  await tabBar(page).getByRole('link', { name: 'Home' }).click()
+  const glance = page.getByRole('link', { name: /Bathroom/ })
+  await expect(glance).toContainText('5 weeks ago', WAIT)
+  await expect(glance).toContainText('Due for a full clean')
+  await glance.click()
+  await expect(page.getByRole('heading', { name: 'Litter', level: 1 })).toBeVisible(WAIT)
+
   // A slower litter: a 6-week interval makes five weeks old no longer due.
   await box.getByRole('button', { name: 'Edit' }).click()
   await box.getByTestId('litter-interval').selectOption('6')

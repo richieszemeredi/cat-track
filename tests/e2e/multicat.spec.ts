@@ -45,7 +45,21 @@ test('the switcher moves Food, Weight and Profile between cats', async ({ page }
   await page.reload()
   await expect(page.getByRole('heading', { name: 'Biscuit' })).toBeVisible(WAIT)
 
+  // Home shows every cat at once, whichever one is selected.
+  await tabBar(page).getByRole('link', { name: 'Home' }).click()
+  await expect(page.getByRole('heading', { name: 'Home', level: 1 })).toBeVisible(WAIT)
+  const mochi = page
+    .locator('section')
+    .filter({ has: page.getByRole('heading', { name: /^Mochi/ }) })
+  const biscuit = page
+    .locator('section')
+    .filter({ has: page.getByRole('heading', { name: /^Biscuit/ }) })
+  await expect(mochi).toContainText('0 of 3', WAIT)
+  await expect(mochi).toContainText('1.50 kg')
+  await expect(biscuit).toContainText('No weigh-ins yet', WAIT)
+
   // Back to Mochi: her plan and weight return.
+  await tabBar(page).getByRole('link', { name: 'Profile' }).click()
   await switcher.getByRole('button', { name: 'Mochi' }).click()
   await tabBar(page).getByRole('link', { name: 'Food' }).click()
   await expect(page.getByTestId('today-meals')).toHaveText('0 of 3', WAIT)
