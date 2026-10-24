@@ -1,5 +1,4 @@
 import { Link } from '@tanstack/react-router'
-import { PawMark } from './PawMark'
 
 // Emoji earn their place here and nowhere else: in a bottom bar they are
 // wayfinding you hit with a thumb, not decoration on a heading.
@@ -25,7 +24,9 @@ export function TabBar() {
       className="fixed inset-x-0 bottom-0 border-t border-sand bg-surface/90 pr-[env(safe-area-inset-right)] pb-[env(safe-area-inset-bottom)] pl-[env(safe-area-inset-left)] backdrop-blur lg:top-0 lg:right-auto lg:w-[calc(6rem+env(safe-area-inset-left))] lg:border-t-0 lg:border-r lg:pt-[env(safe-area-inset-top)] lg:pr-0"
     >
       <div className="mx-auto flex max-w-lg items-stretch justify-around lg:flex-col lg:justify-start lg:gap-2 lg:py-6">
-        <PawMark className="mx-auto mb-4 hidden h-9 w-9 text-coral lg:block" />
+        <span aria-hidden="true" className="mb-4 hidden text-center text-4xl leading-none lg:block">
+          🐈
+        </span>
         {TABS.map((tab) => (
           <Link
             key={tab.to}
