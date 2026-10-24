@@ -22,6 +22,7 @@ export default defineConfig(
       'dist',
       'dev-dist',
       'coverage',
+      'scripts',
       'node_modules',
       'playwright-report',
       'test-results',
