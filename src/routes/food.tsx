@@ -2,6 +2,7 @@ import { useQueries, useQuery } from '@tanstack/react-query'
 import { createFileRoute, Link } from '@tanstack/react-router'
 import { format, isSameDay, isValid, parse } from 'date-fns'
 import { useState, type SubmitEvent } from 'react'
+import { CatSwitcher } from '../components/CatSwitcher'
 import { ErrorCard } from '../components/ErrorCard'
 import { FoodForm } from '../components/FoodForm'
 import { LogMealForm } from '../components/LogMealForm'
@@ -106,7 +107,7 @@ function FoodPage() {
     )
   }
 
-  return <FoodContent cat={activeCat} />
+  return <FoodContent key={activeCat.id} cat={activeCat} />
 }
 
 function FoodContent({ cat }: { cat: Cat }) {
@@ -344,6 +345,7 @@ function FoodContent({ cat }: { cat: Cat }) {
   return (
     <main className="flex flex-col gap-7 p-4">
       <h1 className="page-title gutter">Food</h1>
+      <CatSwitcher />
 
       <div className="page-columns">
         {/* Today: how far through the plan she is, and what is left to give. */}

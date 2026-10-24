@@ -2,6 +2,7 @@ import { useQuery } from '@tanstack/react-query'
 import { createFileRoute, Link } from '@tanstack/react-router'
 import { differenceInDays, format } from 'date-fns'
 import { useState } from 'react'
+import { CatSwitcher } from '../components/CatSwitcher'
 import { ErrorCard } from '../components/ErrorCard'
 import { GrowthChart } from '../components/GrowthChart'
 import { WeighForm } from '../components/WeighForm'
@@ -29,12 +30,19 @@ function WeightPage() {
   return (
     <main className="flex flex-col gap-7 p-4">
       <h1 className="page-title gutter">Weight</h1>
+      <CatSwitcher />
       {catsLoading ? (
         <div className="page-solo h-24 animate-pulse rounded-squishy bg-sand" />
       ) : activeCat === null ? (
         <NoCatCard />
       ) : (
-        <WeightBody hid={householdId} cat={activeCat} canEdit={canEdit} uid={user?.uid ?? null} />
+        <WeightBody
+          key={activeCat.id}
+          hid={householdId}
+          cat={activeCat}
+          canEdit={canEdit}
+          uid={user?.uid ?? null}
+        />
       )}
     </main>
   )

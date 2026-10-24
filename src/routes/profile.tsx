@@ -2,6 +2,7 @@ import { useQuery } from '@tanstack/react-query'
 import { createFileRoute } from '@tanstack/react-router'
 import { useState, type ReactNode, type SubmitEvent } from 'react'
 import { CatForm } from '../components/CatForm'
+import { CatSwitcher } from '../components/CatSwitcher'
 import { ErrorCard } from '../components/ErrorCard'
 import { signOutUser, useAuth } from '../lib/auth'
 import { ageLabelLong, LIFE_STAGE_LABELS, MER_MULTIPLIERS } from '../lib/catmath'
@@ -37,6 +38,7 @@ function ProfilePage() {
   return (
     <main className="flex flex-col gap-7 p-4">
       <h1 className="page-title gutter">Profile</h1>
+      <CatSwitcher />
 
       <div className="page-columns">
         {/* Her. */}
@@ -46,7 +48,13 @@ function ProfilePage() {
           ) : activeCat === null ? (
             <NoCatCard canEdit={canEdit} hid={householdId} uid={user.uid} />
           ) : (
-            <CatCard cat={activeCat} canEdit={canEdit} hid={householdId} uid={user.uid} />
+            <CatCard
+              key={activeCat.id}
+              cat={activeCat}
+              canEdit={canEdit}
+              hid={householdId}
+              uid={user.uid}
+            />
           )}
         </div>
 
