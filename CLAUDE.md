@@ -75,8 +75,11 @@ not in a pile-up.
   household, `selected-cat.ts`; never Firestore — what one phone is looking at says nothing
   about the other), else the first created. `/food`, `/weight` and `/profile` show it, with
   a `CatSwitcher` of name chips that exists only from two cats, and key their body by cat
-  id so a half-typed form never carries over. Home is meant to show every cat, not the
-  selected one. Cats are added from Profile ("Add another cat"); removing one is not built
+  id so a half-typed form never carries over. Home shows every cat, not the
+  selected one (`CatToday`: the big-number `full` view for one cat, a `compact` block
+  each from two), then the household's litter boxes once (`LitterGlance`, read-only, outside
+  every cat's block). It deliberately has no food list and no shortcut buttons — the tab bar
+  is the navigation. Cats are added from Profile ("Add another cat"); removing one is not built
   (it would orphan the cat's weights, foods and plans).
 - `src/lib/catmath.ts` — pure, unit-tested RER/MER/growth-band math. Sanity anchor:
   5 kg neutered adult → RER ≈ 234, MER ≈ 281 kcal/day. Any UI showing derived calories
