@@ -4,6 +4,7 @@ import {
   seedLastWeeksWeighIn,
   seedLitterBoxes,
   seedPreviousPlan,
+  seedSecondCat,
   tabBar,
   WAIT,
 } from './seed'
@@ -289,6 +290,9 @@ test('every screen fits the viewport without sideways scroll', async ({
   await seedLastWeeksWeighIn(request, tag)
   // A fresh box and an overdue one, so Litter lays out both of its states.
   await seedLitterBoxes(page)
+  // A second cat with a long name, so the switcher chips are laid out — and
+  // measured by every check below — on the screens that carry them.
+  await seedSecondCat(page, 'Princess Fluffington the Third')
 
   for (const name of PAGES) {
     await tabBar(page).getByRole('link', { name }).click()

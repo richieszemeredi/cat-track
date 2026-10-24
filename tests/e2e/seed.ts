@@ -74,6 +74,23 @@ export async function seedHousehold(page: Page, options: SeedOptions): Promise<v
 }
 
 /**
+ * A second cat, added the way a person would: through the "Add another cat"
+ * section on Profile. Leaves the page on Profile. Mochi stays the active cat —
+ * adding one does not switch to it.
+ */
+export async function seedSecondCat(page: Page, name: string): Promise<void> {
+  await tabBar(page).getByRole('link', { name: 'Profile' }).click()
+  await page.getByText('Add another cat', { exact: true }).click()
+  await page.getByTestId('cat-name').last().fill(name)
+  await page.getByTestId('cat-birthdate').last().fill(daysAgoISO(400))
+  await page.getByTestId('cat-sex').last().selectOption('male')
+  await page.getByTestId('cat-save').last().click()
+  // The switcher only exists once there are two cats, so its chip is the
+  // proof the write landed.
+  await expect(page.getByRole('button', { name, exact: true })).toBeVisible(WAIT)
+}
+
+/**
  * Two litter boxes — one fresh, one well past its four weeks — so the Litter
  * page lays out both its states. Leaves the page on Litter.
  */
