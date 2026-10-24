@@ -52,7 +52,9 @@ export function LitterGlance() {
           </Link>
         </div>
       ) : (
-        <ul className="surface divide-y divide-sand">
+        // The rows' hover fill must follow the card's corners; clipping the card
+        // with overflow-hidden would also cut off the keyboard focus ring.
+        <ul className="surface divide-y divide-sand [&>li:first-child>a]:rounded-t-squishy [&>li:last-child>a]:rounded-b-squishy">
           {shown.map(({ box, age }) => (
             <li key={box.id}>
               <Link
