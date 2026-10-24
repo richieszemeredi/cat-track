@@ -32,7 +32,7 @@ not in a pile-up.
   locally; it does not imply `git push` or `firebase deploy`.
 - **Don't hand-run the suite before a push.** `.husky/pre-push` already runs `npm audit`
   (first, since it is the cheapest and fails on advisories rather than on code), lint, typecheck,
-  unit, rules and e2e, so a manual rerun right before `git push` (including after a rebase
+  unit, the production build, rules and e2e, so a manual rerun right before `git push` (including after a rebase
   onto an unrelated upstream commit) only duplicates it. Verifying before each _commit_ is
   still on you: the pre-commit hook only runs lint-staged.
 - **CI deploys Hosting; nothing else.** `.github/workflows/ci.yml` runs every gate (lint,
