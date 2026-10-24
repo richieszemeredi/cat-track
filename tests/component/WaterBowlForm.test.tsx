@@ -30,6 +30,13 @@ const EXISTING: WaterBowl = {
   createdAt: new Date(2026, 8, 1),
 }
 
+function setWhen(date: string, time: string): void {
+  // userEvent cannot type into date/time inputs; change events are how the
+  // pickers report values anyway.
+  fireEvent.change(screen.getByLabelText('Water last replaced'), { target: { value: date } })
+  fireEvent.change(screen.getByLabelText('At'), { target: { value: time } })
+}
+
 beforeEach(() => {
   addWaterBowlMock.mockReset().mockResolvedValue(undefined)
   updateWaterBowlMock.mockReset().mockResolvedValue(undefined)
@@ -109,5 +116,36 @@ describe('WaterBowlForm', () => {
     render(<WaterBowlForm hid="hh-1" uid="user-1" />)
 
     expect(screen.queryByRole('button', { name: 'Delete water bowl' })).not.toBeInTheDocument()
+  })
+
+  it('saves a backdated time as LOCAL time when the fields were edited', async () => {
+    const user = userEvent.setup()
+    render(<WaterBowlForm hid="hh-1" uid="user-1" existing={EXISTING} />)
+
+    expect(screen.getByLabelText('Water last replaced')).toHaveValue('2026-09-01')
+    expect(screen.getByLabelText('At')).toHaveValue('08:30')
+
+    setWhen('2026-09-02', '07:15')
+    await user.click(screen.getByTestId('water-save'))
+
+    const patch = updateWaterBowlMock.mock.calls[0]?.[2]
+    const at = patch?.lastChangedAt
+    expect(at?.getTime()).toBe(new Date(2026, 8, 2, 7, 15).getTime())
+  })
+
+  it('backdates a new bowl too, and refuses a time in the future', async () => {
+    const user = userEvent.setup()
+    render(<WaterBowlForm hid="hh-1" uid="user-1" />)
+    await user.type(screen.getByTestId('water-location'), 'Kitchen')
+
+    setWhen('2999-01-01', '07:00')
+    await user.click(screen.getByTestId('water-save'))
+    expect(screen.getByRole('alert')).toHaveTextContent("That time hasn't happened yet.")
+    expect(addWaterBowlMock).not.toHaveBeenCalled()
+
+    setWhen('2026-01-05', '06:45')
+    await user.click(screen.getByTestId('water-save'))
+    const input = addWaterBowlMock.mock.calls[0]?.[2]
+    expect(input?.lastChangedAt.getTime()).toBe(new Date(2026, 0, 5, 6, 45).getTime())
   })
 })

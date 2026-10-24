@@ -123,8 +123,9 @@ not in a pile-up.
   differences: it is a full timestamp and the age is ELAPSED HOURS (`useNow`, a minute tick —
   `useToday` only moves at midnight), and the stale limit is one fixed 24 h, not per bowl.
   Both live on ONE tab, `/chores` (a section per column from 768pt; the tab bar stayed at five).
-  The UI can only stamp "now" (or the creation time), so a backdated bowl is seeded through the
-  emulator REST API in the layout spec. No reminders: the screen is the reminder.
+  Like a litter box, the date AND time are editable (separate date and time inputs) for the
+  morning-rush case of refilling the bowl without logging it; untouched, a new bowl takes the time
+  of the save. No reminders: the screen is the reminder.
 - Data model: `households/{hid}/members/{uid}` (roles owner|editor|viewer, source of truth
   for access) and `households/{hid}/cats/{catId}/{weights|foods|feedings|plans}` — append-only
   log docs so two phones never clobber each other. `plans/{planId}/items/{itemId}` holds the

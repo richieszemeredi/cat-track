@@ -1,10 +1,9 @@
 import { expect, test } from '@playwright/test'
-import { seedHousehold, tabBar, WAIT } from './seed'
+import { daysAgoISO, seedHousehold, tabBar, WAIT } from './seed'
 
 /**
- * Water bowls end to end: add one, see it fresh, rename it, mark the water
- * replaced, and delete it. (The stale state needs a backdated write the UI
- * can't make; the layout spec seeds it, and the unit tests pin the hours.)
+ * Water bowls end to end: add one, see it fresh, rename it, correct the time
+ * after a missed log, mark the water replaced, and delete it.
  */
 test('water bowls show when the water was last replaced', async ({ page }, testInfo) => {
   test.setTimeout(180_000)
@@ -32,6 +31,13 @@ test('water bowls show when the water was last replaced', async ({ page }, testI
   await bowl.getByTestId('water-save').click()
   const renamed = page.getByRole('listitem').filter({ hasText: 'Pantry' })
   await expect(renamed).toBeVisible(WAIT)
+
+  // A refill nobody logged: edit the date back a couple of days, and it is overdue.
+  await renamed.getByRole('button', { name: 'Edit' }).click()
+  await renamed.getByTestId('water-date').fill(daysAgoISO(2))
+  await renamed.getByTestId('water-save').click()
+  await expect(renamed.getByText(/\d days ago/)).toBeVisible(WAIT)
+  await expect(renamed.getByText('Time for fresh water')).toBeVisible(WAIT)
 
   await renamed.getByRole('button', { name: 'Replaced now' }).click()
   await expect(renamed.getByText('Just now')).toBeVisible(WAIT)
