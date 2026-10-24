@@ -27,8 +27,10 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  quality:
-    name: Quality gates
+  # The gates run as parallel jobs; `quality` below joins them so the deploy
+  # jobs (and any branch protection) have one name to wait on.
+  checks:
+    name: Lint, types, unit, build
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -46,43 +48,16 @@ jobs:
       - name: Lint
         run: npm run lint
 
-      - name: Typecheck
-        run: npm run typecheck
+      # `build` runs `tsc -b --noEmit` itself, so there is no separate
+      # typecheck step here.
+      - name: Build
+        run: npm run build
 
       - name: Unit + component tests (with coverage)
         run: npm run test
 
-      # test:rules and test:e2e wrap `firebase emulators:exec`; the Firestore
-      # emulator needs a JDK on the runner.
-      - uses: actions/setup-java@v6
-        with:
-          distribution: temurin
-          java-version: 21
-
-      # E2E runs on Safari (iPhone 14 Pro, WebKit) and Chrome (Pixel 7) —
-      # install webkit plus chromium.
-      - name: Install Playwright browsers
-        run: npx playwright install --with-deps webkit chromium
-
-      - name: Firestore security rules tests
-        run: npm run test:rules
-
-      - name: End-to-end tests (iPhone viewport)
-        run: npm run test:e2e
-
-      - name: Build
-        run: npm run build
-
       - name: Audit dependencies
         run: npm audit --audit-level=high
-
-      - name: Upload Playwright report
-        if: always()
-        uses: actions/upload-artifact@v7
-        with:
-          name: playwright-report
-          path: playwright-report/
-          if-no-files-found: ignore
 
       - name: Upload coverage
         if: always()
@@ -91,6 +66,111 @@ jobs:
           name: coverage
           path: coverage/
           if-no-files-found: ignore
+
+  # test:rules wraps `firebase emulators:exec`; the Firestore emulator needs a
+  # JDK on the runner.
+  rules:
+    name: Firestore security rules tests
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+
+      - uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: 21
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Firestore security rules tests
+        run: npm run test:rules
+
+  # E2E runs on Safari (WebKit) and Chrome (Chromium), split across runners —
+  # each has its own emulator, so the shards cannot interfere — and each
+  # installs only the browser it needs.
+  e2e:
+    name: E2E (${{ matrix.name }})
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: Safari iPhone 14 Pro
+            browser: webkit
+            projects: --project=safari-iphone-14-pro
+          - name: Safari layout (12 mini, iPads)
+            browser: webkit
+            projects: --project=safari-iphone-12-mini --project=safari-ipad-mini --project=safari-ipad-pro-landscape
+          - name: Chrome
+            browser: chromium
+            projects: --project=chrome-phone --project=chrome-desktop
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+
+      - uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: 21
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Resolve Playwright version
+        id: pw
+        run: echo "version=$(npx playwright --version | awk '{print $2}')" >> "$GITHUB_OUTPUT"
+
+      - name: Cache Playwright browsers
+        id: pw-cache
+        uses: actions/cache@v6
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ steps.pw.outputs.version }}-${{ matrix.browser }}
+
+      - name: Install Playwright browser
+        if: steps.pw-cache.outputs.cache-hit != 'true'
+        run: npx playwright install --with-deps ${{ matrix.browser }}
+
+      # The cache holds the browser, not the system libraries it links against.
+      - name: Install Playwright system dependencies
+        if: steps.pw-cache.outputs.cache-hit == 'true'
+        run: npx playwright install-deps ${{ matrix.browser }}
+
+      # Not `npm run test:e2e`: the projects flag has to land inside the quoted
+      # playwright command that emulators:exec runs.
+      - name: End-to-end tests
+        run: >
+          npx firebase emulators:exec --only auth,firestore --project demo-cattrack
+          "playwright test ${{ matrix.projects }}"
+
+      - name: Upload Playwright report
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: playwright-report-${{ matrix.browser }}-${{ strategy.job-index }}
+          path: playwright-report/
+          if-no-files-found: ignore
+
+  quality:
+    name: Quality gates
+    needs: [checks, rules, e2e]
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "All gates passed"
 
   # Firestore rules go live BEFORE the Hosting bundle that relies on them, so a
   # new field is never written against rules that still deny it. Rules only:
