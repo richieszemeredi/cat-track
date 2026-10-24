@@ -108,9 +108,12 @@ jobs:
           - name: Safari iPhone 14 Pro
             browser: webkit
             projects: --project=safari-iphone-14-pro
-          - name: Safari layout (12 mini, iPads)
+          - name: Safari layout (12 mini, iPad mini)
             browser: webkit
-            projects: --project=safari-iphone-12-mini --project=safari-ipad-mini --project=safari-ipad-pro-landscape
+            projects: --project=safari-iphone-12-mini --project=safari-ipad-mini
+          - name: Safari layout (iPad Pro)
+            browser: webkit
+            projects: --project=safari-ipad-pro-landscape
           - name: Chrome
             browser: chromium
             projects: --project=chrome-phone --project=chrome-desktop
@@ -202,18 +205,15 @@ jobs:
         env:
           FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_CATTRACK_8AA49 }}
 
-  # Live deploy on every push to main. Secrets cannot be referenced in job-level
-  # `if:` expressions, so this job simply fails until FIREBASE_SERVICE_ACCOUNT
-  # and FIREBASE_PROJECT_ID are configured (documented in the README).
-  deploy_live:
-    name: Deploy to live channel
-    needs: [quality, deploy_rules]
+  # The production bundle is built while the rules deploy runs, so the live
+  # deploy only has to wait for the rules and then upload.
+  build_live:
+    name: Build live bundle
+    needs: quality
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
     runs-on: ubuntu-latest
-    continue-on-error: false
     permissions:
       contents: read
-      checks: write
     steps:
       - uses: actions/checkout@v7
 
@@ -234,6 +234,35 @@ jobs:
           VITE_FIREBASE_STORAGE_BUCKET: ${{ vars.VITE_FIREBASE_STORAGE_BUCKET }}
           VITE_FIREBASE_MESSAGING_SENDER_ID: ${{ vars.VITE_FIREBASE_MESSAGING_SENDER_ID }}
           VITE_FIREBASE_APP_ID: ${{ vars.VITE_FIREBASE_APP_ID }}
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: live-dist
+          path: dist/
+          if-no-files-found: error
+          retention-days: 1
+
+  # Live deploy on every push to main. Secrets cannot be referenced in job-level
+  # `if:` expressions, so this job simply fails until FIREBASE_SERVICE_ACCOUNT
+  # and FIREBASE_PROJECT_ID are configured (documented in the README).
+  deploy_live:
+    name: Deploy to live channel
+    needs: [build_live, deploy_rules]
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    runs-on: ubuntu-latest
+    continue-on-error: false
+    permissions:
+      contents: read
+      checks: write
+    steps:
+      # firebase.json (hosting config) comes from the checkout; the bundle is
+      # the one build_live made.
+      - uses: actions/checkout@v7
+
+      - uses: actions/download-artifact@v8
+        with:
+          name: live-dist
+          path: dist
 
       - uses: FirebaseExtended/action-hosting-deploy@v0
         with:
