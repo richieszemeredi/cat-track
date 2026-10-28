@@ -61,9 +61,12 @@ export function TabBar() {
                       className="absolute inset-0 rounded-full bg-coral-soft"
                     />
                   ) : null}
-                  {/* Positioned so it paints above the pill, which is too. */}
+                  {/* Above every pill, not just this tab's: the pill lives in
+                  one tab and slides across the others, and in tree order a
+                  later tab's pill would paint over an earlier tab's emoji on
+                  its way past. The nav (fixed) keeps this z-index local. */}
                   <span
-                    className={`relative transition-opacity duration-200 ease-squishy ${isActive ? '' : 'opacity-60'}`}
+                    className={`relative z-10 transition-opacity duration-200 ease-squishy ${isActive ? '' : 'opacity-60'}`}
                   >
                     {tab.emoji}
                   </span>

@@ -50,7 +50,12 @@ export function CatSwitcher() {
   }
 
   return (
-    <div ref={groupRef} role="group" aria-label="Cat" className="gutter flex flex-wrap gap-2">
+    <div
+      ref={groupRef}
+      role="group"
+      aria-label="Cat"
+      className="gutter isolate flex flex-wrap gap-2"
+    >
       {cats.map((cat) => {
         const selected = cat.id === activeCat?.id
         return (
@@ -66,15 +71,19 @@ export function CatSwitcher() {
             {selected ? (
               // -inset-px: over the chip's border too, so the selected chip
               // is coral edge to edge as it was when the button was the fill.
+              // z-10 (inside the isolated group): above every chip, not only
+              // its own, or sliding left it would pass under the next chip's
+              // background.
               <m.span
                 layoutId="cat-pill"
                 transition={glide}
-                className="absolute -inset-px rounded-full bg-coral"
+                className="absolute -inset-px z-10 rounded-full bg-coral"
               />
             ) : null}
-            {/* Positioned so the name paints above the pill. The colour eases
-            because it flips at once while the pill is still on its way. */}
-            <span className="relative truncate transition-colors duration-200 ease-squishy">
+            {/* z-20: every name above the pill, which otherwise covers the
+            chip it is leaving the moment it starts to slide right. The colour
+            eases because it flips at once while the pill is on its way. */}
+            <span className="relative z-20 truncate transition-colors duration-200 ease-squishy">
               {cat.name}
             </span>
           </button>
