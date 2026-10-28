@@ -104,7 +104,8 @@
    picture into its new one — the tab bar's old pill ghosting out while the
    live one slides, the status-bar strip (index.html) dimming for a moment.
    Named, each is lifted out of the root crossfade; dropping its old snapshot
-   and leaving its new one unanimated shows the live element throughout. */
+   and leaving its new one unanimated shows the live element throughout.
+   `cat-switcher` is set from CatSwitcher, only while its own crossfade runs. */
 .tab-bar {
   view-transition-name: tab-bar;
 }
@@ -114,14 +115,17 @@
 }
 
 ::view-transition-old(tab-bar),
-::view-transition-old(status-bar) {
+::view-transition-old(status-bar),
+::view-transition-old(cat-switcher) {
   display: none;
 }
 
 ::view-transition-group(tab-bar),
 ::view-transition-group(status-bar),
+::view-transition-group(cat-switcher),
 ::view-transition-new(tab-bar),
-::view-transition-new(status-bar) {
+::view-transition-new(status-bar),
+::view-transition-new(cat-switcher) {
   animation: none;
 }
 

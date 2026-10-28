@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react'
+import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { CatSwitcher } from '../../src/components/CatSwitcher'
@@ -51,5 +51,38 @@ describe('CatSwitcher', () => {
     renderSwitcher([MOCHI, BISCUIT], MOCHI)
     await userEvent.click(screen.getByRole('button', { name: 'Biscuit' }))
     expect(selectCat).toHaveBeenCalledExactlyOnceWith('biscuit')
+  })
+
+  // jsdom has no View Transitions API, so the test above is the fallback path.
+  it('crossfades to the tapped cat where the browser can', async () => {
+    let finish: (() => void) | undefined
+    const startViewTransition = vi.fn((update: () => void) => {
+      update()
+      return {
+        finished: new Promise<void>((resolve) => {
+          finish = resolve
+        }),
+      }
+    })
+    Object.defineProperty(document, 'startViewTransition', {
+      value: startViewTransition,
+      configurable: true,
+    })
+    try {
+      renderSwitcher([MOCHI, BISCUIT], MOCHI)
+      await userEvent.click(screen.getByRole('button', { name: 'Biscuit' }))
+      expect(startViewTransition).toHaveBeenCalledOnce()
+      expect(selectCat).toHaveBeenCalledExactlyOnceWith('biscuit')
+
+      // Lifted out of the crossfade while it runs, and only while it runs.
+      const group = screen.getByRole('group', { name: 'Cat' })
+      expect(group.style.viewTransitionName).toBe('cat-switcher')
+      finish?.()
+      await waitFor(() => {
+        expect(group.style.viewTransitionName).toBe('')
+      })
+    } finally {
+      Reflect.deleteProperty(document, 'startViewTransition')
+    }
   })
 })

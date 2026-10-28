@@ -1,4 +1,6 @@
 import { m } from 'motion/react'
+import { useRef } from 'react'
+import { flushSync } from 'react-dom'
 import { useHousehold } from '../lib/household'
 import { glide } from '../lib/motion'
 
@@ -10,13 +12,45 @@ import { glide } from '../lib/motion'
  * layoutId, like the tab bar's pill), so picking a cat reads as moving the
  * selection rather than two chips swapping colours. It travels between rows
  * too when the chips wrap: Motion animates the box, not a line along the row.
+ *
+ * The screen below crossfades from one cat to the other the way a tab change
+ * does (index.css): the screens key their body by cat id, so without it one
+ * cat's figures would simply be replaced by the other's.
  */
 export function CatSwitcher() {
   const { cats, activeCat, selectCat } = useHousehold()
+  const groupRef = useRef<HTMLDivElement>(null)
+  const latest = useRef<ViewTransition | null>(null)
   if (cats.length < 2) return null
 
+  function pick(catId: string) {
+    const group = groupRef.current
+    if (!('startViewTransition' in document) || group === null) {
+      selectCat(catId)
+      return
+    }
+    // Named only for its own crossfade, so it is lifted out of it and its
+    // fill is seen sliding live, not ghosting. Named for good, a tab change
+    // to a screen without a switcher would drop it at once instead of
+    // letting it fade with the page. Only the latest transition un-names it:
+    // a quick second tap skips the first, whose end must not undo the second.
+    group.style.viewTransitionName = 'cat-switcher'
+    // flushSync so the new snapshot is taken of the new cat's screen, not of
+    // a render React has yet to commit.
+    const transition = document.startViewTransition(() => {
+      flushSync(() => {
+        selectCat(catId)
+      })
+    })
+    latest.current = transition
+    const unname = () => {
+      if (latest.current === transition) group.style.viewTransitionName = ''
+    }
+    void transition.finished.then(unname, unname)
+  }
+
   return (
-    <div role="group" aria-label="Cat" className="gutter flex flex-wrap gap-2">
+    <div ref={groupRef} role="group" aria-label="Cat" className="gutter flex flex-wrap gap-2">
       {cats.map((cat) => {
         const selected = cat.id === activeCat?.id
         return (
@@ -25,7 +59,7 @@ export function CatSwitcher() {
             type="button"
             aria-pressed={selected}
             onClick={() => {
-              selectCat(cat.id)
+              pick(cat.id)
             }}
             className={`btn-chip relative max-w-full ${selected ? 'text-on-coral' : ''}`}
           >
