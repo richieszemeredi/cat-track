@@ -267,3 +267,23 @@ Five rules keep it from drifting back into generic-app territory:
 5. **Plain microcopy.** "Loading…", "Nothing logged yet today." Cute-per-string ("Sniffing
    out today's meals…") is charming once and grating by the fourth screen; the Splash
    line is the one place with any whimsy left.
+
+### Motion
+
+Motion is a feedback channel, not decoration — the same restraint as the palette.
+
+- **CSS first.** Hover/press states, a meter filling, a `<details>` opening: a CSS
+  `transition` with `ease-squishy` (the `@theme` token). Screen changes are the browser's
+  View Transitions API through the router, not JS.
+- **Motion (`motion/react`) only for what CSS can't do:** exits (`AnimatePresence`),
+  layout/`layoutId` moves (the sliding tab and cat pills, list rows making room) and
+  interruptible springs (the meal tick). Use `m.*`, never `motion.*` — `main.tsx` mounts
+  `LazyMotion strict` with `domMax` — and the shared transitions in `src/lib/motion.ts`
+  (`squishy`, `glide`, `fade`) rather than per-component numbers.
+- **Nothing loops.** One-shot only: no confetti, no bouncing paw, no animation on
+  the growth chart (a live update would redraw the curve).
+- **Reduced motion means none.** `MotionConfig reducedMotion="user"` covers Motion; the
+  `prefers-reduced-motion` block in `index.css` zeroes every CSS transition, keyframe and
+  view transition. Playwright runs with `reducedMotion: 'reduce'` and Motion skips all
+  animations under `navigator.webdriver`, so the layout suite measures settled geometry;
+  component tests set `MotionGlobalConfig.skipAnimations` in `tests/component/setup.ts`.

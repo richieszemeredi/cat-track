@@ -22,6 +22,9 @@ export default defineConfig({
   use: {
     baseURL: 'http://localhost:4173',
     trace: 'on-first-retry',
+    // Transitions and view transitions finish at once (index.css), so the
+    // layout assertions and screenshots see where things settle.
+    contextOptions: { reducedMotion: 'reduce' },
   },
   projects: [
     // The phone the household actually uses: full suite.
