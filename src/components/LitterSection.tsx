@@ -126,7 +126,7 @@ function LitterBoxRow({
             {` · every ${weeksLabel(box.changeEveryWeeks)}`}
           </p>
           {age.overdue ? (
-            <p className="text-sm font-semibold text-danger">Due for a full clean</p>
+            <p className="nudge text-sm font-semibold text-danger">Due for a full clean</p>
           ) : null}
         </div>
 

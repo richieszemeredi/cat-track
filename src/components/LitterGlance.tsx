@@ -68,7 +68,7 @@ export function LitterGlance() {
                   <span className="min-w-0 flex-1">
                     <span className="block truncate font-medium">{box.location}</span>
                     {age.overdue ? (
-                      <span className="block text-sm text-danger">Due for a full clean</span>
+                      <span className="nudge block text-sm text-danger">Due for a full clean</span>
                     ) : null}
                   </span>
                   <span className="shrink-0 text-sm text-ink-soft tabular-nums">

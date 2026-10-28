@@ -327,6 +327,25 @@
       background-color 150ms ease-out,
       color 150ms ease-out;
   }
+
+  /* An overdue chore line ("Due for a full clean", "Time for fresh water")
+     swells once when it appears — on opening the screen, or the minute a
+     bowl tips over 24 h while you watch — and then just sits there in red.
+     Once, never a loop: the screen is the reminder, not a siren. It moves
+     the TEXT only; danger never becomes a surface. fit-content so the swell
+     is the words' width, not a full-width box poking past its card; the
+     delay lets a screen change land first, so the nudge is actually seen. */
+  .nudge {
+    width: fit-content;
+    transform-origin: left center;
+    animation: nudge 700ms ease-in-out 300ms;
+  }
+}
+
+@keyframes nudge {
+  40% {
+    scale: 1.07;
+  }
 }
 
 /* Hairlines while a list row leaves (ListRow sets data-leaving for the length

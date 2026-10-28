@@ -66,7 +66,7 @@ export function WaterGlance() {
                   <span className="min-w-0 flex-1">
                     <span className="block truncate font-medium">{bowl.location}</span>
                     {age.overdue ? (
-                      <span className="block text-sm text-danger">Time for fresh water</span>
+                      <span className="nudge block text-sm text-danger">Time for fresh water</span>
                     ) : null}
                   </span>
                   <span className="shrink-0 text-sm text-ink-soft tabular-nums">

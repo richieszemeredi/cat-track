@@ -122,7 +122,7 @@ function WaterBowlRow({
           </p>
           <p className="text-sm text-ink-soft">{format(bowl.lastChangedAt, 'MMM d, HH:mm')}</p>
           {age.overdue ? (
-            <p className="text-sm font-semibold text-danger">Time for fresh water</p>
+            <p className="nudge text-sm font-semibold text-danger">Time for fresh water</p>
           ) : null}
         </div>
 
