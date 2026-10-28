@@ -6,6 +6,7 @@ import { CatSwitcher } from '../components/CatSwitcher'
 import { ErrorCard } from '../components/ErrorCard'
 import { FoodForm } from '../components/FoodForm'
 import { LogMealForm } from '../components/LogMealForm'
+import { MealTick } from '../components/MealTick'
 import { PlanForm } from '../components/PlanForm'
 import { useAuth } from '../lib/auth'
 import {
@@ -872,27 +873,14 @@ function MealRow({
   const [timeValue, setTimeValue] = useState(shownTime)
 
   // The tick is the whole point of keeping a daily record: one bowl goes down,
-  // and the other phone can see that it did.
-  const tick = (
-    <span
-      aria-hidden="true"
-      className={`flex h-7 w-7 items-center justify-center rounded-full ${
-        isGiven ? 'bg-coral text-on-coral' : 'border-2 border-sand-deep'
-      }`}
-    >
-      {isGiven ? (
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-          <path
-            d="M20 6 9 17l-5-5"
-            stroke="currentColor"
-            strokeWidth="3"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          />
-        </svg>
-      ) : null}
-    </span>
-  )
+  // and the other phone can see that it did. It is the most-used tap in the
+  // app, so it gets to feel done — on the other phone too, when it lands live.
+  const tick = <MealTick given={isGiven} />
+  // The time fades to the same soft grey as the food lines beside the tick
+  // rather than switching in a frame.
+  const timeClass = `font-medium tabular-nums transition-colors duration-200 ease-squishy ${
+    isGiven ? 'text-ink-soft' : ''
+  }`
 
   return (
     <li className="flex items-start gap-3 px-4 py-3">
@@ -904,7 +892,7 @@ function MealRow({
           aria-pressed={isGiven}
           disabled={busy}
           onClick={onToggle}
-          className="-my-1 -ml-2 flex h-11 w-11 shrink-0 items-center justify-center rounded-full active:scale-95 disabled:opacity-60"
+          className="-my-1 -ml-2 flex h-11 w-11 shrink-0 items-center justify-center rounded-full transition duration-150 ease-squishy active:scale-95 disabled:opacity-60"
         >
           {tick}
         </button>
@@ -927,15 +915,11 @@ function MealRow({
               }}
               className="-mx-2 -my-1 flex min-h-9 shrink-0 items-baseline gap-1.5 rounded px-2 py-1 active:bg-sand disabled:opacity-60"
             >
-              <span className={`font-medium tabular-nums ${isGiven ? 'text-ink-soft' : ''}`}>
-                {shownTime}
-              </span>
+              <span className={timeClass}>{shownTime}</span>
               <span className="text-xs text-ink-soft">edit</span>
             </button>
           ) : (
-            <span className={`font-medium tabular-nums ${isGiven ? 'text-ink-soft' : ''}`}>
-              {shownTime}
-            </span>
+            <span className={timeClass}>{shownTime}</span>
           )}
           {isSingleFood ? null : (
             <span className="shrink-0 text-sm text-ink-soft tabular-nums">
