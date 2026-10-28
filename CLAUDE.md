@@ -236,7 +236,7 @@ status bar), which the emulator can't show — the layout spec pins its geometry
 
 The whole visual language lives in `src/index.css` — `@theme` tokens plus a small set of
 component classes (`gutter`, `page-title`, `section-label`, `surface`, `field`,
-`btn-primary`, `btn-secondary`, `btn-chip`, `btn-icon`, `disclosure`). Style with those;
+`btn-primary`, `btn-secondary`, `btn-chip`, `btn-icon`, `disclosure`, `nudge`). Style with those;
 reach for raw Tailwind only for layout. Prettier sorts Tailwind classes. UI language is
 English.
 
@@ -273,13 +273,20 @@ Five rules keep it from drifting back into generic-app territory:
 Motion is a feedback channel, not decoration — the same restraint as the palette.
 
 - **CSS first.** Hover/press states, a meter filling, a `<details>` opening: a CSS
-  `transition` with `ease-squishy` (the `@theme` token). Screen changes are the browser's
-  View Transitions API through the router, not JS.
+  `transition`. `ease-squishy` (the `@theme` token) for what should give a little — a
+  press, a disclosure; plain `ease-out` for colours and fills, since a meter overshooting
+  its value would lie. An overdue chore line takes `.nudge` (one swell on appearing,
+  never a loop). Screen changes are the browser's View Transitions API through the
+  router, not JS.
 - **Motion (`motion/react`) only for what CSS can't do:** exits (`AnimatePresence`),
   layout/`layoutId` moves (the sliding tab and cat pills, list rows making room) and
   interruptible springs (the meal tick). Use `m.*`, never `motion.*` — `main.tsx` mounts
   `LazyMotion strict` with `domMax` — and the shared transitions in `src/lib/motion.ts`
-  (`squishy`, `glide`, `fade`) rather than per-component numbers.
+  (`squishy`, `glide`, `fade`) rather than per-component numbers. A list whose rows come
+  and go wraps them in `ListRow` (`StackRow` for a gap-spaced stack) inside
+  `<AnimatePresence initial={false}>`, so opening a screen never grows every row in.
+  A big figure tweens through `AnimatedNumber`; a small "N of M" count pops through
+  `PoppingNumber`.
 - **Nothing loops.** One-shot only: no confetti, no bouncing paw, no animation on
   the growth chart (a live update would redraw the curve).
 - **Reduced motion means none.** `MotionConfig reducedMotion="user"` covers Motion; the
