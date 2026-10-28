@@ -18,6 +18,10 @@ const router = createRouter({
   routeTree,
   context: { queryClient },
   defaultPreload: 'intent',
+  // Screens crossfade (index.css styles it). Only the commit runs inside the
+  // transition — loaders finish first — so a slow load never freezes the
+  // old screen; browsers without the API simply swap.
+  defaultViewTransition: true,
 })
 
 declare module '@tanstack/react-router' {

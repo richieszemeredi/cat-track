@@ -87,6 +87,44 @@
   }
 }
 
+/* Screen changes crossfade through the browser's View Transitions API
+   (`defaultViewTransition` in main.tsx); a browser without it just swaps.
+   Quick, at the same 180ms as Motion's `fade`: the tab bar is how you get
+   around, and a tap should land, not wait on a dissolve. The group is
+   shortened too, or the overlay would swallow taps after the fade is done. */
+::view-transition-group(root),
+::view-transition-old(root),
+::view-transition-new(root) {
+  animation-duration: 180ms;
+  animation-timing-function: ease-out;
+}
+
+/* What stays put while the page crossfades. During a view transition the
+   page is shown as snapshots, and an unnamed element would fade from its old
+   picture into its new one — the tab bar's old pill ghosting out while the
+   live one slides, the status-bar strip (index.html) dimming for a moment.
+   Named, each is lifted out of the root crossfade; dropping its old snapshot
+   and leaving its new one unanimated shows the live element throughout. */
+.tab-bar {
+  view-transition-name: tab-bar;
+}
+
+.status-bar-backdrop {
+  view-transition-name: status-bar;
+}
+
+::view-transition-old(tab-bar),
+::view-transition-old(status-bar) {
+  display: none;
+}
+
+::view-transition-group(tab-bar),
+::view-transition-group(status-bar),
+::view-transition-new(tab-bar),
+::view-transition-new(status-bar) {
+  animation: none;
+}
+
 @layer base {
   html {
     height: 100%;

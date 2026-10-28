@@ -26,13 +26,15 @@ const TABS = [
  * a fixed container: the pill is measured against the nav, not the page, so
  * the scroll reset that comes with navigating can never land between the two
  * measurements and throw the pill in from wherever the old page was scrolled.
+ * `.tab-bar` keeps the nav live through a screen's crossfade (index.css), so
+ * the slide is what you see rather than a ghost of the old pill fading out.
  */
 export function TabBar() {
   return (
     <m.nav
       layoutRoot
       aria-label="Main"
-      className="fixed inset-x-0 bottom-0 border-t border-sand bg-surface/90 pr-[env(safe-area-inset-right)] pb-[env(safe-area-inset-bottom)] pl-[env(safe-area-inset-left)] backdrop-blur lg:top-0 lg:right-auto lg:w-[calc(6rem+env(safe-area-inset-left))] lg:border-t-0 lg:border-r lg:pt-[env(safe-area-inset-top)] lg:pr-0"
+      className="tab-bar fixed inset-x-0 bottom-0 border-t border-sand bg-surface/90 pr-[env(safe-area-inset-right)] pb-[env(safe-area-inset-bottom)] pl-[env(safe-area-inset-left)] backdrop-blur lg:top-0 lg:right-auto lg:w-[calc(6rem+env(safe-area-inset-left))] lg:border-t-0 lg:border-r lg:pt-[env(safe-area-inset-top)] lg:pr-0"
     >
       <div className="mx-auto flex max-w-lg items-stretch justify-around lg:flex-col lg:justify-start lg:gap-2 lg:py-6">
         <span aria-hidden="true" className="mb-4 hidden text-center text-4xl leading-none lg:block">
