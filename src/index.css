@@ -271,6 +271,52 @@
     transition: color 150ms ease-out;
   }
 
+  /* Every <details> grows open and folds shut rather than snapping. CSS
+     only: ::details-content is the box the browser wraps the body in, and
+     interpolate-size lets its height transition to and from `auto`. Safari
+     has the pseudo-element but not the interpolation, so there it still
+     snaps — fine, and not worth JS. Driven by the [open] attribute, so a
+     disclosure that closes itself after a save (AddDisclosure) folds the
+     same way as one closed by hand.
+     The body is clipped vertically only, and only while it moves: settled
+     open it is overflow: visible again, so a focus ring or a row's
+     negative-margin x is never shaved off. Clip, not hidden, because clip
+     on one axis leaves the other one visible. */
+  details::details-content {
+    block-size: 0;
+    overflow-y: clip;
+  }
+
+  details[open]::details-content {
+    block-size: auto;
+    overflow-y: visible;
+  }
+
+  /* The motion itself sits behind no-preference: the reduced-motion block
+     above zeroes transitions on elements, which ::details-content is not. */
+  @media (prefers-reduced-motion: no-preference) {
+    details {
+      interpolate-size: allow-keywords;
+    }
+
+    /* Closing: clip at once, keep the content painted until it has folded
+       (allow-discrete holds content-visibility back to the end). */
+    details::details-content {
+      transition:
+        block-size 250ms var(--ease-squishy),
+        content-visibility 250ms allow-discrete,
+        overflow-y 0s allow-discrete;
+    }
+
+    /* Opening: stay clipped until the growing has finished. */
+    details[open]::details-content {
+      transition:
+        block-size 250ms var(--ease-squishy),
+        content-visibility 250ms allow-discrete,
+        overflow-y 0s 250ms allow-discrete;
+    }
+  }
+
   /* Destructive row action (the x). The negative margin keeps a 44px touch
      target from inflating the row it lives in. */
   .btn-icon {
