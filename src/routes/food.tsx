@@ -2,6 +2,7 @@ import { useQueries, useQuery } from '@tanstack/react-query'
 import { createFileRoute, Link } from '@tanstack/react-router'
 import { format, isSameDay, isValid, parse } from 'date-fns'
 import { useState, type SubmitEvent } from 'react'
+import { PoppingNumber } from '../components/AnimatedNumber'
 import { CatSwitcher } from '../components/CatSwitcher'
 import { ErrorCard } from '../components/ErrorCard'
 import { FoodForm } from '../components/FoodForm'
@@ -750,7 +751,7 @@ function TodayProgress({
     <div className="flex flex-col gap-3">
       <p className="flex items-baseline gap-2">
         <span data-testid="today-meals" className="text-5xl font-bold tracking-tight tabular-nums">
-          {given} of {total}
+          <PoppingNumber value={given} /> of {total}
         </span>
         <span className="text-lg text-ink-soft">meals given</span>
       </p>

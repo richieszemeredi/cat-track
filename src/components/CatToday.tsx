@@ -22,6 +22,7 @@ import { useHousehold } from '../lib/household'
 import { planMealTimes } from '../lib/plan'
 import { dailyKcalTarget, effectiveLifeStage, sumGrams, sumKcal } from '../lib/target'
 import { useToday } from '../lib/use-today'
+import { AnimatedNumber, PoppingNumber } from './AnimatedNumber'
 import { StatCard } from './StatCard'
 
 /** Where one cat stands today: bowls given, calories, and her latest weight. */
@@ -108,6 +109,11 @@ function useCatToday(cat: Cat) {
 
 const signed = (kg: number) => `${kg >= 0 ? '+' : ''}${formatWeightKg(kg)}`
 
+// What the tweened figures settle on — exactly the text they showed before
+// they moved, which the e2e suite asserts.
+const kcalText = (kcal: number) => String(roundKcal(kcal))
+const kgText = (kg: number) => `${roundKg(kg).toFixed(2)} kg`
+
 /**
  * The home screen's view of one cat. `full` is the single-cat screen — the one
  * big number — and `compact` is one of several, where a figure per cat that
@@ -154,7 +160,7 @@ function FullToday({ today }: { today: Today }) {
                 data-testid="dash-kcal-today"
                 className="text-5xl font-bold tracking-tight tabular-nums"
               >
-                {roundKcal(eatenKcal)}
+                <AnimatedNumber value={eatenKcal} format={kcalText} />
               </span>
               <span className="text-lg text-ink-soft">
                 {target === null ? 'kcal' : `of ${String(roundKcal(target))} kcal`}
@@ -182,7 +188,7 @@ function FullToday({ today }: { today: Today }) {
                 data-testid="dash-meals-today"
                 className="text-5xl font-bold tracking-tight tabular-nums"
               >
-                {mealsGiven} of {mealCount}
+                <PoppingNumber value={mealsGiven} /> of {mealCount}
               </span>
               <span className="text-lg text-ink-soft">meals given</span>
             </p>
@@ -205,7 +211,11 @@ function FullToday({ today }: { today: Today }) {
             label="Weight"
             value={
               <span data-testid="dash-weight">
-                {latest === undefined ? '—' : `${roundKg(latest.weightKg).toFixed(2)} kg`}
+                {latest === undefined ? (
+                  '—'
+                ) : (
+                  <AnimatedNumber value={latest.weightKg} format={kgText} />
+                )}
               </span>
             }
             sub={weightSub}
@@ -239,7 +249,9 @@ function CompactToday({ cat, today }: { cat: Cat; today: Today }) {
       <div className="surface flex flex-col gap-3 p-4">
         {plan === null ? (
           <p className="tabular-nums">
-            <span className="text-2xl font-bold tracking-tight">{roundKcal(eatenKcal)}</span>
+            <span className="text-2xl font-bold tracking-tight">
+              <AnimatedNumber value={eatenKcal} format={kcalText} />
+            </span>
             <span className="text-ink-soft">
               {target === null ? ' kcal eaten' : ` of ${String(roundKcal(target))} kcal`}
             </span>
@@ -248,7 +260,7 @@ function CompactToday({ cat, today }: { cat: Cat; today: Today }) {
           <>
             <p className="flex items-baseline gap-2">
               <span className="text-2xl font-bold tracking-tight tabular-nums">
-                {mealsGiven} of {mealCount}
+                <PoppingNumber value={mealsGiven} /> of {mealCount}
               </span>
               <span className="text-ink-soft">meals given</span>
             </p>

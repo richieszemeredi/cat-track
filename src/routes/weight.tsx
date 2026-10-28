@@ -2,6 +2,7 @@ import { useQuery } from '@tanstack/react-query'
 import { createFileRoute, Link } from '@tanstack/react-router'
 import { differenceInDays, format } from 'date-fns'
 import { useState } from 'react'
+import { AnimatedNumber } from '../components/AnimatedNumber'
 import { CatSwitcher } from '../components/CatSwitcher'
 import { ErrorCard } from '../components/ErrorCard'
 import { GrowthChart } from '../components/GrowthChart'
@@ -131,7 +132,11 @@ function WeightBody({
               data-testid="weight-latest"
               className="text-5xl font-bold tracking-tight tabular-nums"
             >
-              {latest === undefined ? '—' : formatWeightKg(latest.weightKg)}
+              {latest === undefined ? (
+                '—'
+              ) : (
+                <AnimatedNumber value={latest.weightKg} format={formatWeightKg} />
+              )}
             </span>
           </p>
           <p className="text-sm text-ink-soft">
