@@ -282,7 +282,7 @@ function AddMemberForm({ hid }: { hid: string }) {
     awaitOrQueued(addMember(hid, { uid, role: memberRole, displayName: PLACEHOLDER_DISPLAY_NAME }))
       .then((result) => {
         setFlash(
-          result === 'queued' ? 'Member added — will sync when back online 📶' : 'Member added! 🎉',
+          result === 'queued' ? 'Member added — will sync when back online' : 'Member added!',
         )
         setMemberUid('')
         setMemberRole('editor')

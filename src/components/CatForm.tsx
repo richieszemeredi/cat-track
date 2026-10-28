@@ -103,7 +103,7 @@ export function CatForm({
     const write = existing ? updateCat(hid, existing.id, input) : createCat(hid, uid, input)
     awaitOrQueued(write)
       .then((result) => {
-        setFlash(result === 'queued' ? 'Saved! Will sync when back online 📶' : 'Profile saved! 🎉')
+        setFlash(result === 'queued' ? 'Saved! Will sync when back online' : 'Profile saved!')
         if (!existing) {
           setName('')
           setBirthDate('')
