@@ -1,4 +1,6 @@
+import { AnimatePresence, m } from 'motion/react'
 import { useRegisterSW } from 'virtual:pwa-register/react'
+import { fade, squishy } from '../lib/motion'
 
 /**
  * registerType is 'prompt': a new version waits until the user opts in, so an
@@ -23,34 +25,47 @@ export function UpdateToast() {
     },
   })
 
-  if (!needRefresh) return null
-
+  // AnimatePresence so "Later" sends the toast back down the way it came —
+  // unmounting it outright would just make it vanish mid-glance.
   return (
-    <div
-      role="status"
-      className="surface fixed inset-x-4 bottom-[calc(6rem+env(safe-area-inset-bottom))] z-50 mx-auto flex max-w-md items-center justify-between gap-3 p-3 shadow-squishy lg:bottom-6"
-    >
-      <span className="text-sm font-medium">A new version is ready</span>
-      <div className="flex gap-2">
-        <button
-          type="button"
-          className="rounded-full px-3 py-1.5 text-sm font-semibold text-ink-soft"
-          onClick={() => {
-            setNeedRefresh(false)
-          }}
+    <AnimatePresence>
+      {needRefresh ? (
+        <m.div
+          key="update-toast"
+          role="status"
+          // Rises a little way from just below its resting spot rather than
+          // from off-screen: it should read as arriving, not as flying in.
+          initial={{ opacity: 0, y: 24 }}
+          animate={{ opacity: 1, y: 0 }}
+          exit={{ opacity: 0, y: 24 }}
+          // The spring carries the slide; a spring on opacity would overshoot
+          // past fully opaque, so the fade keeps its own plain curve.
+          transition={{ ...squishy, opacity: fade }}
+          className="surface fixed inset-x-4 bottom-[calc(6rem+env(safe-area-inset-bottom))] z-50 mx-auto flex max-w-md items-center justify-between gap-3 p-3 shadow-squishy lg:bottom-6"
         >
-          Later
-        </button>
-        <button
-          type="button"
-          className="rounded-full bg-coral px-4 py-1.5 text-sm font-semibold text-on-coral active:scale-[0.98]"
-          onClick={() => {
-            void updateServiceWorker(true)
-          }}
-        >
-          Update
-        </button>
-      </div>
-    </div>
+          <span className="text-sm font-medium">A new version is ready</span>
+          <div className="flex gap-2">
+            <button
+              type="button"
+              className="rounded-full px-3 py-1.5 text-sm font-semibold text-ink-soft"
+              onClick={() => {
+                setNeedRefresh(false)
+              }}
+            >
+              Later
+            </button>
+            <button
+              type="button"
+              className="rounded-full bg-coral px-4 py-1.5 text-sm font-semibold text-on-coral active:scale-[0.98]"
+              onClick={() => {
+                void updateServiceWorker(true)
+              }}
+            >
+              Update
+            </button>
+          </div>
+        </m.div>
+      ) : null}
+    </AnimatePresence>
   )
 }
