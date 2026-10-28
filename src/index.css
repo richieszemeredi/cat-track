@@ -220,20 +220,37 @@
   .field {
     @apply w-full rounded-xl border border-sand-deep bg-surface px-3 py-2 font-normal text-ink;
     @apply focus:border-coral focus:ring-2 focus:ring-coral/25 focus:outline-none;
+    /* The ring is a box-shadow; letting it fade in reads as focus arriving
+       rather than a frame flicking over. */
+    transition:
+      border-color 150ms ease-out,
+      box-shadow 150ms ease-out;
   }
 
   /* hover: only fires where a pointer can hover (Tailwind wraps it in
      @media (hover: hover)), so a phone never shows a stuck hover state after
      a tap. Brighter rather than coral-deep: dark text on coral-deep drops
-     under AA. */
+     under AA.
+     The press is the one that matters on a phone: a quick squish on
+     ease-squishy (Tailwind's scale-* is the `scale` property, not
+     `transform`), so it gives under the thumb and springs back. Colour
+     changes ease plainly — an overshoot means nothing on a colour. */
   .btn-primary {
     @apply rounded-full bg-coral px-5 py-3 text-center font-semibold text-on-coral;
     @apply hover:brightness-105 active:scale-[0.98] disabled:opacity-60;
+    transition:
+      scale 120ms var(--ease-squishy),
+      filter 150ms ease-out,
+      opacity 150ms ease-out;
   }
 
   .btn-secondary {
     @apply rounded-full border border-sand-deep bg-surface px-5 py-3 text-center font-semibold text-ink;
     @apply hover:bg-sand active:scale-[0.98] disabled:opacity-60;
+    transition:
+      scale 120ms var(--ease-squishy),
+      background-color 150ms ease-out,
+      opacity 150ms ease-out;
   }
 
   /* Small inline action inside a list row. min-h keeps it a thumb-sized
@@ -241,12 +258,17 @@
   .btn-chip {
     @apply flex min-h-10 items-center rounded-full border border-sand-deep bg-surface px-3 py-2;
     @apply text-sm font-semibold text-ink hover:bg-sand active:scale-[0.98] disabled:opacity-60;
+    transition:
+      scale 120ms var(--ease-squishy),
+      background-color 150ms ease-out,
+      opacity 150ms ease-out;
   }
 
   /* A <details> header. Padded so the whole row is a thumb target rather
      than a 20px line of text. */
   .disclosure {
     @apply flex min-h-12 cursor-pointer items-center text-sm font-semibold hover:text-coral-ink;
+    transition: color 150ms ease-out;
   }
 
   /* Destructive row action (the x). The negative margin keeps a 44px touch
@@ -254,5 +276,9 @@
   .btn-icon {
     @apply -my-2 -mr-2 flex h-11 w-11 shrink-0 items-center justify-center rounded-full;
     @apply text-xl leading-none text-ink-soft hover:bg-sand hover:text-ink active:scale-95;
+    transition:
+      scale 120ms var(--ease-squishy),
+      background-color 150ms ease-out,
+      color 150ms ease-out;
   }
 }
