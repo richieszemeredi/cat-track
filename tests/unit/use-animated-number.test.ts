@@ -2,14 +2,17 @@ import { renderHook, waitFor } from '@testing-library/react'
 import type * as motionReact from 'motion/react'
 import { MotionGlobalConfig } from 'motion/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { useAnimatedNumber } from '../../src/lib/use-animated-number'
+import { useAnimatedNumber, useBounceWhenDone } from '../../src/lib/use-animated-number'
 
 // jsdom has no matchMedia, so Motion can never see a reduced-motion
-// preference here — stand one in that each test can flip.
+// preference here — stand one in that each test can flip. useAnimate's
+// animate is a spy: what matters about the bounce is WHEN it fires.
 const reduced = vi.hoisted(() => ({ value: false }))
+const animateScope = vi.hoisted(() => vi.fn(() => Promise.resolve()))
 vi.mock('motion/react', async (importOriginal) => ({
   ...(await importOriginal<typeof motionReact>()),
   useReducedMotion: () => reduced.value,
+  useAnimate: () => [{ current: null, animations: [] }, animateScope],
 }))
 
 const render = (initial: number) =>
@@ -68,5 +71,33 @@ describe('useAnimatedNumber', () => {
       rerender({ value: 242 })
       expect(result.current).toBe(242)
     })
+  })
+})
+
+describe('useBounceWhenDone', () => {
+  afterEach(() => {
+    animateScope.mockClear()
+  })
+
+  const render = (done: boolean) =>
+    renderHook(({ done }) => useBounceWhenDone(done), { initialProps: { done } })
+
+  // A day that was finished hours ago is not news.
+  it('stays still when the screen opens on a finished day', () => {
+    const { rerender } = render(true)
+    rerender({ done: true })
+    expect(animateScope).not.toHaveBeenCalled()
+  })
+
+  it('bounces once when the last bowl goes down, and not again while done', async () => {
+    const { rerender } = render(false)
+    rerender({ done: true })
+    // Up, then down — one bounce.
+    await waitFor(() => {
+      expect(animateScope).toHaveBeenCalledTimes(2)
+    })
+
+    rerender({ done: true })
+    expect(animateScope).toHaveBeenCalledTimes(2)
   })
 })

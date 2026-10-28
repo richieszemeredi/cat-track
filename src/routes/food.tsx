@@ -60,6 +60,7 @@ import {
 } from '../lib/plan'
 import { type FoodType } from '../lib/schemas'
 import { dailyKcalTarget, effectiveLifeStage, sumGrams, sumKcal } from '../lib/target'
+import { useBounceWhenDone } from '../lib/use-animated-number'
 import { useToday } from '../lib/use-today'
 
 export const Route = createFileRoute('/food')({
@@ -746,11 +747,16 @@ function TodayProgress({
 }) {
   const pct = total === 0 ? 0 : Math.min(100, (given / total) * 100)
   const left = total - given
+  const figure = useBounceWhenDone<HTMLSpanElement>(total > 0 && left <= 0)
 
   return (
     <div className="flex flex-col gap-3">
       <p className="flex items-baseline gap-2">
-        <span data-testid="today-meals" className="text-5xl font-bold tracking-tight tabular-nums">
+        <span
+          ref={figure}
+          data-testid="today-meals"
+          className="text-5xl font-bold tracking-tight tabular-nums"
+        >
           <PoppingNumber value={given} /> of {total}
         </span>
         <span className="text-lg text-ink-soft">meals given</span>

@@ -1,4 +1,10 @@
-import { animate, MotionGlobalConfig, useAnimate, useReducedMotion } from 'motion/react'
+import {
+  animate,
+  MotionGlobalConfig,
+  useAnimate,
+  useReducedMotion,
+  type Transition,
+} from 'motion/react'
 import { useEffect, useRef, useState } from 'react'
 import { glide, squishy } from './motion'
 
@@ -69,6 +75,34 @@ export function usePopOnChange<T extends HTMLElement>(value: number) {
     // and springs back to size — the change of digit hides the snap.
     void animateScope(scope.current, { scale: [1.12, 1] }, squishy)
   }, [value, scope, animateScope])
+
+  return scope
+}
+
+// The way up of the "all done" bounce. A spring can't go up and come back by
+// itself — two keyframes is all it takes — so the figure rises on a short
+// ease-out and `squishy` brings it down.
+const rise: Transition = { duration: 0.16, ease: 'easeOut' }
+
+/**
+ * One soft bounce on the element when `done` turns true while it is mounted —
+ * the last bowl of the day going down. Not when the screen opens on a day
+ * that is already done (that was news hours ago), and never more than once
+ * per finish: nothing loops. Reduced motion is `useAnimate`'s, as above.
+ */
+export function useBounceWhenDone<T extends HTMLElement>(done: boolean) {
+  const [scope, animateScope] = useAnimate<T>()
+  const wasDone = useRef(done)
+
+  useEffect(() => {
+    const justFinished = done && !wasDone.current
+    wasDone.current = done
+    if (!justFinished) return
+    void (async () => {
+      await animateScope(scope.current, { y: -6 }, rise)
+      await animateScope(scope.current, { y: 0 }, squishy)
+    })()
+  }, [done, scope, animateScope])
 
   return scope
 }
