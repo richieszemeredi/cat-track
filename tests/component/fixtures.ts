@@ -9,6 +9,7 @@ export function makePlan(overrides: Partial<Plan> = {}): Plan {
     mealsPerDay: 3,
     firstMealAt: '07:00',
     lastMealAt: '19:00',
+    mealTimes: [],
     setAtWeightKg: 1.62,
     note: null,
     createdBy: 'user-1',

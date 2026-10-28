@@ -19,7 +19,7 @@ import {
   type Cat,
 } from '../lib/db'
 import { useHousehold } from '../lib/household'
-import { mealTimes } from '../lib/plan'
+import { planMealTimes } from '../lib/plan'
 import { dailyKcalTarget, effectiveLifeStage, sumGrams, sumKcal } from '../lib/target'
 import { useToday } from '../lib/use-today'
 import { StatCard } from './StatCard'
@@ -43,8 +43,7 @@ function useCatToday(cat: Cat) {
   // Only the plan's own meal count is needed here — how many bowls are owed
   // today and how many have gone down. The composition lives on /food.
   const plan = plansQuery.data?.[0] ?? null
-  const mealCount =
-    plan === null ? 0 : mealTimes(plan.mealsPerDay, plan.firstMealAt, plan.lastMealAt).length
+  const mealCount = plan === null ? 0 : planMealTimes(plan).length
   const mealsGiven =
     plan === null
       ? 0

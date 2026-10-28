@@ -55,6 +55,50 @@ export function mealTimes(mealsPerDay: number, firstMealAt: string, lastMealAt: 
   return Array.from({ length: mealsPerDay }, (_, index) => toHhmm(Math.round(first + index * step)))
 }
 
+/** The slice of a stored plan that decides when its meals are. */
+export interface PlanTimesShape {
+  mealsPerDay: number
+  firstMealAt: string
+  lastMealAt: string
+  /** Typed-in meal times; empty when the plan is spread evenly over its window. */
+  mealTimes: readonly string[]
+}
+
+/**
+ * A plan's meal times, earliest first: the typed-in ones when it has any,
+ * otherwise the even spread across its window.
+ */
+export function planMealTimes(plan: PlanTimesShape): string[] {
+  if (plan.mealTimes.length > 0) return [...plan.mealTimes]
+  return mealTimes(plan.mealsPerDay, plan.firstMealAt, plan.lastMealAt)
+}
+
+/** Hours from each meal to the next, the last one running round to the first the next morning. */
+export function gapsAfterMinutes(times: readonly string[]): number[] {
+  return times.map((time, index) => {
+    const next = times[(index + 1) % times.length] ?? time
+    const gap = toMinutes(next) - toMinutes(time)
+    return gap <= 0 ? gap + MINUTES_PER_DAY : gap
+  })
+}
+
+/**
+ * Each typed-in meal's share of the day's food, summing to 1.
+ *
+ * A bowl is sized by the gap AFTER it — how long it has to last — so the meal
+ * before a working day is the big one and the one you eat when you get home is
+ * small. Sizing by the gap BEFORE a meal does the opposite and hands the cat a
+ * huge bowl the moment the door opens, which teaches it that arriving home
+ * means a feast. Times must be distinct; equal ones fall back to equal shares.
+ */
+export function mealShares(times: readonly string[]): number[] {
+  if (times.length === 0) return []
+  const gaps = gapsAfterMinutes(times)
+  const total = gaps.reduce((sum, gap) => sum + gap, 0)
+  if (new Set(times).size !== times.length || total <= 0) return times.map(() => 1 / times.length)
+  return gaps.map((gap) => gap / total)
+}
+
 /** A stored "HH:mm" placed on a calendar day, exactly as the checklist reads it. */
 export function atTimeOn(day: Date, hhmm: string): Date {
   const [hours, minutes] = hhmm.split(':')
@@ -161,14 +205,27 @@ export interface MealLine {
 
 export interface PlanShape {
   mealsPerDay: number
+  mealTimes?: readonly string[]
 }
 
-/** What goes in one bowl — one line per plan item, the same at every meal. */
-export function mealComposition(plan: PlanShape, items: readonly PlanItemLike[]): MealLine[] {
+/**
+ * What goes in one bowl — one line per plan item. The same at every meal of an
+ * evenly spread plan; a plan with typed-in times sizes each bowl by `mealShares`.
+ */
+export function mealComposition(
+  plan: PlanShape,
+  items: readonly PlanItemLike[],
+  mealIndex = 0,
+): MealLine[] {
+  const times = plan.mealTimes ?? []
+  const share = times.length > 0 ? mealShares(times)[mealIndex] : undefined
   return items.map((item) => ({
     foodId: item.foodId,
     name: item.foodNameSnapshot,
-    grams: perMealGrams(item.amountPerDayG, plan.mealsPerDay),
+    grams:
+      share === undefined
+        ? perMealGrams(item.amountPerDayG, plan.mealsPerDay)
+        : item.amountPerDayG * share,
   }))
 }
 

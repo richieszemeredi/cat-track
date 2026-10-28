@@ -50,7 +50,7 @@ import {
   adjustedMealTimes,
   isOutgrown,
   mealComposition,
-  mealTimes,
+  planMealTimes,
   planDailyGrams,
   planDailyKcal,
   planTargetRatio,
@@ -161,7 +161,7 @@ function FoodContent({ cat }: { cat: Cat }) {
   const planItems = plan === null ? [] : (planItemsQuery.data ?? [])
 
   const kcalPerGram = new Map(foods.map((food) => [food.id, food.kcalPerGram]))
-  const times = plan === null ? [] : mealTimes(plan.mealsPerDay, plan.firstMealAt, plan.lastMealAt)
+  const times = plan === null ? [] : planMealTimes(plan)
   const planDailyKcalValue = planDailyKcal(planItems, kcalPerGram)
   const ratio = planTargetRatio(planDailyKcalValue, target)
 
@@ -225,7 +225,7 @@ function FoodContent({ cat }: { cat: Cat }) {
         return
       }
 
-      const lines = mealComposition({ mealsPerDay: plan.mealsPerDay }, planItems)
+      const lines = mealComposition(plan, planItems, mealIndex)
       // The tick logs the bowl's own (possibly already-shifted) due time, not
       // the moment of the tap — a quick tap after feeding her fast shouldn't
       // need a follow-up edit just to fix the time back to when it happened.
@@ -852,7 +852,7 @@ function MealRow({
   onToggle: () => void
   onSetTime: (timeStr: string) => void
 }) {
-  const lines = mealComposition({ mealsPerDay: plan.mealsPerDay }, items)
+  const lines = mealComposition(plan, items, mealIndex)
   const grams = lines.reduce((total, line) => total + line.grams, 0)
   const kcal = lines.reduce(
     (total, line) => total + line.grams * (kcalPerGram.get(line.foodId) ?? 0),
@@ -1041,7 +1041,10 @@ function PlanHistory({
         const items = itemQueries[index]?.data ?? []
         const until = plans[index - 1]?.effectiveFrom ?? null
         const meals = plan.mealsPerDay
-        const window = `${plan.firstMealAt}–${plan.lastMealAt}`
+        const window =
+          plan.mealTimes.length > 0
+            ? plan.mealTimes.join(' · ')
+            : `${plan.firstMealAt}–${plan.lastMealAt}`
 
         return (
           <div key={plan.id} className="flex gap-3">

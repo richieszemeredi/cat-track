@@ -7,6 +7,8 @@ import {
   MAX_MEALS_PER_DAY,
   MIN_MEALS_PER_DAY,
   isMealTime,
+  gapsAfterMinutes,
+  mealShares,
   mealSpacingMinutes,
   mealTimes,
   perMealGrams,
@@ -72,6 +74,11 @@ export function PlanForm({
   const [mealsPerDay, setMealsPerDay] = useState(() => currentPlan?.mealsPerDay ?? 3)
   const [firstMealAt, setFirstMealAt] = useState(() => currentPlan?.firstMealAt ?? '07:00')
   const [lastMealAt, setLastMealAt] = useState(() => currentPlan?.lastMealAt ?? '19:00')
+  // Typed-in times, or null for an even spread across the window. Kept as a
+  // draft list so changing the meal count never throws away what was typed.
+  const [customTimes, setCustomTimes] = useState<string[] | null>(() =>
+    currentPlan !== null && currentPlan.mealTimes.length > 0 ? [...currentPlan.mealTimes] : null,
+  )
   const [startsOn, setStartsOn] = useState(() => format(new Date(), 'yyyy-MM-dd'))
   const [items, setItems] = useState<DraftItem[]>(() =>
     currentItems.length > 0
@@ -87,8 +94,22 @@ export function PlanForm({
   const [saving, setSaving] = useState(false)
 
   const kcalPerGram = new Map(foods.map((food) => [food.id, food.kcalPerGram]))
-  const times = mealTimes(mealsPerDay, firstMealAt, lastMealAt)
+  const evenTimes = mealTimes(mealsPerDay, firstMealAt, lastMealAt)
   const spacing = mealSpacingMinutes(mealsPerDay, firstMealAt, lastMealAt)
+  // One input per meal; a slot nobody has typed in yet starts from the even
+  // spread, so switching modes or adding a meal never shows a blank.
+  const typedTimes =
+    customTimes === null
+      ? null
+      : Array.from({ length: mealsPerDay }, (_, i) => customTimes[i] ?? evenTimes[i] ?? '12:00')
+  const sortedTyped = typedTimes === null ? null : [...typedTimes].sort()
+  const typedValid =
+    sortedTyped !== null &&
+    sortedTyped.every(isMealTime) &&
+    new Set(sortedTyped).size === sortedTyped.length
+  const times = sortedTyped === null ? evenTimes : typedValid ? sortedTyped : []
+  const shares = sortedTyped !== null && typedValid ? mealShares(sortedTyped) : null
+  const gaps = sortedTyped !== null && typedValid ? gapsAfterMinutes(sortedTyped) : null
 
   // Only rows that are actually filled in count towards the running total, so
   // an empty row you have not typed into yet does not read as "0 kcal".
@@ -123,7 +144,16 @@ export function PlanForm({
       setError('Each food can only appear once — combine the amounts instead.')
       return
     }
-    if (!isMealTime(firstMealAt) || !isMealTime(lastMealAt) || times.length !== mealsPerDay) {
+    if (sortedTyped !== null) {
+      if (!typedValid) {
+        setError('Give every meal its own valid time.')
+        return
+      }
+    } else if (
+      !isMealTime(firstMealAt) ||
+      !isMealTime(lastMealAt) ||
+      times.length !== mealsPerDay
+    ) {
       setError('Pick a valid first and last meal time.')
       return
     }
@@ -146,8 +176,9 @@ export function PlanForm({
           {
             effectiveFrom,
             mealsPerDay,
-            firstMealAt,
-            lastMealAt,
+            firstMealAt: sortedTyped?.[0] ?? firstMealAt,
+            lastMealAt: sortedTyped?.[sortedTyped.length - 1] ?? lastMealAt,
+            mealTimes: sortedTyped ?? [],
             setAtWeightKg: latestWeightKg,
             note: null,
           },
@@ -199,43 +230,100 @@ export function PlanForm({
       </section>
 
       <section className="flex flex-col gap-3">
-        <h2 className="section-label">Spread between</h2>
+        <h2 className="section-label">Meal times</h2>
         <div className="surface flex flex-col gap-3 p-4">
-          <div className="grid grid-cols-2 gap-2">
-            <label className="flex flex-col gap-1 text-xs font-normal text-ink-soft">
-              First meal
-              <input
-                data-testid="plan-first-time"
-                type="time"
-                required
-                value={firstMealAt}
-                onChange={(e) => {
-                  setFirstMealAt(e.target.value)
+          <div className="flex gap-2">
+            {[
+              { id: 'even', label: 'Even spread', selected: customTimes === null },
+              { id: 'custom', label: 'Set times', selected: customTimes !== null },
+            ].map((mode) => (
+              <button
+                key={mode.id}
+                type="button"
+                data-testid={`plan-mode-${mode.id}`}
+                aria-pressed={mode.selected}
+                onClick={() => {
+                  setCustomTimes(mode.id === 'even' ? null : (customTimes ?? [...evenTimes]))
                 }}
-                className={INPUT_CLASS}
-              />
-            </label>
-            <label className="flex flex-col gap-1 text-xs font-normal text-ink-soft">
-              Last meal
-              <input
-                data-testid="plan-last-time"
-                type="time"
-                required
-                value={lastMealAt}
-                onChange={(e) => {
-                  setLastMealAt(e.target.value)
-                }}
-                className={INPUT_CLASS}
-              />
-            </label>
+                className={`min-h-11 flex-1 rounded-full text-sm font-semibold active:scale-[0.98] ${
+                  mode.selected ? 'bg-coral text-on-coral' : 'border border-sand-deep bg-surface'
+                }`}
+              >
+                {mode.label}
+              </button>
+            ))}
           </div>
-          <p data-testid="plan-times" className="text-sm text-ink-soft tabular-nums">
-            {times.length === 0
-              ? 'Pick a valid window.'
-              : spacing === null
-                ? times.join(' · ')
-                : `${spacingLabel(spacing)} apart — ${times.join(' · ')}`}
-          </p>
+          {typedTimes === null ? (
+            <>
+              <div className="grid grid-cols-2 gap-2">
+                <label className="flex flex-col gap-1 text-xs font-normal text-ink-soft">
+                  First meal
+                  <input
+                    data-testid="plan-first-time"
+                    type="time"
+                    required
+                    value={firstMealAt}
+                    onChange={(e) => {
+                      setFirstMealAt(e.target.value)
+                    }}
+                    className={INPUT_CLASS}
+                  />
+                </label>
+                <label className="flex flex-col gap-1 text-xs font-normal text-ink-soft">
+                  Last meal
+                  <input
+                    data-testid="plan-last-time"
+                    type="time"
+                    required
+                    value={lastMealAt}
+                    onChange={(e) => {
+                      setLastMealAt(e.target.value)
+                    }}
+                    className={INPUT_CLASS}
+                  />
+                </label>
+              </div>
+              <p data-testid="plan-times" className="text-sm text-ink-soft tabular-nums">
+                {times.length === 0
+                  ? 'Pick a valid window.'
+                  : spacing === null
+                    ? times.join(' · ')
+                    : `${spacingLabel(spacing)} apart — ${times.join(' · ')}`}
+              </p>
+            </>
+          ) : (
+            <>
+              <div className="grid grid-cols-2 gap-2">
+                {typedTimes.map((time, index) => (
+                  <label
+                    key={index}
+                    className="flex flex-col gap-1 text-xs font-normal text-ink-soft"
+                  >
+                    Meal {index + 1}
+                    <input
+                      data-testid={`plan-time-${String(index)}`}
+                      type="time"
+                      required
+                      value={time}
+                      onChange={(e) => {
+                        setCustomTimes(typedTimes.map((t, i) => (i === index ? e.target.value : t)))
+                      }}
+                      className={INPUT_CLASS}
+                    />
+                  </label>
+                ))}
+              </div>
+              <p data-testid="plan-times" className="text-sm text-ink-soft tabular-nums">
+                {gaps === null || sortedTyped === null
+                  ? 'Give every meal its own time.'
+                  : `${sortedTyped.map((t, i) => `${t} → ${spacingLabel(gaps[i] ?? 0)}`).join(' → ')} → ${sortedTyped[0] ?? ''}`}
+              </p>
+              <p className="text-xs text-ink-soft">
+                Each bowl is sized by how long it has to last, so the meal before a long stretch
+                alone is the big one and the one when you get home is small.
+              </p>
+            </>
+          )}
         </div>
       </section>
 
@@ -324,15 +412,31 @@ export function PlanForm({
           </p>
         )}
         {draftItems.length > 0 && mealsPerDay > 0 ? (
-          <p data-testid="plan-per-meal" className="text-sm text-ink-soft tabular-nums">
-            Each meal:{' '}
-            {draftItems
-              .map(
-                (item) =>
-                  `${String(roundGrams(perMealGrams(item.amountPerDayG, mealsPerDay)))} g ${item.foodNameSnapshot}`,
-              )
-              .join(' + ')}
-          </p>
+          shares !== null && sortedTyped !== null ? (
+            <ul data-testid="plan-per-meal" className="text-sm text-ink-soft tabular-nums">
+              {sortedTyped.map((time, index) => (
+                <li key={time}>
+                  {time}:{' '}
+                  {draftItems
+                    .map(
+                      (item) =>
+                        `${String(roundGrams(item.amountPerDayG * (shares[index] ?? 0)))} g ${item.foodNameSnapshot}`,
+                    )
+                    .join(' + ')}
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p data-testid="plan-per-meal" className="text-sm text-ink-soft tabular-nums">
+              Each meal:{' '}
+              {draftItems
+                .map(
+                  (item) =>
+                    `${String(roundGrams(perMealGrams(item.amountPerDayG, mealsPerDay)))} g ${item.foodNameSnapshot}`,
+                )
+                .join(' + ')}
+            </p>
+          )
         ) : null}
       </section>
 

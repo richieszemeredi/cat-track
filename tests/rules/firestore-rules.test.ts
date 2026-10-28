@@ -1023,8 +1023,42 @@ describe('plans', () => {
 
   it('denies an unknown field', async () => {
     await assertFails(
-      addDoc(collection(authedDb('bob'), plans), { ...plan('bob'), mealTimes: ['07:00'] }),
+      addDoc(collection(authedDb('bob'), plans), { ...plan('bob'), mealGrams: [100] }),
     )
+  })
+
+  describe('typed-in meal times', () => {
+    const create = (extra: Record<string, unknown>) =>
+      addDoc(collection(authedDb('bob'), plans), { ...plan('bob'), ...extra })
+
+    it('allows one time per meal', async () => {
+      await assertSucceeds(create({ mealTimes: ['07:00', '17:00', '23:00'] }))
+    })
+
+    it('allows the list to be empty or absent (an even spread)', async () => {
+      await assertSucceeds(create({ mealTimes: [] }))
+      await assertSucceeds(create({}))
+    })
+
+    it('denies a list that does not match the meal count', async () => {
+      await assertFails(create({ mealTimes: ['07:00', '17:00'] }))
+      await assertFails(create({ mealsPerDay: 2, mealTimes: ['07:00', '17:00', '23:00'] }))
+    })
+
+    it('denies a malformed entry', async () => {
+      await assertFails(create({ mealTimes: ['07:00', '5pm', '23:00'] }))
+      await assertFails(create({ mealTimes: ['07:00', '17:00', 2300] }))
+    })
+
+    it('denies more than six entries and non-lists', async () => {
+      await assertFails(
+        create({
+          mealsPerDay: 6,
+          mealTimes: ['06:00', '08:00', '10:00', '12:00', '14:00', '16:00', '18:00'],
+        }),
+      )
+      await assertFails(create({ mealTimes: '07:00' }))
+    })
   })
 
   it('accepts a null setAtWeightKg but not an impossible one', async () => {

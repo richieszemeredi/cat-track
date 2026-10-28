@@ -139,6 +139,9 @@ export const planSchema = z.object({
   mealsPerDay: z.number().int().min(MIN_MEALS_PER_DAY).max(MAX_MEALS_PER_DAY),
   firstMealAt: mealTimeSchema,
   lastMealAt: mealTimeSchema,
+  // Typed-in meal times, ascending. Empty = spread evenly across the window;
+  // otherwise first/lastMealAt are just its first and last entry.
+  mealTimes: z.array(mealTimeSchema).max(MAX_MEALS_PER_DAY).default([]),
   // What she weighed when the plan was set — this is what later lets the app
   // say "she's 1.94 kg now, this was set at 1.62".
   setAtWeightKg: z.number().positive().max(30).nullable().default(null),

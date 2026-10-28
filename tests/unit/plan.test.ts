@@ -4,7 +4,10 @@ import {
   isMealTime,
   isOutgrown,
   mealComposition,
+  gapsAfterMinutes,
+  mealShares,
   mealSpacingMinutes,
+  planMealTimes,
   mealTimes,
   perMealGrams,
   planDailyGrams,
@@ -288,5 +291,44 @@ describe('scaleItemsToTarget', () => {
   it('is null when there is nothing to scale', () => {
     expect(scaleItemsToTarget([], kcalPerGram, 287, 3)).toBeNull()
     expect(scaleItemsToTarget([item('vanished', 300)], kcalPerGram, 287, 3)).toBeNull()
+  })
+})
+
+describe('typed-in meal times', () => {
+  const WORKDAY = ['07:00', '17:00', '23:00']
+
+  it('measures the gap after each meal, the last wrapping to the first', () => {
+    expect(gapsAfterMinutes(WORKDAY)).toEqual([600, 360, 480])
+  })
+
+  it('sizes each bowl by the gap after it, so the homecoming meal is the small one', () => {
+    const [morning, evening, night] = mealShares(WORKDAY).map((share) => share * 100)
+    expect(morning).toBeCloseTo(41.7, 1)
+    expect(evening).toBeCloseTo(25, 1)
+    expect(night).toBeCloseTo(33.3, 1)
+    expect(evening).toBeLessThan(night ?? 0)
+  })
+
+  it('always sums to the whole day', () => {
+    expect(mealShares(WORKDAY).reduce((a, b) => a + b, 0)).toBeCloseTo(1, 10)
+    expect(mealShares(['12:00'])).toEqual([1])
+  })
+
+  it('falls back to equal shares for duplicate times', () => {
+    expect(mealShares(['07:00', '07:00'])).toEqual([0.5, 0.5])
+  })
+
+  it('composes each bowl from its own share', () => {
+    const plan = { mealsPerDay: 3, mealTimes: WORKDAY }
+    const items = [{ foodId: 'a', foodNameSnapshot: 'A', amountPerDayG: 120 }]
+    expect(mealComposition(plan, items, 0)[0]?.grams).toBeCloseTo(50, 5)
+    expect(mealComposition(plan, items, 1)[0]?.grams).toBeCloseTo(30, 5)
+    expect(mealComposition(plan, items, 2)[0]?.grams).toBeCloseTo(40, 5)
+  })
+
+  it('reads a plan with no typed-in times as the even window', () => {
+    const base = { mealsPerDay: 3, firstMealAt: '07:00', lastMealAt: '19:00' }
+    expect(planMealTimes({ ...base, mealTimes: [] })).toEqual(['07:00', '13:00', '19:00'])
+    expect(planMealTimes({ ...base, mealTimes: WORKDAY })).toEqual(WORKDAY)
   })
 })

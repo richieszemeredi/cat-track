@@ -803,6 +803,7 @@ export interface PlanInput {
   mealsPerDay: number
   firstMealAt: string
   lastMealAt: string
+  mealTimes: string[]
   setAtWeightKg: number | null
   note: string | null
 }

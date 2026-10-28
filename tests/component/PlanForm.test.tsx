@@ -122,6 +122,40 @@ describe('PlanForm', () => {
     expect(savedPlan().items[0]?.amountPerDayG).toBe(22.5)
   })
 
+  it('sizes typed-in meals by the gap after each and saves them sorted', async () => {
+    const user = userEvent.setup()
+    renderForm()
+
+    await user.click(screen.getByTestId('plan-mode-custom'))
+    // Seeded from the even spread (07:00 / 13:00 / 19:00); retime to a workday.
+    fireEvent.change(screen.getByTestId('plan-time-1'), { target: { value: '23:00' } })
+    fireEvent.change(screen.getByTestId('plan-time-2'), { target: { value: '17:00' } })
+    await user.type(screen.getByTestId('plan-item-grams-0'), '120')
+
+    expect(screen.getByTestId('plan-per-meal')).toHaveTextContent(
+      '07:00: 50 g Crunchy Kibble17:00: 30 g Crunchy Kibble23:00: 40 g Crunchy Kibble',
+    )
+
+    await user.click(screen.getByTestId('plan-save'))
+    const { input } = savedPlan()
+    expect(input.mealTimes).toEqual(['07:00', '17:00', '23:00'])
+    expect(input.firstMealAt).toBe('07:00')
+    expect(input.lastMealAt).toBe('23:00')
+  })
+
+  it('refuses two meals at the same time', async () => {
+    const user = userEvent.setup()
+    renderForm()
+
+    await user.click(screen.getByTestId('plan-mode-custom'))
+    fireEvent.change(screen.getByTestId('plan-time-1'), { target: { value: '07:00' } })
+    await user.type(screen.getByTestId('plan-item-grams-0'), '120')
+    await user.click(screen.getByTestId('plan-save'))
+
+    expect(screen.getByRole('alert')).toHaveTextContent('its own valid time')
+    expect(onDone).not.toHaveBeenCalled()
+  })
+
   it('saves the plan and its items', async () => {
     const user = userEvent.setup()
     renderForm()
@@ -133,6 +167,7 @@ describe('PlanForm', () => {
     expect(input.mealsPerDay).toBe(3)
     expect(input.firstMealAt).toBe('07:00')
     expect(input.lastMealAt).toBe('19:00')
+    expect(input.mealTimes).toEqual([])
     expect(input.setAtWeightKg).toBe(1.94)
     expect(items).toEqual([
       { foodId: 'food-1', foodNameSnapshot: 'Crunchy Kibble', amountPerDayG: 300 },

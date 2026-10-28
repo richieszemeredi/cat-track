@@ -58,6 +58,20 @@ service cloud.firestore {
       return t is string && t.matches('^([01][0-9]|2[0-3]):[0-5][0-9]$');
     }
 
+    // Rules cannot iterate a list, so a plan's typed-in meal times are checked
+    // by index: an entry past the end of the list is vacuously fine.
+    function validMealTimeAt(times, i) {
+      return times.size() <= i || validMealTime(times[i]);
+    }
+
+    function validMealTimes(times, mealsPerDay) {
+      return times is list && times.size() <= 6 &&
+        (times.size() == 0 || times.size() == mealsPerDay) &&
+        validMealTimeAt(times, 0) && validMealTimeAt(times, 1) &&
+        validMealTimeAt(times, 2) && validMealTimeAt(times, 3) &&
+        validMealTimeAt(times, 4) && validMealTimeAt(times, 5);
+    }
+
     // ---------- membership discovery ----------
     // Lets a signed-in user run
     //   collectionGroup('members').where('uid', '==', auth.uid)
@@ -263,7 +277,7 @@ service cloud.firestore {
           allow create: if isEditor(hid) &&
             request.resource.data.keys().hasOnly([
               'effectiveFrom', 'mealsPerDay', 'firstMealAt', 'lastMealAt',
-              'setAtWeightKg', 'note', 'createdBy', 'createdAt'
+              'mealTimes', 'setAtWeightKg', 'note', 'createdBy', 'createdAt'
             ]) &&
             request.resource.data.effectiveFrom is timestamp &&
             request.resource.data.mealsPerDay is int &&
@@ -271,6 +285,8 @@ service cloud.firestore {
             request.resource.data.mealsPerDay <= 6 &&
             validMealTime(request.resource.data.firstMealAt) &&
             validMealTime(request.resource.data.lastMealAt) &&
+            validMealTimes(request.resource.data.get('mealTimes', []),
+              request.resource.data.mealsPerDay) &&
             (request.resource.data.setAtWeightKg == null ||
               (request.resource.data.setAtWeightKg is number &&
                request.resource.data.setAtWeightKg > 0 &&
