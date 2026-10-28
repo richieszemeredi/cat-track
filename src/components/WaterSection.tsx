@@ -1,5 +1,6 @@
 import { useQuery } from '@tanstack/react-query'
 import { format } from 'date-fns'
+import { AnimatePresence } from 'motion/react'
 import { useState } from 'react'
 import { useAuth } from '../lib/auth'
 import {
@@ -14,6 +15,7 @@ import { useNow } from '../lib/use-now'
 import { waterAge, waterAgeLabel } from '../lib/water'
 import { AddDisclosure } from './AddDisclosure'
 import { ErrorCard } from './ErrorCard'
+import { ListRow } from './ListRow'
 import { WaterBowlForm } from './WaterBowlForm'
 
 /**
@@ -52,16 +54,19 @@ export function WaterSection() {
           <p className="gutter text-sm text-ink-soft">No water bowls yet.</p>
         ) : (
           <ul className="surface divide-y divide-sand">
-            {bowlsQuery.data.map((bowl) => (
-              <WaterBowlRow
-                key={bowl.id}
-                bowl={bowl}
-                now={now}
-                hid={householdId}
-                uid={uid}
-                canEdit={canEdit}
-              />
-            ))}
+            <AnimatePresence initial={false}>
+              {bowlsQuery.data.map((bowl, index) => (
+                <WaterBowlRow
+                  key={bowl.id}
+                  order={index}
+                  bowl={bowl}
+                  now={now}
+                  hid={householdId}
+                  uid={uid}
+                  canEdit={canEdit}
+                />
+              ))}
+            </AnimatePresence>
           </ul>
         )}
       </section>
@@ -80,12 +85,14 @@ export function WaterSection() {
 }
 
 function WaterBowlRow({
+  order,
   bowl,
   now,
   hid,
   uid,
   canEdit,
 }: {
+  order: number
   bowl: WaterBowl
   now: Date
   hid: string
@@ -106,52 +113,54 @@ function WaterBowlRow({
   }
 
   return (
-    <li className="flex flex-col gap-3 px-4 py-4">
-      <div className="min-w-0">
-        <p className="font-medium break-words">{bowl.location}</p>
-        <p className="text-2xl font-bold tracking-tight tabular-nums">
-          {waterAgeLabel(age, bowl.lastChangedAt, now)}
-        </p>
-        <p className="text-sm text-ink-soft">{format(bowl.lastChangedAt, 'MMM d, HH:mm')}</p>
-        {age.overdue ? (
-          <p className="text-sm font-semibold text-danger">Time for fresh water</p>
+    <ListRow order={order}>
+      <div className="flex flex-col gap-3 px-4 py-4">
+        <div className="min-w-0">
+          <p className="font-medium break-words">{bowl.location}</p>
+          <p className="text-2xl font-bold tracking-tight tabular-nums">
+            {waterAgeLabel(age, bowl.lastChangedAt, now)}
+          </p>
+          <p className="text-sm text-ink-soft">{format(bowl.lastChangedAt, 'MMM d, HH:mm')}</p>
+          {age.overdue ? (
+            <p className="text-sm font-semibold text-danger">Time for fresh water</p>
+          ) : null}
+        </div>
+
+        {canEdit && uid !== null ? (
+          <div className="flex flex-wrap gap-2">
+            <button type="button" onClick={handleReplacedNow} className="btn-chip">
+              Replaced now
+            </button>
+            <button
+              type="button"
+              aria-expanded={editing}
+              onClick={() => {
+                setEditing((open) => !open)
+              }}
+              className="btn-chip"
+            >
+              {editing ? 'Close' : 'Edit'}
+            </button>
+          </div>
+        ) : null}
+
+        {error === null ? null : (
+          <p role="alert" className="text-sm font-semibold text-danger">
+            {error}
+          </p>
+        )}
+
+        {editing && uid !== null ? (
+          <WaterBowlForm
+            hid={hid}
+            uid={uid}
+            existing={bowl}
+            onDone={() => {
+              setEditing(false)
+            }}
+          />
         ) : null}
       </div>
-
-      {canEdit && uid !== null ? (
-        <div className="flex flex-wrap gap-2">
-          <button type="button" onClick={handleReplacedNow} className="btn-chip">
-            Replaced now
-          </button>
-          <button
-            type="button"
-            aria-expanded={editing}
-            onClick={() => {
-              setEditing((open) => !open)
-            }}
-            className="btn-chip"
-          >
-            {editing ? 'Close' : 'Edit'}
-          </button>
-        </div>
-      ) : null}
-
-      {error === null ? null : (
-        <p role="alert" className="text-sm font-semibold text-danger">
-          {error}
-        </p>
-      )}
-
-      {editing && uid !== null ? (
-        <WaterBowlForm
-          hid={hid}
-          uid={uid}
-          existing={bowl}
-          onDone={() => {
-            setEditing(false)
-          }}
-        />
-      ) : null}
-    </li>
+    </ListRow>
   )
 }

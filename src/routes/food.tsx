@@ -1,11 +1,13 @@
 import { useQueries, useQuery } from '@tanstack/react-query'
 import { createFileRoute, Link } from '@tanstack/react-router'
 import { format, isSameDay, isValid, parse } from 'date-fns'
+import { AnimatePresence } from 'motion/react'
 import { useState, type SubmitEvent } from 'react'
 import { PoppingNumber } from '../components/AnimatedNumber'
 import { CatSwitcher } from '../components/CatSwitcher'
 import { ErrorCard } from '../components/ErrorCard'
 import { FoodForm } from '../components/FoodForm'
+import { ListRow, StackRow } from '../components/ListRow'
 import { LogMealForm } from '../components/LogMealForm'
 import { MealTick } from '../components/MealTick'
 import { PlanForm } from '../components/PlanForm'
@@ -511,31 +513,35 @@ function FoodContent({ cat }: { cat: Cat }) {
             ) : (
               <>
                 <ul className="surface divide-y divide-sand">
-                  {offPlan.map((entry) => (
-                    <li key={entry.id} className="flex items-center gap-3 px-4 py-3">
-                      <span className="text-sm text-ink-soft tabular-nums">
-                        {format(entry.datetime, 'HH:mm')}
-                      </span>
-                      <span className="min-w-0 flex-1 truncate font-medium">
-                        {entry.foodNameSnapshot}
-                      </span>
-                      <span className="shrink-0 text-sm text-ink-soft tabular-nums">
-                        {roundGrams(entry.amountG)} g · {roundKcal(entry.kcal)} kcal
-                      </span>
-                      {canEdit ? (
-                        <button
-                          type="button"
-                          aria-label="Delete meal"
-                          onClick={() => {
-                            void removeFeeding(entry)
-                          }}
-                          className="btn-icon"
-                        >
-                          ×
-                        </button>
-                      ) : null}
-                    </li>
-                  ))}
+                  <AnimatePresence initial={false}>
+                    {offPlan.map((entry, index) => (
+                      <ListRow key={entry.id} order={index}>
+                        <div className="flex items-center gap-3 px-4 py-3">
+                          <span className="text-sm text-ink-soft tabular-nums">
+                            {format(entry.datetime, 'HH:mm')}
+                          </span>
+                          <span className="min-w-0 flex-1 truncate font-medium">
+                            {entry.foodNameSnapshot}
+                          </span>
+                          <span className="shrink-0 text-sm text-ink-soft tabular-nums">
+                            {roundGrams(entry.amountG)} g · {roundKcal(entry.kcal)} kcal
+                          </span>
+                          {canEdit ? (
+                            <button
+                              type="button"
+                              aria-label="Delete meal"
+                              onClick={() => {
+                                void removeFeeding(entry)
+                              }}
+                              className="btn-icon"
+                            >
+                              ×
+                            </button>
+                          ) : null}
+                        </div>
+                      </ListRow>
+                    ))}
+                  </AnimatePresence>
                 </ul>
                 <p className="gutter text-sm text-ink-soft tabular-nums">
                   Total: {roundGrams(sumGrams(offPlan))} g · {roundKcal(sumKcal(offPlan))} kcal
@@ -586,68 +592,72 @@ function FoodContent({ cat }: { cat: Cat }) {
               </p>
             ) : (
               <ul className="surface divide-y divide-sand">
-                {activeFoods.map((food) => (
-                  <li key={food.id} className="flex flex-col gap-3 p-4">
-                    {/* Actions sit on their own row rather than beside the text:
-                    squeezed next to two chips, a real food name wrapped onto
-                    three lines and the energy figures broke mid-unit. */}
-                    <div className="flex flex-col gap-3">
-                      {/* Name, then one metadata line. The type used to be an
-                      inline pill after the name, which orphaned onto a line of
-                      its own as soon as the name wrapped. */}
-                      <div className="flex min-w-0 flex-col gap-1">
-                        <p className="font-semibold">{food.name}</p>
-                        <p className="flex flex-wrap items-center gap-x-1.5 gap-y-1 text-sm text-ink-soft">
-                          <TypeBadge type={food.type} />
-                          {food.brand === null || food.brand === '' ? null : (
-                            <span>{food.brand}</span>
-                          )}
-                        </p>
-                        {/* Each figure stays whole: "100 g" wrapped mid-unit on a
-                        375pt screen. */}
-                        <p className="text-sm text-ink-soft tabular-nums">
-                          <span className="whitespace-nowrap">{food.kcalPerGram} kcal/g</span> ·{' '}
-                          <span className="whitespace-nowrap">
-                            {roundKcal(food.kcalPerGram * 100)} kcal / 100 g
-                          </span>
-                        </p>
-                      </div>
-                      {canEdit && uid !== null ? (
-                        <div className="flex justify-end gap-2">
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setEditingFoodId((prev) => (prev === food.id ? null : food.id))
-                            }}
-                            className="btn-chip"
-                          >
-                            Edit
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => {
-                              void setFoodArchived(food, true)
-                            }}
-                            className="btn-chip"
-                          >
-                            Archive
-                          </button>
+                <AnimatePresence initial={false}>
+                  {activeFoods.map((food, index) => (
+                    <ListRow key={food.id} order={index}>
+                      <div className="flex flex-col gap-3 p-4">
+                        {/* Actions sit on their own row rather than beside the text:
+                        squeezed next to two chips, a real food name wrapped onto
+                        three lines and the energy figures broke mid-unit. */}
+                        <div className="flex flex-col gap-3">
+                          {/* Name, then one metadata line. The type used to be an
+                          inline pill after the name, which orphaned onto a line of
+                          its own as soon as the name wrapped. */}
+                          <div className="flex min-w-0 flex-col gap-1">
+                            <p className="font-semibold">{food.name}</p>
+                            <p className="flex flex-wrap items-center gap-x-1.5 gap-y-1 text-sm text-ink-soft">
+                              <TypeBadge type={food.type} />
+                              {food.brand === null || food.brand === '' ? null : (
+                                <span>{food.brand}</span>
+                              )}
+                            </p>
+                            {/* Each figure stays whole: "100 g" wrapped mid-unit on a
+                            375pt screen. */}
+                            <p className="text-sm text-ink-soft tabular-nums">
+                              <span className="whitespace-nowrap">{food.kcalPerGram} kcal/g</span> ·{' '}
+                              <span className="whitespace-nowrap">
+                                {roundKcal(food.kcalPerGram * 100)} kcal / 100 g
+                              </span>
+                            </p>
+                          </div>
+                          {canEdit && uid !== null ? (
+                            <div className="flex justify-end gap-2">
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setEditingFoodId((prev) => (prev === food.id ? null : food.id))
+                                }}
+                                className="btn-chip"
+                              >
+                                Edit
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  void setFoodArchived(food, true)
+                                }}
+                                className="btn-chip"
+                              >
+                                Archive
+                              </button>
+                            </div>
+                          ) : null}
                         </div>
-                      ) : null}
-                    </div>
-                    {editingFoodId === food.id && canEdit && uid !== null ? (
-                      <FoodForm
-                        hid={householdId}
-                        catId={cat.id}
-                        uid={uid}
-                        existing={food}
-                        onDone={() => {
-                          setEditingFoodId(null)
-                        }}
-                      />
-                    ) : null}
-                  </li>
-                ))}
+                        {editingFoodId === food.id && canEdit && uid !== null ? (
+                          <FoodForm
+                            hid={householdId}
+                            catId={cat.id}
+                            uid={uid}
+                            existing={food}
+                            onDone={() => {
+                              setEditingFoodId(null)
+                            }}
+                          />
+                        ) : null}
+                      </div>
+                    </ListRow>
+                  ))}
+                </AnimatePresence>
               </ul>
             )}
 
@@ -666,24 +676,28 @@ function FoodContent({ cat }: { cat: Cat }) {
                 </button>
                 {showArchived ? (
                   <ul className="surface divide-y divide-sand">
-                    {archivedFoods.map((food) => (
-                      <li key={food.id} className="flex items-center gap-3 px-4 py-3">
-                        <span className="min-w-0 flex-1 truncate text-sm text-ink-soft">
-                          {food.name}
-                        </span>
-                        {canEdit ? (
-                          <button
-                            type="button"
-                            onClick={() => {
-                              void setFoodArchived(food, false)
-                            }}
-                            className="btn-chip"
-                          >
-                            Unarchive
-                          </button>
-                        ) : null}
-                      </li>
-                    ))}
+                    <AnimatePresence initial={false}>
+                      {archivedFoods.map((food, index) => (
+                        <ListRow key={food.id} order={index}>
+                          <div className="flex items-center gap-3 px-4 py-3">
+                            <span className="min-w-0 flex-1 truncate text-sm text-ink-soft">
+                              {food.name}
+                            </span>
+                            {canEdit ? (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  void setFoodArchived(food, false)
+                                }}
+                                className="btn-chip"
+                              >
+                                Unarchive
+                              </button>
+                            ) : null}
+                          </div>
+                        </ListRow>
+                      ))}
+                    </AnimatePresence>
                   </ul>
                 ) : null}
               </div>
@@ -1033,76 +1047,80 @@ function PlanHistory({
 
   return (
     <div className="flex flex-col gap-4">
-      {plans.map((plan, index) => {
-        const items = itemQueries[index]?.data ?? []
-        const until = plans[index - 1]?.effectiveFrom ?? null
-        const meals = plan.mealsPerDay
-        const window =
-          plan.mealTimes.length > 0
-            ? plan.mealTimes.join(' · ')
-            : `${plan.firstMealAt}–${plan.lastMealAt}`
+      <AnimatePresence initial={false}>
+        {plans.map((plan, index) => {
+          const items = itemQueries[index]?.data ?? []
+          const until = plans[index - 1]?.effectiveFrom ?? null
+          const meals = plan.mealsPerDay
+          const window =
+            plan.mealTimes.length > 0
+              ? plan.mealTimes.join(' · ')
+              : `${plan.firstMealAt}–${plan.lastMealAt}`
 
-        return (
-          <div key={plan.id} className="flex gap-3">
-            <span
-              aria-hidden="true"
-              className={`mt-1.5 h-3 w-3 shrink-0 rounded-full ${
-                index === 0 ? 'bg-coral' : 'border-2 border-sand-deep'
-              }`}
-            />
-            <div className="flex min-w-0 flex-1 flex-col gap-0.5">
-              <span
-                className={`text-sm tabular-nums ${index === 0 ? 'font-semibold text-coral-ink' : 'text-ink-soft'}`}
-              >
-                {/* A plan revised the same day it was set never really ran, and
-                    "24 Aug – 24 Aug" reads as a bug rather than as a same-day
-                    change of mind. */}
-                {until === null
-                  ? `Since ${format(plan.effectiveFrom, 'd MMM')}`
-                  : isSameDay(plan.effectiveFrom, until)
-                    ? `${format(plan.effectiveFrom, 'd MMM')} · replaced the same day`
-                    : `${format(plan.effectiveFrom, 'd MMM')} – ${format(until, 'd MMM')}`}
-              </span>
-              <span className="font-medium tabular-nums">
-                {meals} {meals === 1 ? 'meal' : 'meals'} · {window}
-              </span>
-              <span className="text-sm text-ink-soft tabular-nums">
-                {items.length === 0
-                  ? '—'
-                  : items
-                      .map(
-                        (item) =>
-                          `${String(roundGrams(item.amountPerDayG))} g ${item.foodNameSnapshot}`,
-                      )
-                      .join(' + ')}{' '}
-                a day
-              </span>
-              <span className="text-sm text-ink-soft tabular-nums">
-                {roundKcal(planDailyKcal(items, kcalPerGram))} kcal
-                {plan.setAtWeightKg === null
-                  ? ''
-                  : ` · she was ${String(roundKg(plan.setAtWeightKg))} kg`}
-              </span>
-            </div>
-            {canEdit ? (
-              <button
-                type="button"
-                aria-label={
-                  index === 0
-                    ? 'Delete this plan and go back to the previous one'
-                    : 'Delete this plan'
-                }
-                onClick={() => {
-                  void remove(plan, index === 0)
-                }}
-                className="btn-icon"
-              >
-                ×
-              </button>
-            ) : null}
-          </div>
-        )
-      })}
+          return (
+            <StackRow key={plan.id} order={index} gap="1rem">
+              <div className="flex gap-3">
+                <span
+                  aria-hidden="true"
+                  className={`mt-1.5 h-3 w-3 shrink-0 rounded-full ${
+                    index === 0 ? 'bg-coral' : 'border-2 border-sand-deep'
+                  }`}
+                />
+                <div className="flex min-w-0 flex-1 flex-col gap-0.5">
+                  <span
+                    className={`text-sm tabular-nums ${index === 0 ? 'font-semibold text-coral-ink' : 'text-ink-soft'}`}
+                  >
+                    {/* A plan revised the same day it was set never really ran, and
+                        "24 Aug – 24 Aug" reads as a bug rather than as a same-day
+                        change of mind. */}
+                    {until === null
+                      ? `Since ${format(plan.effectiveFrom, 'd MMM')}`
+                      : isSameDay(plan.effectiveFrom, until)
+                        ? `${format(plan.effectiveFrom, 'd MMM')} · replaced the same day`
+                        : `${format(plan.effectiveFrom, 'd MMM')} – ${format(until, 'd MMM')}`}
+                  </span>
+                  <span className="font-medium tabular-nums">
+                    {meals} {meals === 1 ? 'meal' : 'meals'} · {window}
+                  </span>
+                  <span className="text-sm text-ink-soft tabular-nums">
+                    {items.length === 0
+                      ? '—'
+                      : items
+                          .map(
+                            (item) =>
+                              `${String(roundGrams(item.amountPerDayG))} g ${item.foodNameSnapshot}`,
+                          )
+                          .join(' + ')}{' '}
+                    a day
+                  </span>
+                  <span className="text-sm text-ink-soft tabular-nums">
+                    {roundKcal(planDailyKcal(items, kcalPerGram))} kcal
+                    {plan.setAtWeightKg === null
+                      ? ''
+                      : ` · she was ${String(roundKg(plan.setAtWeightKg))} kg`}
+                  </span>
+                </div>
+                {canEdit ? (
+                  <button
+                    type="button"
+                    aria-label={
+                      index === 0
+                        ? 'Delete this plan and go back to the previous one'
+                        : 'Delete this plan'
+                    }
+                    onClick={() => {
+                      void remove(plan, index === 0)
+                    }}
+                    className="btn-icon"
+                  >
+                    ×
+                  </button>
+                ) : null}
+              </div>
+            </StackRow>
+          )
+        })}
+      </AnimatePresence>
       {error === null ? null : (
         <p role="alert" className="text-sm font-semibold text-danger">
           {error}

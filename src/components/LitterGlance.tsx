@@ -1,9 +1,11 @@
 import { useQuery } from '@tanstack/react-query'
 import { Link } from '@tanstack/react-router'
+import { AnimatePresence } from 'motion/react'
 import { litterBoxesQueryOptions, useLitterBoxesLive } from '../lib/db'
 import { useHousehold } from '../lib/household'
 import { litterAge, litterAgeLabel } from '../lib/litter'
 import { useToday } from '../lib/use-today'
+import { ListRow } from './ListRow'
 
 /** How many boxes the home screen lists before it says "N more". */
 const MAX_ROWS = 3
@@ -56,24 +58,26 @@ export function LitterGlance() {
         // outer one minus the 1px border); clipping the card
         // with overflow-hidden would also cut off the keyboard focus ring.
         <ul className="surface divide-y divide-sand [&>li:first-child>a]:rounded-t-[calc(var(--radius-squishy)-1px)] [&>li:last-child>a]:rounded-b-[calc(var(--radius-squishy)-1px)]">
-          {shown.map(({ box, age }) => (
-            <li key={box.id}>
-              <Link
-                to="/chores"
-                className="flex min-h-12 items-baseline gap-3 px-4 py-3 hover:bg-sand"
-              >
-                <span className="min-w-0 flex-1">
-                  <span className="block truncate font-medium">{box.location}</span>
-                  {age.overdue ? (
-                    <span className="block text-sm text-danger">Due for a full clean</span>
-                  ) : null}
-                </span>
-                <span className="shrink-0 text-sm text-ink-soft tabular-nums">
-                  {litterAgeLabel(age)}
-                </span>
-              </Link>
-            </li>
-          ))}
+          <AnimatePresence initial={false}>
+            {shown.map(({ box, age }, index) => (
+              <ListRow key={box.id} order={index}>
+                <Link
+                  to="/chores"
+                  className="flex min-h-12 items-baseline gap-3 px-4 py-3 hover:bg-sand"
+                >
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate font-medium">{box.location}</span>
+                    {age.overdue ? (
+                      <span className="block text-sm text-danger">Due for a full clean</span>
+                    ) : null}
+                  </span>
+                  <span className="shrink-0 text-sm text-ink-soft tabular-nums">
+                    {litterAgeLabel(age)}
+                  </span>
+                </Link>
+              </ListRow>
+            ))}
+          </AnimatePresence>
           {hidden > 0 ? (
             <li>
               <Link

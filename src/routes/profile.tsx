@@ -1,9 +1,11 @@
 import { useQuery } from '@tanstack/react-query'
 import { createFileRoute } from '@tanstack/react-router'
+import { AnimatePresence } from 'motion/react'
 import { useState, type ReactNode, type SubmitEvent } from 'react'
 import { CatForm } from '../components/CatForm'
 import { CatSwitcher } from '../components/CatSwitcher'
 import { ErrorCard } from '../components/ErrorCard'
+import { ListRow } from '../components/ListRow'
 import { SavedNote } from '../components/SavedNote'
 import { signOutUser, useAuth } from '../lib/auth'
 import { ageLabelLong, LIFE_STAGE_LABELS, MER_MULTIPLIERS } from '../lib/catmath'
@@ -235,14 +237,18 @@ function HouseholdCard({ hid, role }: { hid: string; role: Role }) {
         <p className="gutter text-sm text-ink-soft">No members found yet.</p>
       ) : (
         <ul className="surface divide-y divide-sand">
-          {members.map((member) => (
-            <li key={member.id} className="flex items-center justify-between gap-3 px-4 py-3">
-              {/* Display names are often long emails — truncate, never push
-                  the role badge off the row. */}
-              <span className="min-w-0 truncate font-medium">{member.displayName}</span>
-              <span className={ROLE_BADGE}>{member.role}</span>
-            </li>
-          ))}
+          <AnimatePresence initial={false}>
+            {members.map((member, index) => (
+              <ListRow key={member.id} order={index}>
+                <div className="flex items-center justify-between gap-3 px-4 py-3">
+                  {/* Display names are often long emails — truncate, never
+                      push the role badge off the row. */}
+                  <span className="min-w-0 truncate font-medium">{member.displayName}</span>
+                  <span className={ROLE_BADGE}>{member.role}</span>
+                </div>
+              </ListRow>
+            ))}
+          </AnimatePresence>
         </ul>
       )}
 

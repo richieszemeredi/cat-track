@@ -1,5 +1,6 @@
 import { useQuery } from '@tanstack/react-query'
 import { format, startOfDay } from 'date-fns'
+import { AnimatePresence } from 'motion/react'
 import { useState } from 'react'
 import { useAuth } from '../lib/auth'
 import {
@@ -14,6 +15,7 @@ import { litterAge, litterAgeLabel, weeksLabel } from '../lib/litter'
 import { useToday } from '../lib/use-today'
 import { AddDisclosure } from './AddDisclosure'
 import { ErrorCard } from './ErrorCard'
+import { ListRow } from './ListRow'
 import { LitterBoxForm } from './LitterBoxForm'
 
 /**
@@ -54,16 +56,19 @@ export function LitterSection() {
           <p className="gutter text-sm text-ink-soft">No litter boxes yet.</p>
         ) : (
           <ul className="surface divide-y divide-sand">
-            {boxesQuery.data.map((box) => (
-              <LitterBoxRow
-                key={box.id}
-                box={box}
-                today={today}
-                hid={householdId}
-                uid={uid}
-                canEdit={canEdit}
-              />
-            ))}
+            <AnimatePresence initial={false}>
+              {boxesQuery.data.map((box, index) => (
+                <LitterBoxRow
+                  key={box.id}
+                  order={index}
+                  box={box}
+                  today={today}
+                  hid={householdId}
+                  uid={uid}
+                  canEdit={canEdit}
+                />
+              ))}
+            </AnimatePresence>
           </ul>
         )}
       </section>
@@ -82,12 +87,14 @@ export function LitterSection() {
 }
 
 function LitterBoxRow({
+  order,
   box,
   today,
   hid,
   uid,
   canEdit,
 }: {
+  order: number
   box: LitterBox
   today: Date
   hid: string
@@ -108,59 +115,61 @@ function LitterBoxRow({
   }
 
   return (
-    <li className="flex flex-col gap-3 px-4 py-4">
-      <div className="min-w-0">
-        <p className="font-medium break-words">{box.location}</p>
-        <p className="text-2xl font-bold tracking-tight tabular-nums">{litterAgeLabel(age)}</p>
-        <p className="text-sm text-ink-soft">
-          {format(box.lastChangedAt, 'MMM d')}
-          {age.days > 0 ? ` · ${String(age.days)} ${age.days === 1 ? 'day' : 'days'}` : null}
-          {` · every ${weeksLabel(box.changeEveryWeeks)}`}
-        </p>
-        {age.overdue ? (
-          <p className="text-sm font-semibold text-danger">Due for a full clean</p>
+    <ListRow order={order}>
+      <div className="flex flex-col gap-3 px-4 py-4">
+        <div className="min-w-0">
+          <p className="font-medium break-words">{box.location}</p>
+          <p className="text-2xl font-bold tracking-tight tabular-nums">{litterAgeLabel(age)}</p>
+          <p className="text-sm text-ink-soft">
+            {format(box.lastChangedAt, 'MMM d')}
+            {age.days > 0 ? ` · ${String(age.days)} ${age.days === 1 ? 'day' : 'days'}` : null}
+            {` · every ${weeksLabel(box.changeEveryWeeks)}`}
+          </p>
+          {age.overdue ? (
+            <p className="text-sm font-semibold text-danger">Due for a full clean</p>
+          ) : null}
+        </div>
+
+        {canEdit && uid !== null ? (
+          <div className="flex flex-wrap gap-2">
+            <button
+              type="button"
+              disabled={age.days === 0}
+              onClick={handleReplacedToday}
+              className="btn-chip"
+            >
+              Replaced today
+            </button>
+            <button
+              type="button"
+              aria-expanded={editing}
+              onClick={() => {
+                setEditing((open) => !open)
+              }}
+              className="btn-chip"
+            >
+              {editing ? 'Close' : 'Edit'}
+            </button>
+          </div>
+        ) : null}
+
+        {error === null ? null : (
+          <p role="alert" className="text-sm font-semibold text-danger">
+            {error}
+          </p>
+        )}
+
+        {editing && uid !== null ? (
+          <LitterBoxForm
+            hid={hid}
+            uid={uid}
+            existing={box}
+            onDone={() => {
+              setEditing(false)
+            }}
+          />
         ) : null}
       </div>
-
-      {canEdit && uid !== null ? (
-        <div className="flex flex-wrap gap-2">
-          <button
-            type="button"
-            disabled={age.days === 0}
-            onClick={handleReplacedToday}
-            className="btn-chip"
-          >
-            Replaced today
-          </button>
-          <button
-            type="button"
-            aria-expanded={editing}
-            onClick={() => {
-              setEditing((open) => !open)
-            }}
-            className="btn-chip"
-          >
-            {editing ? 'Close' : 'Edit'}
-          </button>
-        </div>
-      ) : null}
-
-      {error === null ? null : (
-        <p role="alert" className="text-sm font-semibold text-danger">
-          {error}
-        </p>
-      )}
-
-      {editing && uid !== null ? (
-        <LitterBoxForm
-          hid={hid}
-          uid={uid}
-          existing={box}
-          onDone={() => {
-            setEditing(false)
-          }}
-        />
-      ) : null}
-    </li>
+    </ListRow>
   )
 }

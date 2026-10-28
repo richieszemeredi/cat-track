@@ -1,11 +1,13 @@
 import { useQuery } from '@tanstack/react-query'
 import { createFileRoute, Link } from '@tanstack/react-router'
 import { differenceInDays, format } from 'date-fns'
+import { AnimatePresence } from 'motion/react'
 import { useState } from 'react'
 import { AnimatedNumber } from '../components/AnimatedNumber'
 import { CatSwitcher } from '../components/CatSwitcher'
 import { ErrorCard } from '../components/ErrorCard'
 import { GrowthChart } from '../components/GrowthChart'
+import { ListRow } from '../components/ListRow'
 import { WeighForm } from '../components/WeighForm'
 import { useAuth } from '../lib/auth'
 import { formatWeightKg, weeklyWeightTrend } from '../lib/catmath'
@@ -196,21 +198,24 @@ function WeightBody({
           ) : (
             <>
               <ul className="surface divide-y divide-sand">
-                {[...entries]
-                  .reverse()
-                  .slice(0, historyShown)
-                  .map((entry) => (
-                    <HistoryRow
-                      key={entry.id}
-                      entry={entry}
-                      canEdit={canEdit}
-                      onDelete={() => {
-                        if (window.confirm('Delete this weigh-in?')) {
-                          handleDelete(entry.id)
-                        }
-                      }}
-                    />
-                  ))}
+                <AnimatePresence initial={false}>
+                  {[...entries]
+                    .reverse()
+                    .slice(0, historyShown)
+                    .map((entry, index) => (
+                      <HistoryRow
+                        key={entry.id}
+                        order={index}
+                        entry={entry}
+                        canEdit={canEdit}
+                        onDelete={() => {
+                          if (window.confirm('Delete this weigh-in?')) {
+                            handleDelete(entry.id)
+                          }
+                        }}
+                      />
+                    ))}
+                </AnimatePresence>
               </ul>
               {entries.length > historyShown ? (
                 <button
@@ -232,31 +237,40 @@ function WeightBody({
 }
 
 function HistoryRow({
+  order,
   entry,
   canEdit,
   onDelete,
 }: {
+  order: number
   entry: WeightEntry
   canEdit: boolean
   onDelete: () => void
 }) {
   return (
-    <li className="flex items-center gap-3 px-4 py-3">
-      <span className="w-20 shrink-0 font-semibold tabular-nums">
-        {formatWeightKg(entry.weightKg)}
-      </span>
-      <span className="min-w-0 flex-1">
-        <span className="text-sm text-ink-soft">{format(entry.date, 'MMM d, yyyy')}</span>
-        {entry.note === null ? null : (
-          <span className="block text-sm break-words text-ink-soft">{entry.note}</span>
-        )}
-      </span>
-      {canEdit ? (
-        <button type="button" aria-label="Delete weigh-in" onClick={onDelete} className="btn-icon">
-          ×
-        </button>
-      ) : null}
-    </li>
+    <ListRow order={order}>
+      <div className="flex items-center gap-3 px-4 py-3">
+        <span className="w-20 shrink-0 font-semibold tabular-nums">
+          {formatWeightKg(entry.weightKg)}
+        </span>
+        <span className="min-w-0 flex-1">
+          <span className="text-sm text-ink-soft">{format(entry.date, 'MMM d, yyyy')}</span>
+          {entry.note === null ? null : (
+            <span className="block text-sm break-words text-ink-soft">{entry.note}</span>
+          )}
+        </span>
+        {canEdit ? (
+          <button
+            type="button"
+            aria-label="Delete weigh-in"
+            onClick={onDelete}
+            className="btn-icon"
+          >
+            ×
+          </button>
+        ) : null}
+      </div>
+    </ListRow>
   )
 }
 

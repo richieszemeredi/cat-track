@@ -328,3 +328,16 @@
       color 150ms ease-out;
   }
 }
+
+/* Hairlines while a list row leaves (ListRow sets data-leaving for the length
+   of its exit). divide-y draws each divider on the row above it, so without
+   this a collapsing row's own divider, or the one above a collapsing LAST
+   row, would slide down into the card's bottom border and read as a double
+   edge until the row is gone. Instead the leaving row and any row left with
+   nothing present after it drop their divider at once, so the list already
+   has the hairlines it will settle with. Unlayered: divide-y lives in the
+   utilities layer, which beats anything in components. */
+.divide-y > [data-leaving],
+.divide-y > :not(:has(~ :not([data-leaving]))) {
+  border-bottom-width: 0;
+}

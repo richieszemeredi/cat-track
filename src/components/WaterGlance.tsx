@@ -1,9 +1,11 @@
 import { useQuery } from '@tanstack/react-query'
 import { Link } from '@tanstack/react-router'
+import { AnimatePresence } from 'motion/react'
 import { useWaterBowlsLive, waterBowlsQueryOptions } from '../lib/db'
 import { useHousehold } from '../lib/household'
 import { useNow } from '../lib/use-now'
 import { waterAge, waterAgeLabel } from '../lib/water'
+import { ListRow } from './ListRow'
 
 /** How many bowls the home screen lists before it says "N more". */
 const MAX_ROWS = 3
@@ -54,24 +56,26 @@ export function WaterGlance() {
       ) : (
         // Hover fill follows the card's inner corners — see LitterGlance.
         <ul className="surface divide-y divide-sand [&>li:first-child>a]:rounded-t-[calc(var(--radius-squishy)-1px)] [&>li:last-child>a]:rounded-b-[calc(var(--radius-squishy)-1px)]">
-          {shown.map(({ bowl, age }) => (
-            <li key={bowl.id}>
-              <Link
-                to="/chores"
-                className="flex min-h-12 items-baseline gap-3 px-4 py-3 hover:bg-sand"
-              >
-                <span className="min-w-0 flex-1">
-                  <span className="block truncate font-medium">{bowl.location}</span>
-                  {age.overdue ? (
-                    <span className="block text-sm text-danger">Time for fresh water</span>
-                  ) : null}
-                </span>
-                <span className="shrink-0 text-sm text-ink-soft tabular-nums">
-                  {waterAgeLabel(age, bowl.lastChangedAt, now)}
-                </span>
-              </Link>
-            </li>
-          ))}
+          <AnimatePresence initial={false}>
+            {shown.map(({ bowl, age }, index) => (
+              <ListRow key={bowl.id} order={index}>
+                <Link
+                  to="/chores"
+                  className="flex min-h-12 items-baseline gap-3 px-4 py-3 hover:bg-sand"
+                >
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate font-medium">{bowl.location}</span>
+                    {age.overdue ? (
+                      <span className="block text-sm text-danger">Time for fresh water</span>
+                    ) : null}
+                  </span>
+                  <span className="shrink-0 text-sm text-ink-soft tabular-nums">
+                    {waterAgeLabel(age, bowl.lastChangedAt, now)}
+                  </span>
+                </Link>
+              </ListRow>
+            ))}
+          </AnimatePresence>
           {hidden > 0 ? (
             <li>
               <Link
