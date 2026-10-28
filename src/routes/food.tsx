@@ -762,7 +762,12 @@ function TodayProgress({
         aria-valuenow={given}
         className="h-2 w-full overflow-hidden rounded-full bg-sand"
       >
-        <div className="h-full rounded-full bg-coral" style={{ width: `${String(pct)}%` }} />
+        {/* Fills like the Home meter (CatToday's Meter), for the same reason:
+        the other phone's tick arrives live and should be seen to land. */}
+        <div
+          className="h-full rounded-full bg-coral transition-[width] duration-500 ease-out"
+          style={{ width: `${String(pct)}%` }}
+        />
       </div>
       <p data-testid="today-kcal" className="text-sm text-ink-soft tabular-nums">
         {roundKcal(eatenKcal)} of {roundKcal(planKcal)} kcal

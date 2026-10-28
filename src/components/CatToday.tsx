@@ -280,8 +280,12 @@ function Meter({ value, max, label }: { value: number; max: number; label: strin
       aria-valuenow={roundKcal(Math.min(value, max))}
       className="h-2 w-full overflow-hidden rounded-full bg-sand"
     >
+      {/* Fills rather than jumps: feedings arrive live, so a bowl ticked on
+      the other phone should visibly move this bar. Plain ease-out, not
+      ease-squishy — a fill that overshoots would claim, for a moment, more
+      than she has eaten. The colour eases with it when she goes over. */}
       <div
-        className={`h-full rounded-full ${over ? 'bg-coral-deep' : 'bg-coral'}`}
+        className={`h-full rounded-full transition-[width,background-color] duration-500 ease-out ${over ? 'bg-coral-deep' : 'bg-coral'}`}
         style={{ width: `${String(pct)}%` }}
       />
     </div>
