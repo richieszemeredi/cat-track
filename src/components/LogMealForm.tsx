@@ -3,6 +3,7 @@ import { useEffect, useRef, useState, type SubmitEvent } from 'react'
 import { kcalForGrams, roundKcal } from '../lib/catmath'
 import { addFeeding, awaitOrQueued, type Food } from '../lib/db'
 import { DECIMAL_INPUT_PROPS, parseDecimal } from '../lib/numbers'
+import { SavedNote } from './SavedNote'
 
 const INPUT_CLASS = 'field'
 
@@ -187,11 +188,13 @@ export function LogMealForm({
         Log meal
       </button>
 
-      {justLogged ? (
-        <p role="status" className="text-center text-sm font-semibold text-positive">
-          Logged!
-        </p>
-      ) : null}
+      <SavedNote
+        show={justLogged}
+        role="status"
+        className="text-center text-sm font-semibold text-positive"
+      >
+        Logged!
+      </SavedNote>
     </form>
   )
 }

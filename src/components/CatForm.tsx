@@ -4,6 +4,7 @@ import { LIFE_STAGE_LABELS, LIFE_STAGES } from '../lib/catmath'
 import { awaitOrQueued, createCat, updateCat, type Cat, type CatInput } from '../lib/db'
 import { DECIMAL_INPUT_PROPS, parseDecimal } from '../lib/numbers'
 import { lifeStageSchema, sexSchema, type LifeStage, type Sex } from '../lib/schemas'
+import { SavedNote } from './SavedNote'
 
 const FIELD = 'field mt-1'
 
@@ -271,7 +272,9 @@ export function CatForm({
         Save profile
       </button>
 
-      {flash === null ? null : <p className="text-sm font-semibold text-positive">{flash}</p>}
+      <SavedNote show={flash !== null} className="text-sm font-semibold text-positive">
+        {flash}
+      </SavedNote>
       {error === null ? null : (
         <p role="alert" className="text-sm font-semibold text-danger">
           {error}

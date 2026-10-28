@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from '@testing-library/react'
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { WeighForm } from '../../src/components/WeighForm'
@@ -84,6 +84,28 @@ describe('WeighForm', () => {
     await screen.findByText(/saved!/i)
     const [, , , input] = firstWeightCall()
     expect(input.weightKg).toBe(expected)
+  })
+
+  it('lets the Saved! note go again on its own', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true })
+    try {
+      const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime })
+      renderForm()
+
+      await user.type(screen.getByTestId('weight-kg'), '4.2')
+      await user.click(screen.getByTestId('weight-save'))
+      await screen.findByText(/saved!/i)
+
+      act(() => {
+        vi.advanceTimersByTime(2500)
+      })
+      // It fades out first, so it is gone a moment after the timer, not on it.
+      await waitFor(() => {
+        expect(screen.queryByText(/saved!/i)).not.toBeInTheDocument()
+      })
+    } finally {
+      vi.useRealTimers()
+    }
   })
 
   it('sends a null note when left empty', async () => {

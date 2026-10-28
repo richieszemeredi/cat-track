@@ -2,6 +2,7 @@ import { format, isValid, parse } from 'date-fns'
 import { useEffect, useState, type SubmitEvent } from 'react'
 import { addWeightEntry, awaitOrQueued, type WeightInput } from '../lib/db'
 import { DECIMAL_INPUT_PROPS, parseDecimal } from '../lib/numbers'
+import { SavedNote } from './SavedNote'
 
 const FIELD_CLASS = 'field mt-1'
 
@@ -119,7 +120,9 @@ export function WeighForm({ hid, catId, uid }: { hid: string; catId: string; uid
       <button type="submit" data-testid="weight-save" disabled={busy} className="btn-primary">
         Save weigh-in
       </button>
-      {saved ? <p className="text-sm font-semibold text-positive">Saved!</p> : null}
+      <SavedNote show={saved} className="text-sm font-semibold text-positive">
+        Saved!
+      </SavedNote>
       {error === null ? null : (
         <p role="alert" className="text-sm font-semibold text-danger">
           {error}

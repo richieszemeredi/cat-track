@@ -4,6 +4,7 @@ import { useState, type ReactNode, type SubmitEvent } from 'react'
 import { CatForm } from '../components/CatForm'
 import { CatSwitcher } from '../components/CatSwitcher'
 import { ErrorCard } from '../components/ErrorCard'
+import { SavedNote } from '../components/SavedNote'
 import { signOutUser, useAuth } from '../lib/auth'
 import { ageLabelLong, LIFE_STAGE_LABELS, MER_MULTIPLIERS } from '../lib/catmath'
 import { addMember, awaitOrQueued, membersQueryOptions, useMembersLive, type Cat } from '../lib/db'
@@ -328,7 +329,9 @@ function AddMemberForm({ hid }: { hid: string }) {
           shows up on its own the next time they open the app. (Invite links come later.)
         </p>
 
-        {flash === null ? null : <p className="text-sm font-semibold text-positive">{flash}</p>}
+        <SavedNote show={flash !== null} className="text-sm font-semibold text-positive">
+          {flash}
+        </SavedNote>
         {error === null ? null : (
           <p role="alert" className="text-sm font-semibold text-danger">
             {error}
