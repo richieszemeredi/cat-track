@@ -10,7 +10,7 @@ export interface HouseholdState {
   canEdit: boolean
   cats: Cat[]
   /**
-   * The cat the cat-scoped screens (/food, /weight, /profile) show: the one
+   * The cat the cat-scoped screens (/weight, /profile) show: the one
    * chosen on this device, else the first (oldest-created); null pre-onboarding.
    */
   activeCat: Cat | null
