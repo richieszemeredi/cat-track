@@ -90,6 +90,29 @@ export function foodLowLine(state: FoodStockState): string | null {
   return `About ${String(days)} ${days === 1 ? 'day' : 'days'} left — time to order`
 }
 
+interface LitterKindLike {
+  id: string
+  bagSize: number | null
+  bagUnit: 'kg' | 'L' | null
+}
+
+/**
+ * "10 L bags · Bathroom, Hall": the bag size, then where the boxes that take
+ * this kind are (other kinds' boxes are skipped). "Bags" when the size or its
+ * unit is unknown — a bare "10 bags" would read as a count.
+ */
+export function litterMeta(
+  litter: LitterKindLike,
+  boxes: readonly { location: string; litterId: string | null }[],
+): string {
+  const size =
+    litter.bagSize === null || litter.bagUnit === null
+      ? 'Bags'
+      : `${String(Math.round(litter.bagSize * 10) / 10)} ${litter.bagUnit} bags`
+  const where = boxes.filter((b) => b.litterId === litter.id).map((b) => b.location)
+  return where.length === 0 ? size : `${size} · ${where.join(', ')}`
+}
+
 /** "enough for 1 full swap · counted Nov 1". Null while litter isn't counted yet. */
 export function litterSubLine(state: LitterStockState, now: Date): string | null {
   if (state.stock === null) return null

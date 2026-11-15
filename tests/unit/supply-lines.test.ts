@@ -5,6 +5,7 @@ import {
   foodMeta,
   foodSubLine,
   litterLowLine,
+  litterMeta,
   litterSubLine,
   stockWhen,
 } from '../../src/lib/supply-lines'
@@ -77,6 +78,38 @@ describe('foodMeta', () => {
     expect(foodMeta({ type: 'wet', brand: ' ', unit: 'pouch', unitSizeG: 85 })).toBe(
       'Wet · 85 g pouches',
     )
+  })
+})
+
+describe('litterMeta', () => {
+  const CLUMPING = { id: 'l1', bagSize: 10, bagUnit: 'L' as const }
+  const BOXES = [
+    { location: 'Bathroom', litterId: 'l1' },
+    { location: 'Bedroom', litterId: 'l2' },
+    { location: 'Hall', litterId: 'l1' },
+    { location: 'Attic', litterId: null },
+  ]
+
+  it('reads the bag size and the boxes that take it', () => {
+    expect(litterMeta(CLUMPING, BOXES)).toBe('10 L bags · Bathroom, Hall')
+    expect(litterMeta({ id: 'l2', bagSize: 5, bagUnit: 'kg' }, BOXES)).toBe('5 kg bags · Bedroom')
+  })
+
+  it('drops the locations when no box takes it', () => {
+    expect(litterMeta(CLUMPING, [])).toBe('10 L bags')
+    expect(litterMeta({ ...CLUMPING, id: 'l9' }, BOXES)).toBe('10 L bags')
+  })
+
+  it('says just "Bags" when the size or its unit is unknown', () => {
+    expect(litterMeta({ id: 'l1', bagSize: null, bagUnit: null }, [])).toBe('Bags')
+    expect(litterMeta({ id: 'l1', bagSize: 10, bagUnit: null }, [])).toBe('Bags')
+    expect(litterMeta({ id: 'l1', bagSize: null, bagUnit: 'L' }, BOXES)).toBe(
+      'Bags · Bathroom, Hall',
+    )
+  })
+
+  it('keeps a decimal size to one place', () => {
+    expect(litterMeta({ id: 'l1', bagSize: 7.56, bagUnit: 'kg' }, [])).toBe('7.6 kg bags')
   })
 })
 
