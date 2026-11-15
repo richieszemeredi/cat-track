@@ -186,7 +186,11 @@ export async function seedSecondCat(page: Page, name: string): Promise<void> {
 
 /** Opens Home's folded "Litter boxes" if it is closed. Leaves the page on Home. */
 export async function openLitterFold(page: Page): Promise<void> {
-  await tabBar(page).getByRole('link', { name: 'Home' }).click()
+  // WebKit now and then drops a tab tap, so tap until Home is the page.
+  await expect(async () => {
+    await tabBar(page).getByRole('link', { name: 'Home' }).click()
+    await expect(page).toHaveURL(/\/$/, { timeout: 2_000 })
+  }).toPass(WAIT)
   const fold = page.getByTestId('home-litter')
   await expect(fold).toBeVisible(WAIT)
   if ((await fold.getAttribute('open')) === null) {
