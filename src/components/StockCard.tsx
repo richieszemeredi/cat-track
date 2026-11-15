@@ -125,7 +125,10 @@ export function StockCard({
             <span className="text-ink-soft">{unitNoun(unit, stock.shown)} left</span>
           </p>
           {sub === null ? null : <p className="text-sm text-ink-soft tabular-nums">{sub}</p>}
-          {low === null ? null : <p className="nudge text-sm font-semibold text-danger">{low}</p>}
+          {/* Balanced, so a wrap never leaves "order" alone on the last line. */}
+          {low === null ? null : (
+            <p className="nudge text-sm font-semibold text-balance text-danger">{low}</p>
+          )}
         </div>
       )}
 
