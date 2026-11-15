@@ -145,13 +145,19 @@ service cloud.firestore {
       match /litterBoxes/{boxId} {
         function validLitterBoxData() {
           return request.resource.data.keys().hasOnly([
-              'location', 'lastChangedAt', 'changeEveryWeeks', 'createdBy', 'createdAt'
+              'location', 'lastChangedAt', 'changeEveryWeeks', 'bagsPerSwap',
+              'createdBy', 'createdAt'
             ]) &&
             // get() with a default: boxes written before the interval was per
             // box have no such key, and reading an absent key denies outright.
             request.resource.data.get('changeEveryWeeks', 4) is int &&
             request.resource.data.get('changeEveryWeeks', 4) >= 1 &&
             request.resource.data.get('changeEveryWeeks', 4) <= 52 &&
+            // How many bags of litter a full swap of this box takes — what a
+            // swap draws off the litter stock. Same default-for-old-boxes read.
+            request.resource.data.get('bagsPerSwap', 1) is int &&
+            request.resource.data.get('bagsPerSwap', 1) >= 1 &&
+            request.resource.data.get('bagsPerSwap', 1) <= 20 &&
             validString(request.resource.data.location, 60) &&
             request.resource.data.lastChangedAt is timestamp &&
             request.resource.data.createdAt is timestamp;
@@ -163,6 +169,96 @@ service cloud.firestore {
           request.resource.data.createdBy == resource.data.createdBy &&
           request.resource.data.createdAt == resource.data.createdAt;
         allow delete: if isEditor(hid);
+      }
+
+      // ---------- litter stock (append-only log) ----------
+      // A loose count of bags on the shelf: "bought N" adds, "count N" says
+      // "we have exactly N", and a box's full swap draws its bags off. The
+      // running figure is derived client-side, never stored, so two phones
+      // only ever append — nothing to clobber.
+      match /litterStock/{eventId} {
+        function validLitterStockData() {
+          return request.resource.data.keys().hasOnly([
+              'kind', 'bags', 'at', 'createdBy', 'createdAt'
+            ]) &&
+            request.resource.data.kind in ['bought', 'count', 'swap'] &&
+            request.resource.data.bags is number &&
+            request.resource.data.bags >= 0 &&
+            request.resource.data.bags <= 1000 &&
+            // Only a count can be zero ("we're out"); buying or swapping
+            // nothing is a mistake, not an event.
+            (request.resource.data.kind == 'count' || request.resource.data.bags > 0) &&
+            request.resource.data.at is timestamp &&
+            request.resource.data.createdAt is timestamp &&
+            request.resource.data.createdBy == request.auth.uid;
+        }
+        allow read: if isMember(hid);
+        allow create: if isEditor(hid) && validLitterStockData();
+        allow update: if false;
+        allow delete: if isEditor(hid);
+      }
+
+      // ---------- foods (household catalog) ----------
+      // The tins on the shelf belong to the household, not to one cat, so the
+      // catalog (and its stock) lives here. The per-cat /cats/{catId}/foods
+      // below is legacy: the client copies each of those docs here under the
+      // SAME id — preserving its original createdBy and createdAt, which is
+      // why create checks createdBy is a string rather than the caller.
+      match /foods/{foodId} {
+        function validHouseholdFoodData() {
+          return request.resource.data.keys().hasOnly([
+              'name', 'brand', 'type', 'kcalPerGram', 'analysis',
+              'unit', 'unitSizeG', 'archived', 'createdBy', 'createdAt'
+            ]) &&
+            validString(request.resource.data.name, 80) &&
+            optionalString(request.resource.data.brand, 80) &&
+            request.resource.data.type in ['dry', 'wet', 'treat'] &&
+            validFoodAnalysis(request.resource.data.get('analysis', null)) &&
+            request.resource.data.kcalPerGram is number &&
+            request.resource.data.kcalPerGram > 0 &&
+            request.resource.data.kcalPerGram <= 10 &&
+            // What the stock is counted in, and how much one of them holds.
+            // get() with a default: docs copied from the legacy path lack both.
+            (request.resource.data.get('unit', null) == null ||
+              request.resource.data.get('unit', null) in ['tin', 'pouch', 'bag']) &&
+            (request.resource.data.get('unitSizeG', null) == null ||
+              (request.resource.data.get('unitSizeG', null) is number &&
+               request.resource.data.get('unitSizeG', null) > 0 &&
+               request.resource.data.get('unitSizeG', null) <= 20000)) &&
+            request.resource.data.createdAt is timestamp &&
+            validString(request.resource.data.createdBy, 200) &&
+            request.resource.data.archived is bool;
+        }
+        allow read: if isMember(hid);
+        allow create: if isEditor(hid) && validHouseholdFoodData();
+        // Who added it and when stay pinned once written.
+        allow update: if isEditor(hid) && validHouseholdFoodData() &&
+          request.resource.data.createdBy == resource.data.createdBy &&
+          request.resource.data.createdAt == resource.data.createdAt;
+        allow delete: if isEditor(hid);
+
+        // ---------- food stock (append-only log) ----------
+        // Same shape as the litter stock: "bought N" adds, "count N" is
+        // "we have exactly N". Ticked meals count it down client-side.
+        match /stock/{eventId} {
+          function validFoodStockData() {
+            return request.resource.data.keys().hasOnly([
+                'kind', 'units', 'at', 'createdBy', 'createdAt'
+              ]) &&
+              request.resource.data.kind in ['bought', 'count'] &&
+              request.resource.data.units is number &&
+              request.resource.data.units >= 0 &&
+              request.resource.data.units <= 10000 &&
+              (request.resource.data.kind == 'count' || request.resource.data.units > 0) &&
+              request.resource.data.at is timestamp &&
+              request.resource.data.createdAt is timestamp &&
+              request.resource.data.createdBy == request.auth.uid;
+          }
+          allow read: if isMember(hid);
+          allow create: if isEditor(hid) && validFoodStockData();
+          allow update: if false;
+          allow delete: if isEditor(hid);
+        }
       }
 
       // ---------- water bowls ----------
@@ -245,7 +341,10 @@ service cloud.firestore {
           allow delete: if isEditor(hid);
         }
 
-        // ---------- foods (per-cat catalog) ----------
+        // ---------- foods (legacy per-cat catalog) ----------
+        // Superseded by /households/{hid}/foods. Still writable so a phone
+        // running a cached older build keeps working until it updates; the
+        // current client only reads these, to copy them across.
         match /foods/{foodId} {
           allow read: if isMember(hid);
           allow create, update: if isEditor(hid) &&

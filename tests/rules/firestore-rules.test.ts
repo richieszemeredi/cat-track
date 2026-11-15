@@ -125,6 +125,18 @@ function food(createdBy: string) {
   }
 }
 
+function householdFood(createdBy: string) {
+  return { ...food(createdBy), unit: 'tin', unitSizeG: 400 }
+}
+
+function foodStock(createdBy: string) {
+  return { kind: 'bought', units: 6, at: ENTRY_DATE, createdBy, createdAt: CREATED_AT }
+}
+
+function litterStock(createdBy: string) {
+  return { kind: 'bought', bags: 2, at: ENTRY_DATE, createdBy, createdAt: CREATED_AT }
+}
+
 function feeding(createdBy: string) {
   return {
     datetime: ENTRY_DATE,
@@ -529,6 +541,124 @@ describe('litter boxes', () => {
   })
 })
 
+describe('litter boxes: bags per swap', () => {
+  const boxes = `${H1}/litterBoxes`
+
+  it('allows 1 to 20 whole bags', async () => {
+    await assertSucceeds(
+      addDoc(collection(authedDb('bob'), boxes), { ...litterBox('bob'), bagsPerSwap: 1 }),
+    )
+    await assertSucceeds(
+      addDoc(collection(authedDb('bob'), boxes), { ...litterBox('bob'), bagsPerSwap: 20 }),
+    )
+  })
+
+  it.each([0, 21, 1.5, '2'])('denies a bagsPerSwap of %s', async (bagsPerSwap) => {
+    await assertFails(
+      addDoc(collection(authedDb('bob'), boxes), { ...litterBox('bob'), bagsPerSwap }),
+    )
+  })
+
+  it('still lets a box from before bagsPerSwap existed be updated', async () => {
+    await seedDoc(`${boxes}/old`, litterBox('bob'))
+    await assertSucceeds(
+      updateDoc(doc(authedDb('alice'), `${boxes}/old`), {
+        lastChangedAt: Timestamp.fromDate(new Date('2026-02-01T00:00:00Z')),
+      }),
+    )
+  })
+
+  it('lets an editor set bagsPerSwap on an existing box', async () => {
+    await seedDoc(`${boxes}/old`, litterBox('bob'))
+    await assertSucceeds(updateDoc(doc(authedDb('alice'), `${boxes}/old`), { bagsPerSwap: 2 }))
+    await assertFails(updateDoc(doc(authedDb('alice'), `${boxes}/old`), { bagsPerSwap: 0 }))
+  })
+})
+
+describe('litter stock', () => {
+  const stock = `${H1}/litterStock`
+  const boxes = `${H1}/litterBoxes`
+
+  it('allows editors to log bought, count and swap events', async () => {
+    await assertSucceeds(addDoc(collection(authedDb('bob'), stock), litterStock('bob')))
+    await assertSucceeds(
+      addDoc(collection(authedDb('bob'), stock), { ...litterStock('bob'), kind: 'count' }),
+    )
+    await assertSucceeds(
+      addDoc(collection(authedDb('bob'), stock), { ...litterStock('bob'), kind: 'swap' }),
+    )
+  })
+
+  it('allows a count of zero ("we are out")', async () => {
+    await assertSucceeds(
+      addDoc(collection(authedDb('bob'), stock), { ...litterStock('bob'), kind: 'count', bags: 0 }),
+    )
+  })
+
+  it('denies buying or swapping zero bags', async () => {
+    await assertFails(
+      addDoc(collection(authedDb('bob'), stock), {
+        ...litterStock('bob'),
+        kind: 'bought',
+        bags: 0,
+      }),
+    )
+    await assertFails(
+      addDoc(collection(authedDb('bob'), stock), { ...litterStock('bob'), kind: 'swap', bags: 0 }),
+    )
+  })
+
+  it('denies negative or absurd amounts, a non-number and an unknown kind', async () => {
+    await assertFails(
+      addDoc(collection(authedDb('bob'), stock), { ...litterStock('bob'), bags: -1 }),
+    )
+    await assertFails(
+      addDoc(collection(authedDb('bob'), stock), { ...litterStock('bob'), bags: 1001 }),
+    )
+    await assertFails(
+      addDoc(collection(authedDb('bob'), stock), { ...litterStock('bob'), bags: '2' }),
+    )
+    await assertFails(
+      addDoc(collection(authedDb('bob'), stock), { ...litterStock('bob'), kind: 'topup' }),
+    )
+  })
+
+  it('denies an extra field, an at that is not a timestamp and a foreign createdBy', async () => {
+    await assertFails(
+      addDoc(collection(authedDb('bob'), stock), { ...litterStock('bob'), boxId: 'b1' }),
+    )
+    await assertFails(
+      addDoc(collection(authedDb('bob'), stock), { ...litterStock('bob'), at: '2026-01-15' }),
+    )
+    await assertFails(addDoc(collection(authedDb('bob'), stock), litterStock('alice')))
+  })
+
+  it('denies viewers logging, allows members to read', async () => {
+    await assertFails(addDoc(collection(authedDb('vera'), stock), litterStock('vera')))
+    await seedDoc(`${stock}/e1`, litterStock('bob'))
+    await assertSucceeds(getDoc(doc(authedDb('vera'), `${stock}/e1`)))
+    await assertFails(getDoc(doc(authedDb('mallory'), `${stock}/e1`)))
+  })
+
+  it('denies edits — the log is append-only — but lets an editor delete', async () => {
+    await seedDoc(`${stock}/e1`, litterStock('bob'))
+    await assertFails(updateDoc(doc(authedDb('bob'), `${stock}/e1`), { bags: 3 }))
+    await assertFails(deleteDoc(doc(authedDb('vera'), `${stock}/e1`)))
+    await assertSucceeds(deleteDoc(doc(authedDb('bob'), `${stock}/e1`)))
+  })
+
+  it('allows a box swap and its stock event in one batch', async () => {
+    await seedDoc(`${boxes}/b1`, { ...litterBox('bob'), bagsPerSwap: 2 })
+    const db = authedDb('alice')
+    const batch = writeBatch(db)
+    batch.update(doc(db, `${boxes}/b1`), {
+      lastChangedAt: Timestamp.fromDate(new Date('2026-02-01T00:00:00Z')),
+    })
+    batch.set(doc(collection(db, stock)), { ...litterStock('alice'), kind: 'swap', bags: 2 })
+    await assertSucceeds(batch.commit())
+  })
+})
+
 describe('water bowls', () => {
   const bowls = `${H1}/waterBowls`
 
@@ -754,6 +884,168 @@ describe('foods', () => {
   it('allows editors to archive a food', async () => {
     await seedDoc(`${foods}/f1`, food('alice'))
     await assertSucceeds(updateDoc(doc(authedDb('bob'), `${foods}/f1`), { archived: true }))
+  })
+})
+
+// ---------- household foods ----------
+
+describe('household foods', () => {
+  const foods = `${H1}/foods`
+
+  it('allows editors to create a valid food with a unit and size', async () => {
+    await assertSucceeds(addDoc(collection(authedDb('bob'), foods), householdFood('bob')))
+  })
+
+  it('allows a null or absent unit and unitSizeG', async () => {
+    await assertSucceeds(
+      addDoc(collection(authedDb('bob'), foods), {
+        ...householdFood('bob'),
+        unit: null,
+        unitSizeG: null,
+      }),
+    )
+    await assertSucceeds(addDoc(collection(authedDb('bob'), foods), food('bob')))
+  })
+
+  it('denies an unknown unit or an impossible unit size', async () => {
+    await assertFails(
+      addDoc(collection(authedDb('bob'), foods), { ...householdFood('bob'), unit: 'sack' }),
+    )
+    await assertFails(
+      addDoc(collection(authedDb('bob'), foods), { ...householdFood('bob'), unitSizeG: 0 }),
+    )
+    await assertFails(
+      addDoc(collection(authedDb('bob'), foods), { ...householdFood('bob'), unitSizeG: 20001 }),
+    )
+    await assertFails(
+      addDoc(collection(authedDb('bob'), foods), { ...householdFood('bob'), unitSizeG: '400' }),
+    )
+  })
+
+  it('denies the usual food mistakes: bad type, kcal, extra field, archived', async () => {
+    await assertFails(
+      addDoc(collection(authedDb('bob'), foods), { ...householdFood('bob'), type: 'raw' }),
+    )
+    await assertFails(
+      addDoc(collection(authedDb('bob'), foods), { ...householdFood('bob'), kcalPerGram: 0 }),
+    )
+    await assertFails(
+      addDoc(collection(authedDb('bob'), foods), { ...householdFood('bob'), packageSizeG: 2000 }),
+    )
+    await assertFails(
+      addDoc(collection(authedDb('bob'), foods), { ...householdFood('bob'), archived: 'no' }),
+    )
+  })
+
+  it('lets the migration copy a legacy food under the same id, keeping its author and date', async () => {
+    // Written by alice long ago; bob's phone copies it across verbatim.
+    const legacy = { ...food('alice'), createdAt: BIRTH_DATE }
+    await seedDoc(`${C1}/foods/f-old`, legacy)
+    await assertSucceeds(setDoc(doc(authedDb('bob'), `${foods}/f-old`), legacy))
+  })
+
+  it('denies viewers creating foods, allows members to read', async () => {
+    await assertFails(addDoc(collection(authedDb('vera'), foods), householdFood('vera')))
+    await seedDoc(`${foods}/f1`, householdFood('alice'))
+    await assertSucceeds(getDoc(doc(authedDb('vera'), `${foods}/f1`)))
+    await assertFails(getDoc(doc(authedDb('mallory'), `${foods}/f1`)))
+  })
+
+  it('lets a legacy-shaped food (no unit, no unitSizeG) be archived or given a unit', async () => {
+    await seedDoc(`${foods}/f1`, food('alice'))
+    await assertSucceeds(updateDoc(doc(authedDb('bob'), `${foods}/f1`), { archived: true }))
+    await assertSucceeds(
+      updateDoc(doc(authedDb('bob'), `${foods}/f1`), { unit: 'bag', unitSizeG: 1500 }),
+    )
+  })
+
+  it('pins createdBy and createdAt on update', async () => {
+    await seedDoc(`${foods}/f1`, householdFood('alice'))
+    await assertFails(updateDoc(doc(authedDb('bob'), `${foods}/f1`), { createdBy: 'bob' }))
+    await assertFails(updateDoc(doc(authedDb('bob'), `${foods}/f1`), { createdAt: ENTRY_DATE }))
+  })
+
+  it('denies viewers updating, allows editors to delete', async () => {
+    await seedDoc(`${foods}/f1`, householdFood('alice'))
+    await assertFails(updateDoc(doc(authedDb('vera'), `${foods}/f1`), { archived: true }))
+    await assertFails(deleteDoc(doc(authedDb('vera'), `${foods}/f1`)))
+    await assertSucceeds(deleteDoc(doc(authedDb('bob'), `${foods}/f1`)))
+  })
+
+  describe('stock', () => {
+    const stock = `${foods}/f1/stock`
+
+    beforeEach(async () => {
+      await seedDoc(`${foods}/f1`, householdFood('alice'))
+    })
+
+    it('allows editors to log bought and count events', async () => {
+      await assertSucceeds(addDoc(collection(authedDb('bob'), stock), foodStock('bob')))
+      await assertSucceeds(
+        addDoc(collection(authedDb('bob'), stock), { ...foodStock('bob'), kind: 'count' }),
+      )
+    })
+
+    it('allows a count of zero but not buying zero', async () => {
+      await assertSucceeds(
+        addDoc(collection(authedDb('bob'), stock), {
+          ...foodStock('bob'),
+          kind: 'count',
+          units: 0,
+        }),
+      )
+      await assertFails(
+        addDoc(collection(authedDb('bob'), stock), { ...foodStock('bob'), units: 0 }),
+      )
+    })
+
+    it('denies a swap kind, negative or absurd units and a non-number', async () => {
+      await assertFails(
+        addDoc(collection(authedDb('bob'), stock), { ...foodStock('bob'), kind: 'swap' }),
+      )
+      await assertFails(
+        addDoc(collection(authedDb('bob'), stock), { ...foodStock('bob'), units: -1 }),
+      )
+      await assertFails(
+        addDoc(collection(authedDb('bob'), stock), { ...foodStock('bob'), units: 10001 }),
+      )
+      await assertFails(
+        addDoc(collection(authedDb('bob'), stock), { ...foodStock('bob'), units: '6' }),
+      )
+    })
+
+    it('denies an extra field, an at that is not a timestamp and a foreign createdBy', async () => {
+      await assertFails(
+        addDoc(collection(authedDb('bob'), stock), { ...foodStock('bob'), note: 'Tesco' }),
+      )
+      await assertFails(
+        addDoc(collection(authedDb('bob'), stock), { ...foodStock('bob'), at: '2026-01-15' }),
+      )
+      await assertFails(addDoc(collection(authedDb('bob'), stock), foodStock('alice')))
+    })
+
+    it('denies viewers logging, allows members to read', async () => {
+      await assertFails(addDoc(collection(authedDb('vera'), stock), foodStock('vera')))
+      await seedDoc(`${stock}/e1`, foodStock('bob'))
+      await assertSucceeds(getDoc(doc(authedDb('vera'), `${stock}/e1`)))
+      await assertFails(getDoc(doc(authedDb('mallory'), `${stock}/e1`)))
+    })
+
+    it('denies edits — the log is append-only — but lets an editor delete', async () => {
+      await seedDoc(`${stock}/e1`, foodStock('bob'))
+      await assertFails(updateDoc(doc(authedDb('bob'), `${stock}/e1`), { units: 3 }))
+      await assertFails(deleteDoc(doc(authedDb('vera'), `${stock}/e1`)))
+      await assertSucceeds(deleteDoc(doc(authedDb('bob'), `${stock}/e1`)))
+    })
+
+    it('allows a new food and its opening count in one batch', async () => {
+      const db = authedDb('bob')
+      const batch = writeBatch(db)
+      const foodRef = doc(collection(db, foods))
+      batch.set(foodRef, householdFood('bob'))
+      batch.set(doc(collection(foodRef, 'stock')), { ...foodStock('bob'), kind: 'count' })
+      await assertSucceeds(batch.commit())
+    })
   })
 })
 
