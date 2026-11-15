@@ -241,7 +241,7 @@ export async function seedWaterBowls(
 const EMULATOR = 'http://127.0.0.1:8080/v1/projects/demo-cattrack/databases/(default)/documents'
 const OWNER = { Authorization: 'Bearer owner' } as const
 
-interface RestDoc {
+export interface RestDoc {
   name?: string
   fields?: Record<string, { stringValue?: string }>
 }
@@ -367,4 +367,89 @@ export async function seedLastWeeksWeighIn(request: APIRequestContext, tag: stri
     },
   })
   expect(response.ok(), "seeding last week's weigh-in failed").toBe(true)
+}
+
+/**
+ * A food as it was stored before foods moved to the household: under the
+ * household's first cat, at `cats/{catId}/foods/{foodId}`, and nowhere else —
+ * with the retired `packageSizeG` still on it, as the oldest docs have. Plus a
+ * plan from today that names it by that id, so the copy only counts as a
+ * migration if every screen still resolves the same id. 240 g a day of a
+ * 1 kcal/g food in three meals: 80 g a bowl, 240 kcal a day.
+ */
+export async function seedLegacyFoodAndPlan(
+  request: APIRequestContext,
+  tag: string,
+  food: { id: string; name: string },
+): Promise<void> {
+  const catRelative = await catPathFor(request, tag)
+  const created = new Date(Date.now() - 30 * 24 * 3_600_000).toISOString()
+
+  const foodResponse = await request.post(
+    `${EMULATOR}/${catRelative}/foods?documentId=${encodeURIComponent(food.id)}`,
+    {
+      headers: OWNER,
+      data: {
+        fields: {
+          name: { stringValue: food.name },
+          brand: { nullValue: null },
+          type: { stringValue: 'wet' },
+          kcalPerGram: { doubleValue: 1 },
+          packageSizeG: { integerValue: '400' },
+          archived: { booleanValue: false },
+          createdBy: { stringValue: 'legacy-seed' },
+          createdAt: { timestampValue: created },
+        },
+      },
+    },
+  )
+  expect(foodResponse.ok(), 'seeding a legacy food failed').toBe(true)
+
+  const today = new Date()
+  today.setHours(0, 0, 0, 0)
+  const planResponse = await request.post(`${EMULATOR}/${catRelative}/plans`, {
+    headers: OWNER,
+    data: {
+      fields: {
+        effectiveFrom: { timestampValue: today.toISOString() },
+        mealsPerDay: { integerValue: '3' },
+        firstMealAt: { stringValue: '07:00' },
+        lastMealAt: { stringValue: '19:00' },
+        setAtWeightKg: { doubleValue: 1.5 },
+        note: { nullValue: null },
+        createdBy: { stringValue: 'legacy-seed' },
+        createdAt: { timestampValue: new Date().toISOString() },
+      },
+    },
+  })
+  expect(planResponse.ok(), 'seeding a legacy plan failed').toBe(true)
+  const plan = (await planResponse.json()) as RestDoc
+  if (plan.name === undefined) throw new Error('emulator returned no plan path')
+
+  const itemResponse = await request.post(`${EMULATOR}/${relativeOf(plan.name)}/items`, {
+    headers: OWNER,
+    data: {
+      fields: {
+        foodId: { stringValue: food.id },
+        foodNameSnapshot: { stringValue: food.name },
+        amountPerDayG: { doubleValue: 240 },
+      },
+    },
+  })
+  expect(itemResponse.ok(), 'seeding a legacy plan item failed').toBe(true)
+}
+
+/** The household-level food doc with this id, or null while there is none. */
+export async function householdFood(
+  request: APIRequestContext,
+  tag: string,
+  foodId: string,
+): Promise<RestDoc | null> {
+  const relative = await householdPathFor(request, tag)
+  const response = await request.get(`${EMULATOR}/${relative}/foods/${foodId}`, {
+    headers: OWNER,
+  })
+  if (response.status() === 404) return null
+  expect(response.ok(), 'reading a household food failed').toBe(true)
+  return (await response.json()) as RestDoc
 }
