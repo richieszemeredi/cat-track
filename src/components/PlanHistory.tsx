@@ -81,7 +81,8 @@ export function PlanHistory({
                   <span className="font-medium tabular-nums">
                     {meals} {meals === 1 ? 'meal' : 'meals'} · {window}
                   </span>
-                  <span className="text-sm text-ink-soft tabular-nums">
+                  {/* Balanced, so a long food name never strands "a day". */}
+                  <span className="text-sm text-balance text-ink-soft tabular-nums">
                     {items.length === 0
                       ? '—'
                       : items

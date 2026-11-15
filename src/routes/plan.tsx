@@ -21,6 +21,7 @@ export const Route = createFileRoute('/plan')({
 })
 
 const DISCLAIMER = 'Estimates only — always confirm with your vet.'
+// Balanced where it is shown: wrapped plainly it left "history." alone on a line.
 const CHANGE_NOTE = 'A change starts today; the old plan stays in the history.'
 const NO_PLAN =
   'No feeding plan yet. Set how many meals she gets, when, and how much a day — the app works out the rest.'
@@ -103,7 +104,9 @@ function PlanPage() {
         ))}
       </div>
       <div className="flex flex-col gap-2">
-        {canEdit ? <p className="gutter text-sm text-ink-soft">{CHANGE_NOTE}</p> : null}
+        {canEdit ? (
+          <p className="gutter text-sm text-balance text-ink-soft">{CHANGE_NOTE}</p>
+        ) : null}
         <p className="gutter text-xs text-ink-soft">{DISCLAIMER}</p>
       </div>
     </main>
@@ -211,7 +214,7 @@ function SoloPlan({ cat, onEdit }: { cat: Cat; onEdit: () => void }) {
                     >
                       Change the plan
                     </button>
-                    <p className="gutter text-sm text-ink-soft">{CHANGE_NOTE}</p>
+                    <p className="gutter text-sm text-balance text-ink-soft">{CHANGE_NOTE}</p>
                   </>
                 ) : null}
               </section>

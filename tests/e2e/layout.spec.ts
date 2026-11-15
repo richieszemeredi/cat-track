@@ -177,10 +177,10 @@ async function splitPhrases(page: Page): Promise<string[]> {
 }
 
 /**
- * Warning lines that end on one stray word. A wrapped "— time to order"
- * left "order" alone on a line of its own under a full one: the warning
- * reads as finished before its point. Every danger line is checked — the
- * lines a person must not misread.
+ * Lines that end on one stray word. A wrapped "— time to order" left "order"
+ * alone under a full line, and Plan's note ended on "history." by itself:
+ * the line reads as finished before its point. Checked on every danger line,
+ * every page-level note (`.gutter`) and anything marked `text-balance`.
  */
 async function orphanedWords(page: Page): Promise<string[]> {
   return page.evaluate(() => {
@@ -198,7 +198,9 @@ async function orphanedWords(page: Page): Promise<string[]> {
       }
     }
     const out: string[] = []
-    for (const el of g.document.querySelectorAll('main p.text-danger')) {
+    for (const el of g.document.querySelectorAll(
+      'main p.text-danger, main p.gutter, main .text-balance',
+    )) {
       const range = g.document.createRange()
       range.selectNodeContents(el)
       // One rect per line per text run; merge runs that share a line.
@@ -474,7 +476,7 @@ test('every screen fits the viewport without sideways scroll', async ({
     expect(await smallTouchTargets(page), `${shot} has under-sized tap targets`).toEqual([])
     expect(await buttonsHuggingTheirCard(page), `${shot} has a button on a card's edge`).toEqual([])
     expect(await splitPhrases(page), `${shot} splits a phrase across lines`).toEqual([])
-    expect(await orphanedWords(page), `${shot} ends a warning on a stray word`).toEqual([])
+    expect(await orphanedWords(page), `${shot} ends a line on a stray word`).toEqual([])
     expect(await textColumnMisalignments(page), `${shot} has a ragged text column`).toEqual([])
     expect(await columnProblems(page), `${shot} columns`).toEqual([])
     expect(await navProblems(page), `${shot} main nav`).toEqual([])
@@ -639,6 +641,7 @@ test('a two-food bowl shows both foods and holds its layout', async ({ page }, t
     expect(await controlsOutsideTheirCard(page), `${where}: a control escapes its card`).toEqual([])
     expect(await smallTouchTargets(page), `${where}: an under-sized tap target`).toEqual([])
     expect(await buttonsHuggingTheirCard(page), `${where}: a button on a card's edge`).toEqual([])
+    expect(await orphanedWords(page), `${where}: a line ends on a stray word`).toEqual([])
     expect(await textColumnMisalignments(page), `${where}: a ragged text column`).toEqual([])
   }
   const shoot = async (shot: string) => {
