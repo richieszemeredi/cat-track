@@ -111,10 +111,15 @@ export function WeightRow({
       data-testid="home-weight-row"
       className="flex min-h-16 flex-wrap items-center gap-x-3 gap-y-2 px-4 py-3"
     >
-      <div className="min-w-0 flex-1">
+      {/* Sized by its content, not squeezed to fit beside the kg field: when
+      the two don't fit on one line the field wraps under, rather than a long
+      name breaking into three. */}
+      <div className="min-w-0 flex-auto">
         {named ? (
           <>
-            <p className="font-semibold break-words">{cat.name}</p>
+            <p data-testid="home-weight-name" className="font-semibold break-words">
+              {cat.name}
+            </p>
             <p className="text-sm text-ink-soft tabular-nums">
               {kgText === null ? (
                 'No weigh-ins yet'
