@@ -27,6 +27,26 @@ import {
 
 const PAGES = ['Home', 'Weight', 'Plan', 'Supplies', 'Profile'] as const
 type PageName = (typeof PAGES)[number]
+const PATHS: Record<PageName, RegExp> = {
+  Home: /\/$/,
+  Weight: /\/weight$/,
+  Plan: /\/plan$/,
+  Supplies: /\/supplies$/,
+  Profile: /\/profile$/,
+}
+
+/**
+ * Go to a tab and make sure it got there, tapping again if a tap was lost:
+ * every screen has an h1, so waiting for one alone let a tap WebKit dropped
+ * audit the previous screen under the next one's name.
+ */
+async function openTab(page: Page, name: PageName): Promise<void> {
+  await expect(async () => {
+    await tabBar(page).getByRole('link', { name }).click()
+    await expect(page).toHaveURL(PATHS[name], { timeout: 2_000 })
+  }).toPass(WAIT)
+  await expect(page.getByRole('heading', { level: 1 })).toBeVisible(WAIT)
+}
 
 // tests/e2e compiles under the node tsconfig (no DOM lib), so the browser
 // globals used inside page.evaluate are typed structurally here — same
@@ -434,7 +454,7 @@ test('every screen fits the viewport without sideways scroll', async ({
   await seedEverything(page, request, tag)
 
   const audit = async (name: PageName, shot: string, navigate = true) => {
-    if (navigate) await tabBar(page).getByRole('link', { name }).click()
+    if (navigate) await openTab(page, name)
     await expect(page.getByRole('heading', { level: 1 })).toBeVisible(WAIT)
     // Recharts measures its container on a frame; give the chart one.
     await page.waitForTimeout(500)
@@ -724,8 +744,7 @@ test.describe('in dark mode', () => {
     }
 
     for (const name of PAGES) {
-      await tabBar(page).getByRole('link', { name }).click()
-      await expect(page.getByRole('heading', { level: 1 })).toBeVisible(WAIT)
+      await openTab(page, name)
       await page.waitForTimeout(500)
       await sweep(name.toLowerCase())
     }
