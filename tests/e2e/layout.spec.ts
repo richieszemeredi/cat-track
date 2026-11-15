@@ -1,6 +1,8 @@
-import { expect, test, type Page } from '@playwright/test'
+import { expect, test, type APIRequestContext, type Page } from '@playwright/test'
 import {
-  openAddForm,
+  addFoodOnSupplies,
+  openLitterAddForm,
+  openLitterFold,
   seedHousehold,
   seedLastWeeksWeighIn,
   seedLitterBoxes,
@@ -23,7 +25,8 @@ import {
  * of on a 393pt screen — that is the class of bug this catches.
  */
 
-const PAGES = ['Home', 'Food', 'Weight', 'Chores', 'Profile'] as const
+const PAGES = ['Home', 'Weight', 'Plan', 'Supplies', 'Profile'] as const
+type PageName = (typeof PAGES)[number]
 
 // tests/e2e compiles under the node tsconfig (no DOM lib), so the browser
 // globals used inside page.evaluate are typed structurally here — same
@@ -41,6 +44,7 @@ interface DomElement {
   getAttribute: (name: string) => string | null
   closest: (selector: string) => DomElement | null
   getBoundingClientRect: () => DomRect
+  getClientRects: () => Iterable<{ top: number; width: number }>
 }
 
 /** Elements that stick out past either edge of the viewport. */
@@ -92,6 +96,106 @@ async function controlsOutsideTheirCard(page: Page): Promise<string[]> {
             `escapes card ${String(Math.round(c.left))}..${String(Math.round(c.right))}`,
         )
       }
+    }
+    return out.slice(0, 5)
+  })
+}
+
+/**
+ * Buttons that hug the edge of the card they sit in. A chip or a button
+ * inside a card belongs in the card's text column; one flush with its border
+ * has lost its padding. The off-plan fold's "Log something" chip once
+ * stretched edge to edge across its card because a class name ran into the
+ * next one ("self-startmx-4"), which no viewport or escape check could see.
+ */
+async function buttonsHuggingTheirCard(page: Page): Promise<string[]> {
+  return page.evaluate(() => {
+    const INSET = 8
+    const g = globalThis as unknown as {
+      document: { querySelectorAll: (selector: string) => Iterable<DomElement> }
+    }
+    const out: string[] = []
+    for (const el of g.document.querySelectorAll(
+      '.surface .btn-chip, .surface .btn-primary, .surface .btn-secondary',
+    )) {
+      const card = el.closest('.surface')
+      if (card === null) continue
+      const r = el.getBoundingClientRect()
+      if (r.width === 0 && r.height === 0) continue
+      const c = card.getBoundingClientRect()
+      if (r.left < c.left + INSET || r.right > c.right - INSET) {
+        out.push(
+          `"${(el.textContent ?? '').trim().slice(0, 24)}" ` +
+            `${String(Math.round(r.left))}..${String(Math.round(r.right))} ` +
+            `in card ${String(Math.round(c.left))}..${String(Math.round(c.right))}`,
+        )
+      }
+    }
+    return out.slice(0, 5)
+  })
+}
+
+/**
+ * Inline phrases that must move to the next line whole: a "Needs attention"
+ * line once wrapped as "· about 1 / day left", orphaning half its detail.
+ */
+async function splitPhrases(page: Page): Promise<string[]> {
+  return page.evaluate(() => {
+    const g = globalThis as unknown as {
+      document: { querySelectorAll: (selector: string) => Iterable<DomElement> }
+    }
+    const out: string[] = []
+    for (const el of g.document.querySelectorAll('[data-testid="home-attention-detail"]')) {
+      // Chromium gives an inline element one rect per text node, so count the
+      // distinct lines they sit on rather than the rects.
+      const lines = new Set<number>()
+      for (const r of el.getClientRects()) if (r.width > 0) lines.add(Math.round(r.top))
+      if (lines.size > 1) out.push((el.textContent ?? '').trim())
+    }
+    return out
+  })
+}
+
+/**
+ * Warning lines that end on one stray word. A wrapped "— time to order"
+ * left "order" alone on a line of its own under a full one: the warning
+ * reads as finished before its point. Every danger line is checked — the
+ * lines a person must not misread.
+ */
+async function orphanedWords(page: Page): Promise<string[]> {
+  return page.evaluate(() => {
+    interface LineRect {
+      top: number
+      width: number
+    }
+    const g = globalThis as unknown as {
+      document: {
+        querySelectorAll: (selector: string) => Iterable<DomElement>
+        createRange: () => {
+          selectNodeContents: (el: DomElement) => void
+          getClientRects: () => Iterable<LineRect>
+        }
+      }
+    }
+    const out: string[] = []
+    for (const el of g.document.querySelectorAll('main p.text-danger')) {
+      const range = g.document.createRange()
+      range.selectNodeContents(el)
+      // One rect per line per text run; merge runs that share a line.
+      const lines = new Map<number, number>()
+      for (const r of range.getClientRects()) {
+        if (r.width === 0) continue
+        const top = Math.round(r.top)
+        lines.set(top, (lines.get(top) ?? 0) + r.width)
+      }
+      if (lines.size < 2) continue
+      const widths = [...lines.entries()].sort((a, b) => a[0] - b[0]).map(([, w]) => w)
+      const last = widths.at(-1) ?? 0
+      const widest = Math.max(...widths)
+      const text = (el.textContent ?? '').trim()
+      const lastWord = text.split(/\s+/).at(-1) ?? ''
+      // A last line about one short word wide, under a much wider one.
+      if (last < widest * 0.25 && last < lastWord.length * 12) out.push(text)
     }
     return out.slice(0, 5)
   })
@@ -277,28 +381,60 @@ async function documentScrollsSideways(page: Page): Promise<boolean> {
   })
 }
 
+/**
+ * Everything a screen can show at once, short of a second cat: a superseded
+ * plan, a week-old weigh-in (so the weekly trend line), a fresh and an overdue
+ * litter box, a fresh and a stale water bowl, and a food and the litter both
+ * running low — so Home leads with a full "Needs attention" and the Supplies
+ * dot is on the tab bar.
+ */
+async function seedEverything(page: Page, request: APIRequestContext, tag: string): Promise<void> {
+  await seedHousehold(page, { tag })
+  await seedPreviousPlan(request, tag)
+  await seedLastWeeksWeighIn(request, tag)
+  await seedLitterBoxes(page)
+  await seedWaterBowls(page, request, tag)
+
+  await tabBar(page).getByRole('link', { name: 'Supplies' }).click()
+  // The kibble gets a bag size, and a count of one bag: a day and a bit at
+  // 69 g a day, so the longest "Order …" line Home can produce.
+  const kibble = page.getByTestId('food-supply').first()
+  await expect(kibble).toBeVisible(WAIT)
+  await kibble.getByTestId('food-supply-edit').click()
+  await kibble.getByTestId('food-unit-size').fill('100')
+  await kibble.getByTestId('food-save').click()
+  await expect(kibble).toContainText('100 g bags', WAIT)
+  // The edit panel closes on the server's ack, which can land after the meta
+  // line has already updated from the local write: a Recount opened before
+  // then would be closed by it.
+  await expect(kibble.getByTestId('food-name')).toBeHidden(WAIT)
+  await kibble.getByTestId('food-supply-recount').click()
+  await kibble.getByTestId('food-supply-count-amount').fill('1')
+  await kibble.getByTestId('food-supply-count-save').click()
+  await expect(kibble).toContainText('time to order', WAIT)
+
+  const litter = page.getByTestId('litter-supply')
+  await litter.getByTestId('litter-supply-recount').click()
+  await litter.getByTestId('litter-supply-count-amount').fill('1')
+  await litter.getByTestId('litter-supply-count-save').click()
+  await expect(litter).toContainText('time to order', WAIT)
+  await expect(page.getByTestId('supplies-dot')).toBeVisible(WAIT)
+}
+
 test('every screen fits the viewport without sideways scroll', async ({
   page,
   request,
 }, testInfo) => {
-  test.setTimeout(180_000)
+  test.setTimeout(240_000)
 
-  // Unique per attempt: the emulator REST seeding finds the household BY NAME,
-  // and a retry would otherwise find the one the failed attempt left behind.
-  const tag = `layout-${testInfo.project.name}-${String(testInfo.repeatEachIndex)}-${String(testInfo.retry)}`
-  await seedHousehold(page, { tag })
-  // A superseded plan, so the Food page renders its history section here.
-  await seedPreviousPlan(request, tag)
-  // A second weigh-in a week back, so Home and Weight lay out the per-week
-  // change instead of the shorter first-weigh-in line.
-  await seedLastWeeksWeighIn(request, tag)
-  // A fresh box and an overdue one, so Chores lays out both litter states.
-  await seedLitterBoxes(page)
-  // A fresh bowl and a stale one, so Chores lays out both water states.
-  await seedWaterBowls(page, request, tag)
+  // Unique per attempt and per run: the emulator REST seeding finds the
+  // household BY NAME, and a retry — or a re-run against an emulator still
+  // warm from the last one — would otherwise find an older household.
+  const tag = `layout-${testInfo.project.name}-${String(testInfo.repeatEachIndex)}-${String(testInfo.retry)}-${String(Date.now())}`
+  await seedEverything(page, request, tag)
 
-  const audit = async (name: (typeof PAGES)[number], shot: string) => {
-    await tabBar(page).getByRole('link', { name }).click()
+  const audit = async (name: PageName, shot: string, navigate = true) => {
+    if (navigate) await tabBar(page).getByRole('link', { name }).click()
     await expect(page.getByRole('heading', { level: 1 })).toBeVisible(WAIT)
     // Recharts measures its container on a frame; give the chart one.
     await page.waitForTimeout(500)
@@ -312,33 +448,70 @@ test('every screen fits the viewport without sideways scroll', async ({
       fullPage: true,
     })
 
-    expect(await overflowingElements(page), `${name} has elements past the viewport`).toEqual([])
-    expect(await documentScrollsSideways(page), `${name} scrolls sideways`).toBe(false)
-    expect(await controlsOutsideTheirCard(page), `${name} has controls escaping a card`).toEqual([])
-    expect(await smallTouchTargets(page), `${name} has under-sized tap targets`).toEqual([])
-    expect(await textColumnMisalignments(page), `${name} has a ragged text column`).toEqual([])
-    expect(await columnProblems(page), `${name} columns`).toEqual([])
-    expect(await navProblems(page), `${name} main nav`).toEqual([])
+    expect(await overflowingElements(page), `${shot} has elements past the viewport`).toEqual([])
+    expect(await documentScrollsSideways(page), `${shot} scrolls sideways`).toBe(false)
+    expect(await controlsOutsideTheirCard(page), `${shot} has controls escaping a card`).toEqual([])
+    expect(await smallTouchTargets(page), `${shot} has under-sized tap targets`).toEqual([])
+    expect(await buttonsHuggingTheirCard(page), `${shot} has a button on a card's edge`).toEqual([])
+    expect(await splitPhrases(page), `${shot} splits a phrase across lines`).toEqual([])
+    expect(await orphanedWords(page), `${shot} ends a warning on a stray word`).toEqual([])
+    expect(await textColumnMisalignments(page), `${shot} has a ragged text column`).toEqual([])
+    expect(await columnProblems(page), `${shot} columns`).toEqual([])
+    expect(await navProblems(page), `${shot} main nav`).toEqual([])
   }
 
-  // Home with one cat is the big-number layout; with several it is one compact
-  // block each, so it is audited in both shapes.
+  // ---- one cat ----
+  // Home leads with "Needs attention": the low food, the low litter and the
+  // overdue box.
   await audit('Home', 'home-single')
+  await expect(page.getByTestId('home-attention-row')).toHaveCount(3)
 
-  // A second cat with a long name, so the switcher chips and the compact home
-  // blocks are laid out — and measured by every check — with the longest label.
+  // The two folds, open: off-plan with its form, the litter boxes with theirs.
+  await page.getByTestId('home-off-plan-summary').click()
+  await page.getByTestId('off-plan-open').click()
+  await expect(page.getByTestId('meal-food-select')).toBeVisible(WAIT)
+  await openLitterAddForm(page)
+  await audit('Home', 'home-single-folds', false)
+
+  // A water bowl's edit form, and the add-another form it leads to.
+  await page.getByTestId('water-edit').first().click()
+  await expect(
+    page.getByTestId('home-water-row').first().getByTestId('water-location'),
+  ).toBeVisible(WAIT)
+  await audit('Home', 'home-water-forms', false)
+  await page.getByTestId('water-add-another').click()
+  await expect(page.getByTestId('home-water-add')).toBeVisible(WAIT)
+  await audit('Home', 'home-water-add', false)
+
+  // Plan for one cat: the plan beside its reference folds, both open.
+  await tabBar(page).getByRole('link', { name: 'Plan' }).click()
+  await page.getByText('How the target works').click()
+  await page.getByText(/^Plan history/).click()
+  await audit('Plan', 'plan-single', false)
+
+  // Supplies: each stock panel open, then the food form with its stock fields.
+  await tabBar(page).getByRole('link', { name: 'Supplies' }).click()
+  const kibble = page.getByTestId('food-supply').first()
+  await kibble.getByTestId('food-supply-bought').click()
+  await expect(kibble.getByTestId('food-supply-bought-amount')).toBeVisible(WAIT)
+  await page.getByTestId('litter-supply').getByTestId('litter-supply-recount').click()
+  await audit('Supplies', 'supplies-panels', false)
+  await kibble.getByTestId('food-supply-edit').click()
+  await expect(kibble.getByTestId('food-name')).toBeVisible(WAIT)
+  await audit('Supplies', 'supplies-edit-food', false)
+  await page.getByTestId('supplies-add-food').click()
+  await expect(page.getByTestId('food-opening-units')).toBeVisible(WAIT)
+  await audit('Supplies', 'supplies-add-food', false)
+
+  // ---- two cats ----
+  // A second cat with a long name, so the switcher chips, the per-cat blocks
+  // on Home and Plan, and the named weight rows are laid out — and measured
+  // by every check — with the longest label.
   await seedSecondCat(page, 'Princess Fluffington the Third')
 
   for (const name of PAGES) {
     await audit(name, name.toLowerCase())
   }
-
-  // Chores is audited above with both add forms folded away; open them so
-  // the forms themselves are measured too.
-  await tabBar(page).getByRole('link', { name: 'Chores' }).click()
-  await openAddForm(page, 'litter')
-  await openAddForm(page, 'water')
-  await audit('Chores', 'chores-add-forms')
 })
 
 test('the weigh-in form fields each get a full-width row', async ({ page }, testInfo) => {
@@ -369,8 +542,8 @@ test('the label calculator lays out inside the food form', async ({ page }, test
   test.setTimeout(180_000)
 
   await seedHousehold(page, { tag: `analysis-${testInfo.project.name}` })
-  await tabBar(page).getByRole('link', { name: 'Food' }).click()
-  await page.getByTestId('food-add-open').click()
+  await tabBar(page).getByRole('link', { name: 'Supplies' }).click()
+  await page.getByTestId('supplies-add-food').click()
   await expect(page.getByTestId('food-name')).toBeVisible(WAIT)
   await page.getByTestId('food-type').selectOption('wet')
   await page.getByTestId('food-analysis-toggle').click()
@@ -419,27 +592,17 @@ test('the label calculator lays out inside the food form', async ({ page }, test
 
 /**
  * A bowl with two foods on it is the widest row the app can produce: two food
- * names, two gram figures and a meal total, all inside one checklist row on a
- * 375pt screen. If any layout is going to break, it breaks here.
+ * names, two gram figures and a meal total, all inside one checklist row on
+ * Home on a 375pt screen. If any layout is going to break, it breaks here.
  */
 test('a two-food bowl shows both foods and holds its layout', async ({ page }, testInfo) => {
   test.setTimeout(180_000)
 
   await seedHousehold(page, { tag: `combo-${testInfo.project.name}` })
-
-  await tabBar(page).getByRole('link', { name: 'Food' }).click()
-  await expect(page.getByTestId('food-add-open')).toBeVisible(WAIT)
-  await page.getByTestId('food-add-open').click()
-  await expect(page.getByTestId('food-name')).toBeVisible(WAIT)
-  await page.getByTestId('food-name').fill('Wet Tuna in Jelly')
-  await page.getByTestId('food-type').selectOption('wet')
-  await page.getByTestId('food-kcal-per-gram').fill('0.75')
-  await page.getByTestId('food-save').click()
-  await expect(page.getByRole('listitem').filter({ hasText: 'Wet Tuna in Jelly' })).toBeVisible(
-    WAIT,
-  )
+  await addFoodOnSupplies(page, { name: 'Wet Tuna in Jelly', type: 'wet', kcalPerGram: '0.75' })
 
   // She eats both the kibble and the tuna at every meal.
+  await tabBar(page).getByRole('link', { name: 'Plan' }).click()
   await expect(page.getByTestId('plan-edit')).toBeVisible(WAIT)
   await page.getByTestId('plan-edit').click()
   await expect(page.getByTestId('plan-item-grams-0')).toBeVisible(WAIT)
@@ -448,33 +611,59 @@ test('a two-food bowl shows both foods and holds its layout', async ({ page }, t
   await page.getByTestId('plan-item-food-1').selectOption({ label: 'Wet Tuna in Jelly' })
   await page.getByTestId('plan-item-grams-1').fill('240')
   await page.getByTestId('plan-save').click()
+  await expect(page.getByText('240 g a day')).toBeVisible(WAIT)
 
-  const firstMeal = page.getByRole('listitem').filter({ hasText: '07:00' })
+  const checks = async (where: string) => {
+    expect(await overflowingElements(page), `${where} overflows the viewport`).toEqual([])
+    expect(await documentScrollsSideways(page), `${where} scrolls sideways`).toBe(false)
+    expect(await controlsOutsideTheirCard(page), `${where}: a control escapes its card`).toEqual([])
+    expect(await smallTouchTargets(page), `${where}: an under-sized tap target`).toEqual([])
+    expect(await buttonsHuggingTheirCard(page), `${where}: a button on a card's edge`).toEqual([])
+    expect(await textColumnMisalignments(page), `${where}: a ragged text column`).toEqual([])
+  }
+  const shoot = async (shot: string) => {
+    await page.screenshot({
+      path: `test-results/screenshots/${testInfo.project.name}-${shot}.png`,
+      fullPage: true,
+    })
+    await testInfo.attach(`${testInfo.project.name}-${shot}`, {
+      body: await page.screenshot({ fullPage: true }),
+      contentType: 'image/png',
+    })
+  }
+
+  // The revision leaves a superseded plan behind, so the history is here too —
+  // opened, because a collapsed section cannot break a layout.
+  await page.getByText(/^Plan history/).click()
+  // The superseded plan is the one still naming the kibble as the whole bowl.
+  await expect(page.getByText('69 g Test Kibble with a fairly long name a day')).toBeVisible(WAIT)
+  await shoot('plan-combo')
+  await checks('the combo Plan')
+
+  await tabBar(page).getByRole('link', { name: 'Home' }).click()
+  const firstMeal = page.getByRole('listitem').filter({ has: page.getByTestId('meal-tick-0') })
   await expect(firstMeal).toContainText('Test Kibble with a fairly long name', WAIT)
   await expect(firstMeal).toContainText('Wet Tuna in Jelly')
   await expect(firstMeal).toContainText('20 g')
   await expect(firstMeal).toContainText('80 g')
+  // The bowl's own total, once there is more than one food to add up.
+  await expect(firstMeal).toContainText('100 g')
 
-  // The revision leaves a superseded plan behind, so the history is here too —
-  // opened, because a collapsed section cannot break a layout.
-  await page.getByText('Plan history').click()
-  // The superseded plan is the one still naming the kibble as the whole bowl.
-  await expect(page.getByText('69 g Test Kibble with a fairly long name a day')).toBeVisible(WAIT)
+  // Each food line keeps its grams on the row's right edge, beside the name,
+  // however long the name: a name that pushed its figure onto a line of its
+  // own would read as a third food.
+  const foodLines = firstMeal.locator('div.text-sm')
+  await expect(foodLines).toHaveCount(2)
+  for (const line of await foodLines.all()) {
+    const name = await line.locator('span').first().boundingBox()
+    const grams = await line.locator('span').last().boundingBox()
+    if (name === null || grams === null) throw new Error('a food line is not laid out')
+    expect(Math.abs(name.y - grams.y), 'a food line wrapped its grams').toBeLessThanOrEqual(4)
+    expect(grams.x).toBeGreaterThan(name.x)
+  }
 
-  await page.screenshot({
-    path: `test-results/screenshots/${testInfo.project.name}-food-combo.png`,
-    fullPage: true,
-  })
-  await testInfo.attach(`${testInfo.project.name}-food-combo`, {
-    body: await page.screenshot({ fullPage: true }),
-    contentType: 'image/png',
-  })
-
-  expect(await overflowingElements(page), 'a combo bowl overflows the viewport').toEqual([])
-  expect(await documentScrollsSideways(page), 'the combo Food page scrolls sideways').toBe(false)
-  expect(await controlsOutsideTheirCard(page), 'a control escapes its card').toEqual([])
-  expect(await smallTouchTargets(page), 'an under-sized tap target').toEqual([])
-  expect(await textColumnMisalignments(page), 'a ragged text column').toEqual([])
+  await shoot('home-combo')
+  await checks('the combo Home')
 })
 
 /**
@@ -522,26 +711,35 @@ test.describe('in dark mode', () => {
   }, testInfo) => {
     test.setTimeout(180_000)
 
-    const tag = `dark-${testInfo.project.name}-${String(testInfo.repeatEachIndex)}-${String(testInfo.retry)}`
-    await seedHousehold(page, { tag })
-    await seedPreviousPlan(request, tag)
-    await seedLastWeeksWeighIn(request, tag)
-    await seedLitterBoxes(page)
-    await seedWaterBowls(page, request, tag)
+    const tag = `dark-${testInfo.project.name}-${String(testInfo.repeatEachIndex)}-${String(testInfo.retry)}-${String(Date.now())}`
+    await seedEverything(page, request, tag)
+
+    const sweep = async (shot: string) => {
+      await page.screenshot({
+        path: `test-results/screenshots/${testInfo.project.name}-${shot}-dark.png`,
+        fullPage: true,
+      })
+      expect(await lightBackgrounds(page), `${shot} has a light surface in dark mode`).toEqual([])
+      expect(await overflowingElements(page), `${shot} has elements past the viewport`).toEqual([])
+    }
 
     for (const name of PAGES) {
       await tabBar(page).getByRole('link', { name }).click()
       await expect(page.getByRole('heading', { level: 1 })).toBeVisible(WAIT)
       await page.waitForTimeout(500)
-
-      await page.screenshot({
-        path: `test-results/screenshots/${testInfo.project.name}-${name.toLowerCase()}-dark.png`,
-        fullPage: true,
-      })
-
-      expect(await lightBackgrounds(page), `${name} has a light surface in dark mode`).toEqual([])
-      expect(await overflowingElements(page), `${name} has elements past the viewport`).toEqual([])
+      await sweep(name.toLowerCase())
     }
+
+    // What only shows once opened: Home's folds and the stock panels.
+    await openLitterFold(page)
+    await page.getByTestId('home-off-plan-summary').click()
+    await sweep('home-folds')
+
+    await tabBar(page).getByRole('link', { name: 'Supplies' }).click()
+    await page.getByTestId('food-supply').first().getByTestId('food-supply-bought').click()
+    await page.getByTestId('supplies-add-food').click()
+    await expect(page.getByTestId('food-opening-units')).toBeVisible(WAIT)
+    await sweep('supplies-panels')
   })
 
   test('the sign-in screen is dark', async ({ page }, testInfo) => {
