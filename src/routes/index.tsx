@@ -1,5 +1,6 @@
 import { createFileRoute, Link } from '@tanstack/react-router'
 import { useState, type ReactNode } from 'react'
+import { CatAge } from '../components/CatAge'
 import { ErrorCard } from '../components/ErrorCard'
 import { FoldChevron } from '../components/FoldChevron'
 import { HomeWater } from '../components/HomeWater'
@@ -153,7 +154,13 @@ function HomeBody({ days }: { days: readonly CatAndDay[] }) {
           {days.map(({ cat, day }, index) => (
             <section key={cat.id} className="flex flex-col gap-3">
               <h2 className="section-label gutter break-words">
-                {several ? `${cat.name} · ${ageLabelLong(cat.birthDate, day.now)}` : 'Meals'}
+                {several ? (
+                  <>
+                    {cat.name} · <CatAge cat={cat} now={day.now} />
+                  </>
+                ) : (
+                  'Meals'
+                )}
               </h2>
               <CatMeals cat={cat} day={day} />
               {/* Household-level: once, straight after the last cat's bowls. */}

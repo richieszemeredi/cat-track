@@ -1,6 +1,7 @@
 import { createFileRoute, Link } from '@tanstack/react-router'
 import { format } from 'date-fns'
 import { useState } from 'react'
+import { CatAge } from '../components/CatAge'
 import { ErrorCard } from '../components/ErrorCard'
 import { OutgrownNudge } from '../components/OutgrownNudge'
 import { PlanForm } from '../components/PlanForm'
@@ -9,7 +10,6 @@ import { PlanSummaryRows } from '../components/PlanSummary'
 import { RerMerMath } from '../components/RerMerMath'
 import { SectionError, Skeleton } from '../components/SectionStatus'
 import { useAuth } from '../lib/auth'
-import { ageLabelLong } from '../lib/catmath'
 import { type Cat } from '../lib/db'
 import { useHousehold } from '../lib/household'
 import { isOutgrown } from '../lib/plan'
@@ -255,7 +255,7 @@ function CatPlanBlock({ cat, onEdit }: { cat: Cat; onEdit: () => void }) {
     <section className="flex flex-col gap-3">
       <div className="gutter flex items-baseline justify-between gap-2">
         <h2 className="section-label min-w-0 break-words">
-          {cat.name} · {ageLabelLong(cat.birthDate, catPlan.now)}
+          {cat.name} · <CatAge cat={cat} now={catPlan.now} />
         </h2>
         {plan === null ? null : (
           <span className="shrink-0 text-sm text-ink-soft">

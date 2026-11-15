@@ -156,8 +156,9 @@ async function buttonsHuggingTheirCard(page: Page): Promise<string[]> {
 }
 
 /**
- * Inline phrases that must move to the next line whole: a "Needs attention"
- * line once wrapped as "· about 1 / day left", orphaning half its detail.
+ * Phrases that must move to the next line whole: a "Needs attention" line
+ * once wrapped as "· about 1 / day left", and a cat's age as "1 year 1 /
+ * month old".
  */
 async function splitPhrases(page: Page): Promise<string[]> {
   return page.evaluate(() => {
@@ -165,7 +166,9 @@ async function splitPhrases(page: Page): Promise<string[]> {
       document: { querySelectorAll: (selector: string) => Iterable<DomElement> }
     }
     const out: string[] = []
-    for (const el of g.document.querySelectorAll('[data-testid="home-attention-detail"]')) {
+    for (const el of g.document.querySelectorAll(
+      '[data-testid="home-attention-detail"], [data-testid="cat-age"]',
+    )) {
       // Chromium gives an inline element one rect per text node, so count the
       // distinct lines they sit on rather than the rects.
       const lines = new Set<number>()
