@@ -131,6 +131,42 @@ export async function addFoodOnSupplies(page: Page, food: FoodSeed): Promise<voi
   await expect(page.getByTestId('food-name')).toBeHidden(WAIT)
 }
 
+export interface LitterSeed {
+  name: string
+  /** Bag size as typed, comma or point. */
+  bagSize?: string
+  bagUnit?: 'kg' | 'L'
+  /** How many bags are on the shelf when it is added. */
+  openingBags?: string
+}
+
+/**
+ * Add a kind of litter the way a person would: Supplies, "Add litter", the
+ * form. Leaves the page on Supplies with the kind's stock card showing.
+ */
+export async function addLitterOnSupplies(page: Page, litter: LitterSeed): Promise<void> {
+  await tabBar(page).getByRole('link', { name: 'Supplies' }).click()
+  await expect(page.getByRole('heading', { name: 'Litter', level: 2 })).toBeVisible(WAIT)
+  await page.getByTestId('supplies-add-litter').click()
+  await expect(page.getByTestId('litter-kind-name')).toBeVisible(WAIT)
+  await page.getByTestId('litter-kind-name').fill(litter.name)
+  if (litter.bagSize !== undefined) {
+    await page.getByTestId('litter-kind-bag-size').fill(litter.bagSize)
+  }
+  if (litter.bagUnit !== undefined) {
+    await page.getByTestId(`litter-kind-unit-${litter.bagUnit}`).click()
+  }
+  if (litter.openingBags !== undefined) {
+    await page.getByTestId('litter-kind-opening-bags').fill(litter.openingBags)
+  }
+  await page.getByTestId('litter-kind-save').click()
+
+  await expect(
+    page.getByTestId('litter-supply').filter({ hasText: litter.name }).first(),
+  ).toBeVisible(WAIT)
+  await expect(page.getByTestId('litter-kind-name')).toBeHidden(WAIT)
+}
+
 /**
  * A second cat, added the way a person would: through the "Add another cat"
  * section on Profile. Leaves the page on Profile. Mochi stays the active cat —
