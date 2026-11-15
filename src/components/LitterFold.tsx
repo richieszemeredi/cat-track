@@ -37,7 +37,7 @@ export function LitterFold({
   const { householdId, canEdit } = useHousehold()
   const { user } = useAuth()
   const uid = user?.uid ?? null
-  const { litterKinds } = useSupplies()
+  const { litterKinds, activeLitterKinds } = useSupplies()
   const boxesQuery = useQuery(litterBoxesQueryOptions(householdId))
   useLitterBoxesLive(householdId)
   // Ages are calendar days, so the clock only needs to be right to the day —
@@ -90,6 +90,8 @@ export function LitterFold({
                   uid={uid}
                   canEdit={canEdit}
                   litters={litterKinds}
+                  // With one kind every box takes it; naming it says nothing.
+                  showKind={activeLitterKinds.length >= 2}
                 />
               ))}
             </AnimatePresence>
@@ -121,6 +123,7 @@ export function LitterBoxRow({
   uid,
   canEdit,
   litters,
+  showKind,
 }: {
   order: number
   box: LitterBox
@@ -130,11 +133,14 @@ export function LitterBoxRow({
   canEdit: boolean
   /** The household's litter kinds, archived included. */
   litters: readonly LitterKind[]
+  /** Name the box's kind after its location (only once there are several). */
+  showKind: boolean
 }) {
   const [editing, setEditing] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const age = litterAge(box.lastChangedAt, today, box.changeEveryWeeks)
   const next = nextSwapLine(box, today)
+  const kindName = showKind ? (litters.find((l) => l.id === box.litterId)?.name ?? null) : null
 
   const handleReplacedToday = () => {
     setError(null)
@@ -151,7 +157,15 @@ export function LitterBoxRow({
         {/* The two dates that matter, each with how far off it is. Past due,
         the whole next-swap line turns danger — no separate warning line. */}
         <div className="flex min-w-0 flex-col gap-0.5">
-          <p className="font-semibold break-words">{box.location}</p>
+          <p className="font-semibold break-words">
+            {box.location}
+            {kindName === null ? null : (
+              <span data-testid="litter-box-kind" className="font-normal text-ink-soft">
+                {' '}
+                · {kindName}
+              </span>
+            )}
+          </p>
           <p data-testid="litter-last-swap" className="text-sm text-ink-soft tabular-nums">
             {lastSwapLine(box.lastChangedAt, today)}
           </p>
