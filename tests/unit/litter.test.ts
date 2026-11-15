@@ -3,6 +3,7 @@ import {
   DEFAULT_LITTER_CHANGE_EVERY_WEEKS,
   litterAge,
   litterAgeLabel,
+  litterFoldSummary,
   weeksLabel,
 } from '../../src/lib/litter'
 
@@ -62,5 +63,36 @@ describe('litterAgeLabel', () => {
     expect(litterAgeLabel({ days: 4, weeks: 0, overdue: false })).toBe('This week')
     expect(litterAgeLabel({ days: 9, weeks: 1, overdue: false })).toBe('1 week ago')
     expect(litterAgeLabel({ days: 37, weeks: 5, overdue: true })).toBe('5 weeks ago')
+  })
+})
+
+describe('litterFoldSummary', () => {
+  const today = new Date(2026, 10, 15)
+  const box = (location: string, lastChangedAt: Date, changeEveryWeeks = 4) => ({
+    location,
+    lastChangedAt,
+    changeEveryWeeks,
+    bagsPerSwap: 1,
+  })
+
+  it('says so when there are no boxes', () => {
+    expect(litterFoldSummary([], today)).toBe('none yet')
+  })
+
+  it('names the next swap when nothing is due', () => {
+    expect(
+      litterFoldSummary(
+        [box('Bathroom', new Date(2026, 10, 15)), box('Hallway', new Date(2026, 9, 23))],
+        today,
+      ),
+    ).toBe('next swap Nov 20')
+  })
+
+  it('names an overdue box, or counts several', () => {
+    const old = box('Hallway', new Date(2026, 9, 1))
+    expect(litterFoldSummary([old, box('Bathroom', today)], today)).toBe('Hallway due')
+    expect(litterFoldSummary([old, box('Bathroom', new Date(2026, 8, 1))], today)).toBe(
+      '2 boxes due',
+    )
   })
 })

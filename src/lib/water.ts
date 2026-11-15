@@ -36,3 +36,19 @@ export function waterAgeLabel(age: WaterAge, changedAt: Date, now: Date): string
   const days = Math.max(1, differenceInCalendarDays(now, changedAt))
   return `${String(days)} ${days === 1 ? 'day' : 'days'} ago`
 }
+
+/**
+ * Home's one-line version: "changed just now", "changed 6 h ago", and past a
+ * day "changed 1 day ago" — the point at which the line turns red.
+ */
+export function waterChangedLabel(age: WaterAge, changedAt: Date, now: Date): string {
+  if (age.hours < 1) return 'changed just now'
+  if (!age.overdue) return `changed ${String(age.hours)} h ago`
+  const days = Math.max(1, differenceInCalendarDays(now, changedAt))
+  return `changed ${String(days)} ${days === 1 ? 'day' : 'days'} ago`
+}
+
+/** A refresh logged under a minute ago can't usefully be logged again. */
+export function waterJustChanged(changedAt: Date, now: Date): boolean {
+  return now.getTime() - changedAt.getTime() < 60_000
+}

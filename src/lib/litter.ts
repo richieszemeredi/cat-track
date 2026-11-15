@@ -1,4 +1,5 @@
-import { differenceInCalendarDays } from 'date-fns'
+import { differenceInCalendarDays, format } from 'date-fns'
+import { litterBoxDueOn, type LitterBoxLike } from './stock'
 
 /**
  * How often a box wants a full clean-out (all the litter out, box scrubbed)
@@ -51,4 +52,23 @@ export function litterAgeLabel(age: LitterAge): string {
   if (age.days === 0) return 'Today'
   if (age.weeks === 0) return 'This week'
   return `${weeksLabel(age.weeks)} ago`
+}
+
+/**
+ * The one-line state of the household's boxes, for a closed fold: what is due
+ * if anything is, otherwise when the next swap comes round.
+ */
+export function litterFoldSummary(
+  boxes: readonly (LitterBoxLike & { location: string })[],
+  today: Date,
+): string {
+  if (boxes.length === 0) return 'none yet'
+  const overdue = boxes.filter(
+    (box) => litterAge(box.lastChangedAt, today, box.changeEveryWeeks).overdue,
+  )
+  const [onlyOverdue] = overdue
+  if (overdue.length === 1 && onlyOverdue !== undefined) return `${onlyOverdue.location} due`
+  if (overdue.length > 1) return `${String(overdue.length)} boxes due`
+  const next = Math.min(...boxes.map((box) => litterBoxDueOn(box).getTime()))
+  return `next swap ${format(next, 'MMM d')}`
 }

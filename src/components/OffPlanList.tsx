@@ -18,6 +18,10 @@ import { SectionError } from './SectionStatus'
  * With a `heading` the add chip sits beside it in a header row and the form
  * opens above the list; without one the chip and the form follow the list
  * (for a screen that labels the section itself, e.g. inside a fold).
+ *
+ * `inset` is for living inside a card that is already there (Home's folded
+ * "Anything off-plan"): rows and text pad themselves to the card's text
+ * column instead of bringing a card and a page gutter of their own.
  */
 export function OffPlanList({
   cat,
@@ -25,6 +29,9 @@ export function OffPlanList({
   foods,
   heading,
   addLabel = 'Add',
+  emptyText = 'Nothing off-plan today.',
+  inset = false,
+  showKcal = true,
 }: {
   cat: Cat
   /** That cat's off-plan feedings for today (`useCatDay(cat).offPlan`). */
@@ -35,6 +42,12 @@ export function OffPlanList({
   heading?: string
   /** The add chip's text while the form is closed. */
   addLabel?: string
+  /** What to say while nothing off-plan has been logged. */
+  emptyText?: string
+  /** Inside an existing card: no card or page gutter of its own. */
+  inset?: boolean
+  /** Print kcal beside the grams. Home shows grams only. */
+  showKcal?: boolean
 }) {
   const { householdId, canEdit } = useHousehold()
   const { user } = useAuth()
@@ -61,7 +74,7 @@ export function OffPlanList({
         onClick={() => {
           setShowForm((v) => !v)
         }}
-        className={heading === undefined ? 'btn-chip self-start' : 'btn-chip'}
+        className={heading === undefined ? `btn-chip self-start${inset ? 'mx-4' : ''}` : 'btn-chip'}
       >
         {showForm ? 'Close' : addLabel}
       </button>
@@ -69,16 +82,21 @@ export function OffPlanList({
 
   const form =
     showForm && canEdit && uid !== null ? (
-      <div className="surface p-4">
+      <div className={inset ? 'px-4' : 'surface p-4'}>
         <LogMealForm hid={householdId} catId={cat.id} uid={uid} foods={foods} />
       </div>
     ) : null
 
+  // Inside a card the text column is the card's own padding; on a page it is
+  // the gutter that lines up with the text in cards.
+  const textColumn = inset ? 'px-4' : 'gutter'
+  const kcalSuffix = (kcal: number) => (showKcal ? ` · ${String(roundKcal(kcal))} kcal` : '')
+
   return (
     <div className="flex flex-col gap-3">
       {heading === undefined ? null : (
-        <div className="gutter flex items-center justify-between gap-2">
-          <h2 className="section-label">{heading}</h2>
+        <div className={`${textColumn} flex items-center justify-between gap-2`}>
+          <h2 className="section-label break-words">{heading}</h2>
           {addChip}
         </div>
       )}
@@ -86,10 +104,10 @@ export function OffPlanList({
       {heading === undefined ? null : form}
 
       {feedings.length === 0 ? (
-        <p className="gutter text-sm text-ink-soft">Nothing off-plan today.</p>
+        <p className={`${textColumn} text-sm text-ink-soft`}>{emptyText}</p>
       ) : (
         <>
-          <ul className="surface divide-y divide-sand">
+          <ul className={inset ? 'divide-y divide-sand' : 'surface divide-y divide-sand'}>
             <AnimatePresence initial={false}>
               {feedings.map((entry, index) => (
                 <ListRow key={entry.id} order={index}>
@@ -101,7 +119,7 @@ export function OffPlanList({
                       {entry.foodNameSnapshot}
                     </span>
                     <span className="shrink-0 text-sm text-ink-soft tabular-nums">
-                      {roundGrams(entry.amountG)} g · {roundKcal(entry.kcal)} kcal
+                      {roundGrams(entry.amountG)} g{kcalSuffix(entry.kcal)}
                     </span>
                     {canEdit ? (
                       <button
@@ -120,8 +138,8 @@ export function OffPlanList({
               ))}
             </AnimatePresence>
           </ul>
-          <p className="gutter text-sm text-ink-soft tabular-nums">
-            Total: {roundGrams(sumGrams(feedings))} g · {roundKcal(sumKcal(feedings))} kcal
+          <p className={`${textColumn} text-sm text-ink-soft tabular-nums`}>
+            Total: {roundGrams(sumGrams(feedings))} g{kcalSuffix(sumKcal(feedings))}
           </p>
         </>
       )}
