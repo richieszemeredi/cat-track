@@ -74,7 +74,12 @@ export function OffPlanList({
         onClick={() => {
           setShowForm((v) => !v)
         }}
-        className={heading === undefined ? `btn-chip self-start${inset ? 'mx-4' : ''}` : 'btn-chip'}
+        // The space lives in the template, not in ' mx-4': the Tailwind
+        // Prettier plugin trims class strings, which once ran the two into
+        // "self-startmx-4" and stretched the chip across its card.
+        className={
+          heading === undefined ? `btn-chip self-start ${inset ? 'mx-4' : ''}` : 'btn-chip'
+        }
       >
         {showForm ? 'Close' : addLabel}
       </button>
