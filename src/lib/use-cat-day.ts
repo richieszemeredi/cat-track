@@ -26,16 +26,13 @@ import { adjustedMealTimes, planDailyKcal, planMealTimes, planTargetRatio } from
 import { dailyKcalTarget, sumKcal } from './target'
 import { useToday } from './use-today'
 
-/** Everything one cat's day hangs on: her plan, its bowls, and what has gone down. */
-export interface CatDay {
-  /** Today, as `useToday` has it — moves at midnight. */
-  day: DayRange
+/** One cat's plan in force, measured against her target. */
+export interface CatPlan {
   /** This render's clock, for anything age- or target-dependent. */
   now: Date
 
   weightsQuery: UseQueryResult<WeightEntry[]>
   foodsQuery: UseQueryResult<Food[]>
-  feedingsQuery: UseQueryResult<Feeding[]>
   plansQuery: UseQueryResult<Plan[]>
   planItemsQuery: UseQueryResult<PlanItem[]>
 
@@ -57,7 +54,13 @@ export interface CatDay {
   planDailyKcal: number
   /** Plan kcal as a share of the target; null without a target. */
   ratio: number | null
+}
 
+/** Everything one cat's day hangs on: her plan, its bowls, and what has gone down. */
+export interface CatDay extends CatPlan {
+  /** Today, as `useToday` has it — moves at midnight. */
+  day: DayRange
+  feedingsQuery: UseQueryResult<Feeding[]>
   feedings: Feeding[]
   /** Feedings that tick off a bowl of THIS plan, by meal index. */
   givenByMeal: ReadonlyMap<number, Feeding[]>
@@ -70,29 +73,19 @@ export interface CatDay {
 }
 
 /**
- * Load one cat's day: her current plan and its items, the household's foods,
- * today's feedings and today's meal-time nudges, all kept live. Shared by
- * every screen that shows her bowls, so they agree on what counts as given.
+ * Load one cat's plan: every revision, the current one's items, the
+ * household's foods and her weights (for the target), all kept live.
  */
-export function useCatDay(cat: Cat): CatDay {
+export function useCatPlan(cat: Cat): CatPlan {
   const { householdId } = useHousehold()
-  const day = useToday()
   const now = new Date()
 
   const weightsQuery = useQuery(weightsQueryOptions(householdId, cat.id))
   useWeightsLive(householdId, cat.id)
   const foodsQuery = useQuery(foodsQueryOptions(householdId))
   useFoodsLive(householdId)
-  const feedingsQuery = useQuery(
-    feedingsForDayQueryOptions(householdId, cat.id, day.start, day.end),
-  )
-  useFeedingsForDayLive(householdId, cat.id, day.start, day.end)
   const plansQuery = useQuery(plansQueryOptions(householdId, cat.id))
   usePlansLive(householdId, cat.id)
-  const overridesQuery = useQuery(
-    mealTimeOverridesForDayQueryOptions(householdId, cat.id, day.start, day.end),
-  )
-  useMealTimeOverridesForDayLive(householdId, cat.id, day.start, day.end)
 
   const plans = plansQuery.data ?? []
   // Plans come back newest first and are never edited, so [0] is the one in
@@ -106,7 +99,6 @@ export function useCatDay(cat: Cat): CatDay {
 
   const latestWeightKg = weightsQuery.data?.at(-1)?.weightKg ?? null
   const target = dailyKcalTarget(cat, latestWeightKg, now)
-  const feedings = feedingsQuery.data ?? []
   const foods = foodsQuery.data ?? []
   const activeFoods = foods.filter((f) => !f.archived)
   const planItems = plan === null ? [] : (planItemsQuery.data ?? [])
@@ -115,6 +107,48 @@ export function useCatDay(cat: Cat): CatDay {
   const times = plan === null ? [] : planMealTimes(plan)
   const planDailyKcalValue = planDailyKcal(planItems, kcalPerGram)
   const ratio = planTargetRatio(planDailyKcalValue, target)
+
+  return {
+    now,
+    weightsQuery,
+    foodsQuery,
+    plansQuery,
+    planItemsQuery,
+    latestWeightKg,
+    target,
+    foods,
+    activeFoods,
+    kcalPerGram,
+    plans,
+    plan,
+    planItems,
+    times,
+    planDailyKcal: planDailyKcalValue,
+    ratio,
+  }
+}
+
+/**
+ * Load one cat's day: her current plan and its items, the household's foods,
+ * today's feedings and today's meal-time nudges, all kept live. Shared by
+ * every screen that shows her bowls, so they agree on what counts as given.
+ */
+export function useCatDay(cat: Cat): CatDay {
+  const { householdId } = useHousehold()
+  const day = useToday()
+  const catPlan = useCatPlan(cat)
+  const { plan, times } = catPlan
+
+  const feedingsQuery = useQuery(
+    feedingsForDayQueryOptions(householdId, cat.id, day.start, day.end),
+  )
+  useFeedingsForDayLive(householdId, cat.id, day.start, day.end)
+  const overridesQuery = useQuery(
+    mealTimeOverridesForDayQueryOptions(householdId, cat.id, day.start, day.end),
+  )
+  useMealTimeOverridesForDayLive(householdId, cat.id, day.start, day.end)
+
+  const feedings = feedingsQuery.data ?? []
 
   // A feeding belongs to a planned bowl only if it names THIS plan — a tick
   // left over from yesterday's plan must not mark today's bowl as given.
@@ -160,24 +194,9 @@ export function useCatDay(cat: Cat): CatDay {
   const adjustedTimes = adjustedMealTimes(times, day.start, givenAtByMeal, movedAtByMeal)
 
   return {
+    ...catPlan,
     day,
-    now,
-    weightsQuery,
-    foodsQuery,
     feedingsQuery,
-    plansQuery,
-    planItemsQuery,
-    latestWeightKg,
-    target,
-    foods,
-    activeFoods,
-    kcalPerGram,
-    plans,
-    plan,
-    planItems,
-    times,
-    planDailyKcal: planDailyKcalValue,
-    ratio,
     feedings,
     givenByMeal,
     offPlan,
