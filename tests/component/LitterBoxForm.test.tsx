@@ -8,6 +8,7 @@ import {
   deleteLitterBox,
   updateLitterBox,
   type LitterBox,
+  type LitterKind,
 } from '../../src/lib/db'
 import { expectLocalDate } from './fixtures'
 
@@ -34,6 +35,21 @@ const EXISTING: LitterBox = {
   createdAt: new Date(2026, 8, 1),
 }
 
+function makeLitter(overrides: Partial<LitterKind> = {}): LitterKind {
+  return {
+    id: 'default',
+    name: 'Litter',
+    bagSize: null,
+    bagUnit: null,
+    archived: false,
+    createdBy: 'user-1',
+    createdAt: new Date(2026, 8, 1),
+    ...overrides,
+  }
+}
+
+const LITTERS: LitterKind[] = [makeLitter()]
+
 function setDate(value: string): void {
   // userEvent cannot type into <input type="date">; change events are how
   // date pickers report values anyway.
@@ -50,7 +66,7 @@ beforeEach(() => {
 describe('LitterBoxForm', () => {
   it('adds a box with a trimmed location and the LOCAL date, then resets', async () => {
     const user = userEvent.setup()
-    render(<LitterBoxForm hid="hh-1" uid="user-1" />)
+    render(<LitterBoxForm hid="hh-1" uid="user-1" litters={LITTERS} />)
 
     await user.type(screen.getByTestId('litter-location'), '  Hallway  ')
     setDate('2026-02-14')
@@ -70,7 +86,7 @@ describe('LitterBoxForm', () => {
   })
 
   it('refuses a blank location', () => {
-    const { container } = render(<LitterBoxForm hid="hh-1" uid="user-1" />)
+    const { container } = render(<LitterBoxForm hid="hh-1" uid="user-1" litters={LITTERS} />)
 
     const form = container.querySelector('form')
     if (form === null) throw new Error('form not rendered')
@@ -84,7 +100,15 @@ describe('LitterBoxForm', () => {
     awaitOrQueuedMock.mockResolvedValue('queued')
     const user = userEvent.setup()
     const onDone = vi.fn()
-    render(<LitterBoxForm hid="hh-1" uid="user-1" existing={EXISTING} onDone={onDone} />)
+    render(
+      <LitterBoxForm
+        hid="hh-1"
+        uid="user-1"
+        litters={LITTERS}
+        existing={EXISTING}
+        onDone={onDone}
+      />,
+    )
 
     await user.click(screen.getByTestId('litter-save'))
 
@@ -94,7 +118,15 @@ describe('LitterBoxForm', () => {
   it('edits an existing box: pre-filled, and updates rather than adds', async () => {
     const user = userEvent.setup()
     const onDone = vi.fn()
-    render(<LitterBoxForm hid="hh-1" uid="user-1" existing={EXISTING} onDone={onDone} />)
+    render(
+      <LitterBoxForm
+        hid="hh-1"
+        uid="user-1"
+        litters={LITTERS}
+        existing={EXISTING}
+        onDone={onDone}
+      />,
+    )
 
     expect(screen.getByTestId('litter-location')).toHaveValue('Bathroom')
     expect(screen.getByTestId('litter-date')).toHaveValue('2026-09-01')
@@ -121,7 +153,15 @@ describe('LitterBoxForm', () => {
     const user = userEvent.setup()
     const onDone = vi.fn()
     const confirm = vi.spyOn(window, 'confirm')
-    render(<LitterBoxForm hid="hh-1" uid="user-1" existing={EXISTING} onDone={onDone} />)
+    render(
+      <LitterBoxForm
+        hid="hh-1"
+        uid="user-1"
+        litters={LITTERS}
+        existing={EXISTING}
+        onDone={onDone}
+      />,
+    )
 
     confirm.mockReturnValueOnce(false)
     await user.click(screen.getByRole('button', { name: 'Delete litter box' }))
@@ -135,8 +175,104 @@ describe('LitterBoxForm', () => {
   })
 
   it('offers no delete while adding', () => {
-    render(<LitterBoxForm hid="hh-1" uid="user-1" />)
+    render(<LitterBoxForm hid="hh-1" uid="user-1" litters={LITTERS} />)
 
     expect(screen.queryByRole('button', { name: 'Delete litter box' })).not.toBeInTheDocument()
+  })
+})
+
+describe('LitterBoxForm — which litter', () => {
+  const clumping = makeLitter({ id: 'litter-c', name: 'Clumping' })
+  const silica = makeLitter({ id: 'litter-s', name: 'Silica' })
+  const archived = makeLitter({ id: 'litter-old', name: 'Old pellets', archived: true })
+
+  async function addBox(litters: LitterKind[], pick?: string) {
+    const user = userEvent.setup()
+    render(<LitterBoxForm hid="hh-1" uid="user-1" litters={litters} />)
+    await user.type(screen.getByTestId('litter-location'), 'Hall')
+    if (pick !== undefined) await user.selectOptions(screen.getByLabelText('Litter'), pick)
+    await user.click(screen.getByTestId('litter-save'))
+    return addLitterBoxMock.mock.calls[0]?.[2]
+  }
+
+  it('gives a new box the only kind there is', async () => {
+    const input = await addBox([clumping])
+    expect(input?.litterId).toBe('litter-c')
+  })
+
+  it('offers the active kinds, starts on the first, and saves the one picked', async () => {
+    const user = userEvent.setup()
+    render(<LitterBoxForm hid="hh-1" uid="user-1" litters={[clumping, archived, silica]} />)
+
+    const select = screen.getByLabelText('Litter')
+    expect(select).toHaveValue('litter-c')
+    expect(Array.from(select.querySelectorAll('option')).map((o) => o.textContent)).toEqual([
+      'Clumping',
+      'Silica',
+    ])
+
+    await user.type(screen.getByTestId('litter-location'), 'Hall')
+    await user.selectOptions(select, 'litter-s')
+    await user.click(screen.getByTestId('litter-save'))
+    expect(addLitterBoxMock.mock.calls[0]?.[2]?.litterId).toBe('litter-s')
+  })
+
+  it('with no kinds, says where to add one and saves the box with none', async () => {
+    render(<LitterBoxForm hid="hh-1" uid="user-1" litters={[archived]} />)
+
+    expect(screen.queryByLabelText('Litter')).not.toBeInTheDocument()
+    expect(screen.getByText('Add a litter on Supplies to count its bags.')).toBeInTheDocument()
+
+    const user = userEvent.setup()
+    await user.type(screen.getByTestId('litter-location'), 'Hall')
+    await user.click(screen.getByTestId('litter-save'))
+    expect(addLitterBoxMock.mock.calls[0]?.[2]?.litterId).toBeNull()
+  })
+
+  it('keeps an edited box on its own kind, even an archived one', async () => {
+    const user = userEvent.setup()
+    render(
+      <LitterBoxForm
+        hid="hh-1"
+        uid="user-1"
+        litters={[clumping, archived, silica]}
+        existing={{ ...EXISTING, litterId: 'litter-old' }}
+      />,
+    )
+
+    const select = screen.getByLabelText('Litter')
+    expect(select).toHaveValue('litter-old')
+    expect(Array.from(select.querySelectorAll('option')).map((o) => o.textContent)).toEqual([
+      'Clumping',
+      'Old pellets',
+      'Silica',
+    ])
+
+    await user.click(screen.getByTestId('litter-save'))
+    expect(updateLitterBoxMock.mock.calls[0]?.[2]?.litterId).toBe('litter-old')
+  })
+
+  it('moves an edited box to another kind', async () => {
+    const user = userEvent.setup()
+    render(
+      <LitterBoxForm
+        hid="hh-1"
+        uid="user-1"
+        litters={[clumping, silica]}
+        existing={{ ...EXISTING, litterId: 'litter-c' }}
+      />,
+    )
+
+    await user.selectOptions(screen.getByLabelText('Litter'), 'litter-s')
+    await user.click(screen.getByTestId('litter-save'))
+    expect(updateLitterBoxMock.mock.calls[0]?.[2]?.litterId).toBe('litter-s')
+  })
+
+  it('leaves an edited box on its kind when there are none to pick from', async () => {
+    const user = userEvent.setup()
+    render(<LitterBoxForm hid="hh-1" uid="user-1" litters={[]} existing={EXISTING} />)
+
+    await user.click(screen.getByTestId('litter-save'))
+    expect(updateLitterBoxMock.mock.calls[0]?.[2]?.litterId).toBe('default')
   })
 })

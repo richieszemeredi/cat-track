@@ -8,10 +8,12 @@ import {
   replaceLitterBox,
   useLitterBoxesLive,
   type LitterBox,
+  type LitterKind,
 } from '../lib/db'
 import { useHousehold } from '../lib/household'
 import { lastSwapLine, litterAge, litterFoldSummary, nextSwapLine, weeksLabel } from '../lib/litter'
 import { bagsLabel } from '../lib/stock'
+import { useSupplies } from '../lib/supplies'
 import { useToday } from '../lib/use-today'
 import { AddDisclosure } from './AddDisclosure'
 import { FoldChevron } from './FoldChevron'
@@ -35,6 +37,7 @@ export function LitterFold({
   const { householdId, canEdit } = useHousehold()
   const { user } = useAuth()
   const uid = user?.uid ?? null
+  const { litterKinds } = useSupplies()
   const boxesQuery = useQuery(litterBoxesQueryOptions(householdId))
   useLitterBoxesLive(householdId)
   // Ages are calendar days, so the clock only needs to be right to the day —
@@ -86,6 +89,7 @@ export function LitterFold({
                   hid={householdId}
                   uid={uid}
                   canEdit={canEdit}
+                  litters={litterKinds}
                 />
               ))}
             </AnimatePresence>
@@ -98,7 +102,9 @@ export function LitterFold({
             className={boxes.length === 0 ? 'px-4' : 'border-t border-sand px-4'}
             defaultOpen={boxes.length === 0}
           >
-            {(close) => <LitterBoxForm hid={householdId} uid={uid} onDone={close} />}
+            {(close) => (
+              <LitterBoxForm hid={householdId} uid={uid} litters={litterKinds} onDone={close} />
+            )}
           </AddDisclosure>
         ) : null}
       </div>
@@ -114,6 +120,7 @@ export function LitterBoxRow({
   hid,
   uid,
   canEdit,
+  litters,
 }: {
   order: number
   box: LitterBox
@@ -121,6 +128,8 @@ export function LitterBoxRow({
   hid: string
   uid: string | null
   canEdit: boolean
+  /** The household's litter kinds, archived included. */
+  litters: readonly LitterKind[]
 }) {
   const [editing, setEditing] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -194,6 +203,7 @@ export function LitterBoxRow({
           <LitterBoxForm
             hid={hid}
             uid={uid}
+            litters={litters}
             existing={box}
             onDone={() => {
               setEditing(false)

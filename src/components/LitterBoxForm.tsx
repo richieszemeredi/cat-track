@@ -6,6 +6,7 @@ import {
   deleteLitterBox,
   updateLitterBox,
   type LitterBox,
+  type LitterKind,
 } from '../lib/db'
 import {
   DEFAULT_BAGS_PER_SWAP,
@@ -13,7 +14,7 @@ import {
   MAX_BAGS_PER_SWAP,
   weeksLabel,
 } from '../lib/litter'
-import { bagsLabel, LEGACY_LITTER_ID } from '../lib/stock'
+import { bagsLabel } from '../lib/stock'
 
 const FIELD_CLASS = 'field mt-1'
 
@@ -30,6 +31,17 @@ function todayStr(): string {
 }
 
 /**
+ * The kinds a box may take: every active one, plus the box's own kind if it
+ * has since been archived — so editing the box doesn't quietly move it.
+ */
+function litterChoices(
+  litters: readonly LitterKind[],
+  current: string | null | undefined,
+): LitterKind[] {
+  return litters.filter((l) => !l.archived || l.id === current)
+}
+
+/**
  * Add a litter box, or (with `existing`) fix its location and last-changed
  * date — the way back when a clean-out went untracked. Offline-friendly:
  * 'queued' counts as success.
@@ -37,11 +49,14 @@ function todayStr(): string {
 export function LitterBoxForm({
   hid,
   uid,
+  litters,
   existing,
   onDone,
 }: {
   hid: string
   uid: string
+  /** The household's litter kinds, archived included. */
+  litters: readonly LitterKind[]
   existing?: LitterBox
   onDone?: () => void
 }) {
@@ -53,8 +68,16 @@ export function LitterBoxForm({
     existing?.changeEveryWeeks ?? DEFAULT_LITTER_CHANGE_EVERY_WEEKS,
   )
   const [bagsPerSwap, setBagsPerSwap] = useState(existing?.bagsPerSwap ?? DEFAULT_BAGS_PER_SWAP)
+  // null until a kind is picked by hand: the default follows the catalog,
+  // which may still be loading when the form opens.
+  const [pickedLitterId, setPickedLitterId] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
+
+  const choices = litterChoices(litters, existing?.litterId)
+  const fallbackLitterId =
+    choices.find((l) => l.id === existing?.litterId)?.id ?? choices[0]?.id ?? null
+  const litterId = pickedLitterId ?? fallbackLitterId
 
   const handleSubmit = (event: SubmitEvent<HTMLFormElement>) => {
     event.preventDefault()
@@ -79,9 +102,9 @@ export function LitterBoxForm({
       lastChangedAt,
       changeEveryWeeks: everyWeeks,
       bagsPerSwap,
-      // A box keeps its kind; a new one takes the legacy kind until the form
-      // offers a choice.
-      litterId: existing === undefined ? LEGACY_LITTER_ID : existing.litterId,
+      // With no kinds to pick from, a new box takes none (its swaps then
+      // count no bags) and a saved one keeps whatever it had.
+      litterId: choices.length === 0 ? (existing?.litterId ?? null) : litterId,
     }
     awaitOrQueued(
       existing === undefined
@@ -94,6 +117,7 @@ export function LitterBoxForm({
           setDateStr(todayStr())
           setEveryWeeks(DEFAULT_LITTER_CHANGE_EVERY_WEEKS)
           setBagsPerSwap(DEFAULT_BAGS_PER_SWAP)
+          setPickedLitterId(null)
         }
         onDone?.()
       })
@@ -174,6 +198,29 @@ export function LitterBoxForm({
           ))}
         </select>
       </label>
+      {choices.length === 0 ? (
+        <p data-testid="litter-kind-none" className="text-sm text-ink-soft">
+          Add a litter on Supplies to count its bags.
+        </p>
+      ) : (
+        <label className="text-sm font-semibold">
+          Litter
+          <select
+            data-testid="litter-kind"
+            value={litterId ?? ''}
+            onChange={(event) => {
+              setPickedLitterId(event.target.value)
+            }}
+            className={FIELD_CLASS}
+          >
+            {choices.map((litter) => (
+              <option key={litter.id} value={litter.id}>
+                {litter.name}
+              </option>
+            ))}
+          </select>
+        </label>
+      )}
       <label className="text-sm font-semibold">
         Bags per full swap
         <select
