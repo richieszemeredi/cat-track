@@ -14,6 +14,7 @@ import { useAuth } from '../lib/auth'
 import { membershipQueryOptions } from '../lib/db'
 import { HouseholdProvider } from '../lib/household'
 import { type RouterContext } from '../lib/router-context'
+import { SuppliesProvider } from '../lib/supplies'
 import { useDisplayNameSync } from '../lib/use-display-name-sync'
 import { useLegacyFoodsMigration } from '../lib/use-legacy-foods-migration'
 import { useOnline } from '../lib/use-online'
@@ -77,22 +78,25 @@ function MembershipGate({ user }: { user: User }) {
 function AppShell() {
   useLegacyFoodsMigration()
   return (
-    // The outer box clears the tab bar: below it on a phone, beside it once
-    // it becomes a rail at 1024pt. The inner one centres the content in
-    // what is left, so the rail never overlaps a centred column.
-    <div className="min-h-dvh pb-24 lg:pb-8 lg:pl-24">
-      <div className="mx-auto max-w-lg md:max-w-5xl">
-        <OfflineBanner />
-        <InstallPrompt />
-        <ErrorBoundary
-          fallbackRender={({ error, resetErrorBoundary }) => (
-            <ErrorCard error={error} onRetry={resetErrorBoundary} />
-          )}
-        >
-          <Outlet />
-        </ErrorBoundary>
+    // One supplies state for every screen and the tab bar's dot.
+    <SuppliesProvider>
+      {/* The outer box clears the tab bar: below it on a phone, beside it
+          once it becomes a rail at 1024pt. The inner one centres the content
+          in what is left, so the rail never overlaps a centred column. */}
+      <div className="min-h-dvh pb-24 lg:pb-8 lg:pl-24">
+        <div className="mx-auto max-w-lg md:max-w-5xl">
+          <OfflineBanner />
+          <InstallPrompt />
+          <ErrorBoundary
+            fallbackRender={({ error, resetErrorBoundary }) => (
+              <ErrorCard error={error} onRetry={resetErrorBoundary} />
+            )}
+          >
+            <Outlet />
+          </ErrorBoundary>
+        </div>
+        <TabBar />
       </div>
-      <TabBar />
-    </div>
+    </SuppliesProvider>
   )
 }
