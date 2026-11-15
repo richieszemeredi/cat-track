@@ -261,13 +261,16 @@ Run `npm run test:visual` and **look at the PNGs** it writes to
   next, `self-startmx-4`, once stretched a chip across its whole card);
 - one text column per page column — every `.gutter` element starts exactly one
   card-padding inside the cards of the column it sits in;
-- a Needs-attention detail ("· about 1 day left") never splits across lines, and no
-  danger line ends on one stray word ("— time to / order");
+- some phrases never split across lines — a Needs-attention detail ("· about 1 / day
+  left"), a cat's age after her name ("1 year 1 / month old"), a cat's name in a Home
+  weight row — and no danger line, page-level note (`.gutter`) or `text-balance` line
+  ends on one stray word ("— time to / order", "… stays in the / history.");
 - from 768pt the two `.page-column`s sit side by side, each ≥ 343pt; below it they stack;
 - the main nav is a full-width bottom bar below 1024pt and a full-height left rail from
   it, with no content underneath.
 
-Every screen is swept with one cat and again with two (a long-named second cat), with
+Each tab is opened by its tab-bar link and waited on by URL (a tap WebKit drops is
+retried), then every screen is swept with one cat and again with two (a long-named second cat), with
 everything seeded that can show: a full "Needs attention", both folds open with their
 forms, a water bowl's edit and add forms, Plan's folds open, Supplies with a stock panel
 open and the food form (edit and add, stock fields included) — and the whole sweep again
