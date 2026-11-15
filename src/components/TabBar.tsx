@@ -1,14 +1,15 @@
 import { Link } from '@tanstack/react-router'
 import { m } from 'motion/react'
 import { glide } from '../lib/motion'
+import { useSupplies } from '../lib/supplies'
 
 // Emoji earn their place here and nowhere else: in a bottom bar they are
 // wayfinding you hit with a thumb, not decoration on a heading.
 const TABS = [
   { to: '/', label: 'Home', emoji: '🏠' },
-  { to: '/food', label: 'Food', emoji: '🍽️' },
   { to: '/weight', label: 'Weight', emoji: '⚖️' },
-  { to: '/chores', label: 'Chores', emoji: '🧺' },
+  { to: '/plan', label: 'Plan', emoji: '🍽️' },
+  { to: '/supplies', label: 'Supplies', emoji: '📦' },
   { to: '/profile', label: 'Profile', emoji: '🐱' },
 ] as const
 
@@ -28,8 +29,12 @@ const TABS = [
  * measurements and throw the pill in from wherever the old page was scrolled.
  * `.tab-bar` keeps the nav live through a screen's crossfade (index.css), so
  * the slide is what you see rather than a ghost of the old pill fading out.
+ *
+ * While any food or the litter is running low, Supplies wears a small coral
+ * dot — decoration for the eye; the link's accessible name says it in words.
  */
 export function TabBar() {
+  const { anyLow } = useSupplies()
   return (
     <m.nav
       layoutRoot
@@ -40,42 +45,52 @@ export function TabBar() {
         <span aria-hidden="true" className="mb-4 hidden text-center text-4xl leading-none lg:block">
           🐈
         </span>
-        {TABS.map((tab) => (
-          <Link
-            key={tab.to}
-            to={tab.to}
-            className="flex flex-1 flex-col items-center gap-0.5 rounded-xl py-2 text-xs font-medium text-ink-soft transition-[color,font-weight] duration-200 ease-squishy hover:text-ink data-[status=active]:font-semibold data-[status=active]:text-coral-ink data-[status=active]:hover:text-coral-ink lg:flex-none lg:py-3"
-            activeProps={{ 'aria-current': 'page' }}
-            activeOptions={{ exact: tab.to === '/' }}
-          >
-            {({ isActive }) => (
-              <>
-                <span
-                  aria-hidden="true"
-                  className="relative rounded-full px-4 py-1 text-xl leading-none"
-                >
-                  {isActive ? (
-                    <m.span
-                      layoutId="tab-pill"
-                      transition={glide}
-                      className="absolute inset-0 rounded-full bg-coral-soft"
-                    />
-                  ) : null}
-                  {/* Above every pill, not just this tab's: the pill lives in
+        {TABS.map((tab) => {
+          const dot = tab.to === '/supplies' && anyLow
+          return (
+            <Link
+              key={tab.to}
+              to={tab.to}
+              {...(dot ? { 'aria-label': `${tab.label}, needs restocking` } : {})}
+              className="flex flex-1 flex-col items-center gap-0.5 rounded-xl py-2 text-xs font-medium text-ink-soft transition-[color,font-weight] duration-200 ease-squishy hover:text-ink data-[status=active]:font-semibold data-[status=active]:text-coral-ink data-[status=active]:hover:text-coral-ink lg:flex-none lg:py-3"
+              activeProps={{ 'aria-current': 'page' }}
+              activeOptions={{ exact: tab.to === '/' }}
+            >
+              {({ isActive }) => (
+                <>
+                  <span
+                    aria-hidden="true"
+                    className="relative rounded-full px-4 py-1 text-xl leading-none"
+                  >
+                    {isActive ? (
+                      <m.span
+                        layoutId="tab-pill"
+                        transition={glide}
+                        className="absolute inset-0 rounded-full bg-coral-soft"
+                      />
+                    ) : null}
+                    {/* Above every pill, not just this tab's: the pill lives in
                   one tab and slides across the others, and in tree order a
                   later tab's pill would paint over an earlier tab's emoji on
                   its way past. The nav (fixed) keeps this z-index local. */}
-                  <span
-                    className={`relative z-10 transition-opacity duration-200 ease-squishy ${isActive ? '' : 'opacity-60'}`}
-                  >
-                    {tab.emoji}
+                    <span
+                      className={`relative z-10 transition-opacity duration-200 ease-squishy ${isActive ? '' : 'opacity-60'}`}
+                    >
+                      {tab.emoji}
+                    </span>
+                    {dot ? (
+                      <span
+                        data-testid="supplies-dot"
+                        className="absolute top-0 right-2.5 z-20 h-2.5 w-2.5 rounded-full bg-coral-deep ring-2 ring-surface"
+                      />
+                    ) : null}
                   </span>
-                </span>
-                {tab.label}
-              </>
-            )}
-          </Link>
-        ))}
+                  {tab.label}
+                </>
+              )}
+            </Link>
+          )
+        })}
       </div>
     </m.nav>
   )
