@@ -1,12 +1,21 @@
 import { expect, test } from '@playwright/test'
-import { daysAgoISO, openLitterAddForm, openLitterFold, seedHousehold, tabBar, WAIT } from './seed'
+import {
+  localDaysAgoISO,
+  openLitterAddForm,
+  openLitterFold,
+  seedHousehold,
+  tabBar,
+  WAIT,
+} from './seed'
 
 /**
- * Litter boxes end to end, in Home's folded "Litter boxes": add one, see how
- * old its last clean is in weeks, correct the date after a missed log, and
- * mark it replaced today.
+ * Litter boxes end to end, in Home’s folded "Litter boxes": add one, see its
+ * last and next full swap and how far off each is, correct the date after a
+ * missed log, and mark it replaced today.
  */
-test('litter boxes show their age in weeks and can be re-dated', async ({ page }, testInfo) => {
+test('litter boxes show their last and next swap and can be re-dated', async ({
+  page,
+}, testInfo) => {
   test.setTimeout(180_000)
 
   await seedHousehold(page, { tag: `litter-${testInfo.project.name}` })
@@ -22,23 +31,30 @@ test('litter boxes show their age in weeks and can be re-dated', async ({ page }
   await page.getByTestId('litter-location').fill('Bathroom')
   await page.getByTestId('litter-save').click()
   const box = fold.getByRole('listitem').filter({ hasText: 'Bathroom' })
-  await expect(box.getByText('Today', { exact: true })).toBeVisible(WAIT)
+  const lastSwap = box.getByTestId('litter-last-swap')
+  const nextSwap = box.getByTestId('litter-next-swap')
+  // The two dates that matter, each with how far off it is.
+  await expect(lastSwap).toHaveText(/^Last swap · \w{3} \d{1,2} · today$/, WAIT)
+  await expect(nextSwap).toHaveText(/^Next swap · \w{3} \d{1,2} · in 4 weeks$/)
+  await expect(nextSwap).not.toHaveClass(/text-danger/)
   await expect(box.getByRole('button', { name: 'Replaced today' })).toBeDisabled()
   await expect(page.getByTestId('litter-location')).toBeHidden()
   await openLitterAddForm(page)
   await expect(page.getByTestId('litter-location')).toBeVisible()
   await page.getByTestId('litter-add-toggle').click()
   await expect(page.getByTestId('litter-location')).toBeHidden()
-  await expect(page.getByText('Due for a full clean')).toHaveCount(0)
   await expect(summary).toContainText('· next swap', WAIT)
   await expect(page.getByTestId('home-attention')).toHaveCount(0)
 
   // A clean-out nobody logged: edit the date back to five weeks ago.
   await box.getByRole('button', { name: 'Edit' }).click()
-  await box.getByTestId('litter-date').fill(daysAgoISO(38))
+  await box.getByTestId('litter-date').fill(localDaysAgoISO(38))
   await box.getByTestId('litter-save').click()
-  await expect(box.getByText('5 weeks ago')).toBeVisible(WAIT)
-  await expect(box.getByText('Due for a full clean')).toBeVisible(WAIT)
+  await expect(lastSwap).toContainText('· 5 weeks ago', WAIT)
+  // 38 days since, on a four-week interval: due ten days ago, and the whole
+  // line says so.
+  await expect(nextSwap).toHaveText(/^Next swap · was due \w{3} \d{1,2} · 10 days overdue$/)
+  await expect(nextSwap).toHaveClass(/text-danger/)
   await expect(summary).toContainText('· Bathroom due')
 
   // Needs attention says so too, and its line opens the fold rather than
@@ -56,13 +72,14 @@ test('litter boxes show their age in weeks and can be re-dated', async ({ page }
   await box.getByTestId('litter-interval').selectOption('6')
   await box.getByTestId('litter-save').click()
   await expect(box.getByText(/every 6 weeks/)).toBeVisible(WAIT)
-  await expect(box.getByText('Due for a full clean')).toHaveCount(0)
+  await expect(nextSwap).toHaveText(/^Next swap · \w{3} \d{1,2} · in 4 days$/)
+  await expect(nextSwap).not.toHaveClass(/text-danger/)
   await expect(page.getByTestId('home-attention')).toHaveCount(0)
 
   // One tap says it was done today.
   await box.getByRole('button', { name: 'Replaced today' }).click()
-  await expect(box.getByText('Today', { exact: true })).toBeVisible(WAIT)
-  await expect(box.getByText('Due for a full clean')).toHaveCount(0)
+  await expect(lastSwap).toContainText('· today', WAIT)
+  await expect(nextSwap).toContainText('· in 6 weeks')
 
   // And it can go.
   page.once('dialog', (dialog) => {
@@ -86,7 +103,7 @@ test('a full swap takes its bags off the litter stock', async ({ page }, testInf
   // A two-bag box, overdue — so it is due within the week.
   await openLitterAddForm(page)
   await page.getByTestId('litter-location').fill('Bathroom')
-  await page.getByTestId('litter-date').fill(daysAgoISO(38))
+  await page.getByTestId('litter-date').fill(localDaysAgoISO(38))
   await page.getByTestId('litter-bags-per-swap').selectOption('2')
   await page.getByTestId('litter-save').click()
   const box = page.getByTestId('home-litter').getByRole('listitem').filter({ hasText: 'Bathroom' })
@@ -109,7 +126,7 @@ test('a full swap takes its bags off the litter stock', async ({ page }, testInf
   // The swap, on Home.
   await openLitterFold(page)
   await box.getByRole('button', { name: 'Replaced today' }).click()
-  await expect(box.getByText('Today', { exact: true })).toBeVisible(WAIT)
+  await expect(box.getByTestId('litter-last-swap')).toContainText('· today', WAIT)
 
   await tabBar(page).getByRole('link', { name: 'Supplies' }).click()
   // Derived since the count, so no longer exact.

@@ -192,7 +192,7 @@ export async function seedLitterBoxes(page: Page): Promise<void> {
   // 38 days is five weeks whichever side of midnight UTC the local day falls.
   await page.getByTestId('litter-date').fill(daysAgoISO(38))
   await page.getByTestId('litter-save').click()
-  await expect(page.getByText('5 weeks ago')).toBeVisible(WAIT)
+  await expect(page.getByText('· 5 weeks ago')).toBeVisible(WAIT)
   await expect(page.getByTestId('litter-location')).toBeHidden(WAIT)
 }
 

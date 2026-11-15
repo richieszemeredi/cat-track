@@ -47,11 +47,56 @@ export function weeksLabel(weeks: number): string {
   return `${String(weeks)} ${weeks === 1 ? 'week' : 'weeks'}`
 }
 
-/** "Today", "This week", "1 week ago", "5 weeks ago". */
-export function litterAgeLabel(age: LitterAge): string {
-  if (age.days === 0) return 'Today'
-  if (age.weeks === 0) return 'This week'
-  return `${weeksLabel(age.weeks)} ago`
+/** Short date, as the rest of the app writes one: "Nov 20". */
+function shortDate(date: Date | number): string {
+  return format(date, 'MMM d')
+}
+
+/** "today", "yesterday", "4 days ago", then floored weeks: "3 weeks ago". */
+export function daysAgoLabel(days: number): string {
+  if (days <= 0) return 'today'
+  if (days === 1) return 'yesterday'
+  if (days < 7) return `${String(days)} days ago`
+  return `${weeksLabel(Math.floor(days / 7))} ago`
+}
+
+/** "today", "tomorrow", "in 5 days" up to a fortnight, then "in 3 weeks". */
+export function daysAheadLabel(days: number): string {
+  if (days <= 0) return 'today'
+  if (days === 1) return 'tomorrow'
+  if (days < 14) return `in ${String(days)} days`
+  return `in ${weeksLabel(Math.floor(days / 7))}`
+}
+
+/** "1 day overdue", "9 days overdue", then floored weeks: "2 weeks overdue". */
+export function overdueLabel(days: number): string {
+  if (days < 14) return `${String(days)} ${days === 1 ? 'day' : 'days'} overdue`
+  return `${weeksLabel(Math.floor(days / 7))} overdue`
+}
+
+/** "Last swap · Oct 23 · 3 weeks ago". Calendar days, like `litterAge`. */
+export function lastSwapLine(changedAt: Date, today: Date): string {
+  const days = Math.max(0, differenceInCalendarDays(today, changedAt))
+  return `Last swap · ${shortDate(changedAt)} · ${daysAgoLabel(days)}`
+}
+
+export interface NextSwap {
+  text: string
+  /** Due today or earlier — the same day `litterAge` turns overdue. */
+  due: boolean
+}
+
+/**
+ * "Next swap · Nov 20 · in 5 days"; on the day, "Next swap · Nov 15 · today";
+ * past it, "Next swap · was due Nov 13 · 2 days overdue".
+ */
+export function nextSwapLine(box: LitterBoxLike, today: Date): NextSwap {
+  const dueOn = litterBoxDueOn(box)
+  const days = differenceInCalendarDays(dueOn, today)
+  if (days < 0) {
+    return { text: `Next swap · was due ${shortDate(dueOn)} · ${overdueLabel(-days)}`, due: true }
+  }
+  return { text: `Next swap · ${shortDate(dueOn)} · ${daysAheadLabel(days)}`, due: days === 0 }
 }
 
 /**
@@ -70,5 +115,5 @@ export function litterFoldSummary(
   if (overdue.length === 1 && onlyOverdue !== undefined) return `${onlyOverdue.location} due`
   if (overdue.length > 1) return `${String(overdue.length)} boxes due`
   const next = Math.min(...boxes.map((box) => litterBoxDueOn(box).getTime()))
-  return `next swap ${format(next, 'MMM d')}`
+  return `next swap ${shortDate(next)}`
 }

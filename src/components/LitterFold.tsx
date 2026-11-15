@@ -1,5 +1,4 @@
 import { useQuery } from '@tanstack/react-query'
-import { format } from 'date-fns'
 import { AnimatePresence } from 'motion/react'
 import { useState } from 'react'
 import { useAuth } from '../lib/auth'
@@ -11,7 +10,7 @@ import {
   type LitterBox,
 } from '../lib/db'
 import { useHousehold } from '../lib/household'
-import { litterAge, litterAgeLabel, litterFoldSummary, weeksLabel } from '../lib/litter'
+import { lastSwapLine, litterAge, litterFoldSummary, nextSwapLine, weeksLabel } from '../lib/litter'
 import { bagsLabel } from '../lib/stock'
 import { useToday } from '../lib/use-today'
 import { AddDisclosure } from './AddDisclosure'
@@ -126,6 +125,7 @@ export function LitterBoxRow({
   const [editing, setEditing] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const age = litterAge(box.lastChangedAt, today, box.changeEveryWeeks)
+  const next = nextSwapLine(box, today)
 
   const handleReplacedToday = () => {
     setError(null)
@@ -139,17 +139,26 @@ export function LitterBoxRow({
   return (
     <ListRow order={order}>
       <div className="flex flex-col gap-3 px-4 py-4">
-        <div className="min-w-0">
-          <p className="font-medium break-words">{box.location}</p>
-          <p className="text-2xl font-bold tracking-tight tabular-nums">{litterAgeLabel(age)}</p>
-          <p className="text-sm text-ink-soft">
-            {format(box.lastChangedAt, 'MMM d')}
-            {` · every ${weeksLabel(box.changeEveryWeeks)}`}
-            {` · ${bagsLabel(box.bagsPerSwap)} a swap`}
+        {/* The two dates that matter, each with how far off it is. Past due,
+        the whole next-swap line turns danger — no separate warning line. */}
+        <div className="flex min-w-0 flex-col gap-0.5">
+          <p className="font-semibold break-words">{box.location}</p>
+          <p data-testid="litter-last-swap" className="text-sm text-ink-soft tabular-nums">
+            {lastSwapLine(box.lastChangedAt, today)}
           </p>
-          {age.overdue ? (
-            <p className="nudge text-sm font-semibold text-danger">Due for a full clean</p>
-          ) : null}
+          <p
+            data-testid="litter-next-swap"
+            className={
+              next.due
+                ? 'nudge text-sm font-semibold text-danger tabular-nums'
+                : 'text-sm text-ink-soft tabular-nums'
+            }
+          >
+            {next.text}
+          </p>
+          <p className="text-xs text-ink-soft">
+            every {weeksLabel(box.changeEveryWeeks)} · {bagsLabel(box.bagsPerSwap)} a swap
+          </p>
         </div>
 
         {canEdit && uid !== null ? (
