@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test'
-import { daysAgoISO, tabBar, WAIT } from './seed'
+import { addFoodOnSupplies, daysAgoISO, localDaysAgoISO, tabBar, WAIT } from './seed'
 
 /**
  * Full household journey against the Firebase emulators (fresh state per
@@ -49,29 +49,37 @@ test('full household journey', async ({ page, context }, testInfo) => {
   // The saved cat renders as the profile card heading.
   await expect(page.getByRole('heading', { name: 'Mochi' })).toBeVisible(WAIT)
 
-  // ---- d. weigh in, so the plan has a target to sit against ----
+  // ---- d. yesterday's weigh-in, so the plan has a target to sit against ----
   await tabBar(page).getByRole('link', { name: 'Weight' }).click()
   await expect(page.getByTestId('weight-kg')).toBeVisible(WAIT)
   await page.getByTestId('weight-kg').fill('1.50')
+  await page.getByLabel('Date').fill(localDaysAgoISO(1))
   await page.getByTestId('weight-save').click()
   await expect(page.getByTestId('weight-latest')).toHaveText('1.50 kg', WAIT)
 
-  // ---- e. add a food ----
-  await tabBar(page).getByRole('link', { name: 'Food' }).click()
-  await expect(page.getByTestId('food-add-open')).toBeVisible(WAIT)
-  await page.getByTestId('food-add-open').click()
-  await page.getByTestId('food-name').fill('Test Kibble')
-  await page.getByTestId('food-type').selectOption('dry')
-  await page.getByTestId('food-kcal-per-gram').fill('3.5')
-  await page.getByTestId('food-save').click()
+  // ---- e. Home before there is a plan: it says so, and points at Plan ----
+  await tabBar(page).getByRole('link', { name: 'Home' }).click()
+  await expect(page.getByRole('heading', { name: 'Mochi', level: 1 })).toBeVisible(WAIT)
+  await expect(page.getByText('No feeding plan yet.')).toBeVisible(WAIT)
+  await expect(page.getByRole('link', { name: 'Set a plan' })).toBeVisible()
 
-  // Catalog row: the name, then the energy line "3.5 kcal/g · 350 kcal / 100 g".
-  // Scoped to the list item: a bare getByText would also match a form's
-  // <option>, which Playwright treats as hidden.
-  await expect(page.getByRole('listitem').filter({ hasText: 'Test Kibble' })).toBeVisible(WAIT)
-  await expect(page.getByText('3.5 kcal/g · 350 kcal / 100 g')).toBeVisible(WAIT)
+  // ---- f. add a food on Supplies, with what it comes in and how many ----
+  await addFoodOnSupplies(page, {
+    name: 'Test Kibble',
+    type: 'dry',
+    kcalPerGram: '3.5',
+    unitSizeG: '2000',
+    openingUnits: '3',
+  })
+  const kibble = page.getByTestId('food-supply').filter({ hasText: 'Test Kibble' })
+  await expect(kibble).toContainText('Dry · 2000 g bags')
+  // Just counted, nothing eaten since: an exact figure, no "about".
+  await expect(kibble.getByTestId('food-supply-figure')).toHaveText('3', WAIT)
+  await expect(kibble).toContainText('bags left')
+  await expect(kibble).toContainText('not on a plan · counted just now')
 
-  // ---- f. set her plan: a count, a window, and grams a day ----
+  // ---- g. set her plan on Plan: a count, a window, and grams a day ----
+  await tabBar(page).getByRole('link', { name: 'Plan' }).click()
   await expect(page.getByTestId('plan-setup')).toBeVisible(WAIT)
   await page.getByTestId('plan-setup').click()
 
@@ -83,22 +91,31 @@ test('full household journey', async ({ page, context }, testInfo) => {
   await expect(page.getByTestId('plan-per-meal')).toHaveText('Each meal: 23 g Test Kibble')
   await page.getByTestId('plan-save').click()
 
-  // ---- g. tick a bowl ----
-  await expect(page.getByTestId('today-meals')).toHaveText('0 of 3', WAIT)
   await expect(page.getByTestId('plan-ratio')).toContainText('%', WAIT)
+  await expect(page.getByText('3 meals, 07:00 to 19:00')).toBeVisible()
+  await expect(page.getByText('69 g a day')).toBeVisible()
+  await expect(page.getByText('23 g a meal')).toBeVisible()
+  await expect(page.getByTestId('plan-since')).toContainText('Mochi · in force since')
 
-  await page.getByTestId('meal-tick-0').click()
-  await expect(page.getByTestId('today-meals')).toHaveText('1 of 3', WAIT)
-  // 23 g × 3.5 = 81 kcal of the 242 the plan is worth.
-  await expect(page.getByTestId('today-kcal')).toContainText('81 of 242 kcal', WAIT)
+  // ---- h. tick a bowl on Home ----
+  await tabBar(page).getByRole('link', { name: 'Home' }).click()
+  const firstTick = page.getByTestId('meal-tick-0')
+  await expect(firstTick).toHaveAttribute('aria-pressed', 'false', WAIT)
+  // Grams only on Home — the calories live on Plan.
+  const breakfast = page.getByRole('listitem').filter({ has: firstTick })
+  await expect(breakfast).toContainText('Test Kibble')
+  await expect(breakfast).toContainText('23 g')
+  await expect(breakfast).not.toContainText('kcal')
 
+  await firstTick.click()
+  await expect(firstTick).toHaveAttribute('aria-pressed', 'true', WAIT)
   // A tick is undoable — it deletes the feedings it wrote.
-  await page.getByTestId('meal-tick-0').click()
-  await expect(page.getByTestId('today-meals')).toHaveText('0 of 3', WAIT)
-  await page.getByTestId('meal-tick-0').click()
-  await expect(page.getByTestId('today-meals')).toHaveText('1 of 3', WAIT)
+  await firstTick.click()
+  await expect(firstTick).toHaveAttribute('aria-pressed', 'false', WAIT)
+  await firstTick.click()
+  await expect(firstTick).toHaveAttribute('aria-pressed', 'true', WAIT)
 
-  // ---- g2. a bowl given late drags the rest of the day with it ----
+  // ---- h2. a bowl given late drags the rest of the day with it ----
   // The tick logs the bowl's own due time, so a day only runs off schedule
   // once a given meal is corrected to when it really happened. Everything
   // after it shifts by that much — which is the state a moved bowl has to
@@ -111,7 +128,7 @@ test('full household journey', async ({ page, context }, testInfo) => {
     WAIT,
   )
 
-  // ---- g3. move a bowl without touching the plan ----
+  // ---- h3. move a bowl without touching the plan ----
   // A plan is never edited, so "feed her an hour early today" is an override
   // both phones read. It lands on the time typed and nowhere else — the 30
   // minutes breakfast ran late must not slide 12:00 to 12:30 — and the bowls
@@ -127,18 +144,43 @@ test('full household journey', async ({ page, context }, testInfo) => {
     WAIT,
   )
 
-  // ---- h. the dashboard leads with the same figure ----
-  await tabBar(page).getByRole('link', { name: 'Home' }).click()
-  await expect(page.getByTestId('dash-meals-today')).toHaveText('1 of 3', WAIT)
-  await expect(page.getByTestId('dash-weight')).toContainText('1.50 kg', WAIT)
+  // ---- i. start tracking the water, right under the bowls ----
+  await page.getByTestId('water-track').click()
+  await page.getByTestId('water-location').fill('Kitchen')
+  await page.getByTestId('water-save').click()
+  const water = page.getByTestId('home-water-row')
+  // One bowl is just "Water"; the location only tells several apart.
+  await expect(water).toContainText('Water', WAIT)
+  await expect(page.getByTestId('home-water-age')).toHaveText('changed just now', WAIT)
+  // Refreshed a moment ago: nothing to refresh yet.
+  await expect(page.getByTestId('water-refreshed')).toBeDisabled()
 
-  // ---- i. offline: tick another bowl, then sync ----
+  // ---- j. weigh in on Home, and the row moves on ----
+  await expect(page.getByTestId('home-weight-latest')).toHaveText('1.50 kg', WAIT)
+  // A comma, as the iOS decimal keypad types one.
+  await page.getByTestId('home-weight-kg').fill('1,62')
+  await page.getByTestId('home-weight-save').click()
+  await expect(page.getByTestId('home-weight-latest')).toHaveText('1.62 kg', WAIT)
+  // A day apart is too short a span for a weekly figure: the raw change.
+  await expect(page.getByTestId('home-weight-trend')).toHaveText(
+    '+120 g since the last weigh-in',
+    WAIT,
+  )
+  // Weighed today: the field goes until tomorrow.
+  await expect(page.getByTestId('home-weight-kg')).toHaveCount(0)
+
+  // The same weigh-in, on the Weight screen.
+  await tabBar(page).getByRole('link', { name: 'Weight' }).click()
+  await expect(page.getByTestId('weight-latest')).toHaveText('1.62 kg', WAIT)
+
+  // ---- k. offline: tick another bowl, then sync ----
+  await tabBar(page).getByRole('link', { name: 'Home' }).click()
+  const secondTick = page.getByTestId('meal-tick-1')
+  await expect(secondTick).toBeVisible(WAIT)
   await context.setOffline(true)
-  await tabBar(page).getByRole('link', { name: 'Food' }).click()
-  await expect(page.getByTestId('meal-tick-1')).toBeVisible(WAIT)
-  await page.getByTestId('meal-tick-1').click()
+  await secondTick.click()
   // Firestore latency compensation shows the queued tick immediately.
-  await expect(page.getByTestId('today-meals')).toHaveText('2 of 3', WAIT)
+  await expect(secondTick).toHaveAttribute('aria-pressed', 'true', WAIT)
 
   await context.setOffline(false)
   // One short settle so the queued write reaches the emulator before reload.
@@ -149,7 +191,10 @@ test('full household journey', async ({ page, context }, testInfo) => {
   // After reload the app re-authenticates and re-reads from the emulator —
   // the offline tick must still be there.
   await expect(tabBar(page)).toBeVisible({ timeout: 30_000 })
-  await expect(page.getByTestId('today-meals')).toHaveText('2 of 3', { timeout: 30_000 })
+  await expect(page.getByTestId('meal-tick-1')).toHaveAttribute('aria-pressed', 'true', {
+    timeout: 30_000,
+  })
+  await expect(page.getByTestId('meal-tick-0')).toHaveAttribute('aria-pressed', 'true')
   // The moved bowl came from Firestore, not from this tab's state — which is
   // what makes it visible on the household's other phone.
   await expect(middayMeal).toContainText('12:00', { timeout: 30_000 })

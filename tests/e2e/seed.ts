@@ -1,7 +1,7 @@
 import { expect, type APIRequestContext, type Locator, type Page } from '@playwright/test'
 
 // Shared setup for specs that need a populated app: a signed-in user, a
-// household, a kitten, a food, a meal and a weigh-in. Each call creates its
+// household, a kitten, a food, a plan and a weigh-in. Each call creates its
 // own user so specs (and projects) never collide on emulator state.
 
 // Firestore emulator + webkit can be slow on first paint / first connection.
@@ -24,7 +24,44 @@ export interface SeedOptions {
   ageDays?: number
 }
 
+/** A date `days` ago in the LOCAL calendar, as a date input wants it. */
+export function localDaysAgoISO(days: number): string {
+  const d = new Date()
+  d.setDate(d.getDate() - days)
+  const pad = (n: number) => String(n).padStart(2, '0')
+  return `${String(d.getFullYear())}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`
+}
+
+/**
+ * A signed-in user, a household named `tag`, a kitten called Mochi and one
+ * weigh-in of 1.50 kg today, then a food (added on Supplies) and her plan
+ * (set on Plan): 69 g a day in three meals. Leaves the page on Plan.
+ */
 export async function seedHousehold(page: Page, options: SeedOptions): Promise<void> {
+  await seedCat(page, options)
+
+  await addFoodOnSupplies(page, {
+    name: 'Test Kibble with a fairly long name',
+    type: 'dry',
+    kcalPerGram: '3.5',
+  })
+
+  // 69 g a day of a 3.5 kcal/g food is 242 kcal — near enough this kitten's
+  // 237 kcal target that the "she's outgrown this" nudge stays quiet.
+  await tabBar(page).getByRole('link', { name: 'Plan' }).click()
+  await expect(page.getByTestId('plan-setup')).toBeVisible(WAIT)
+  await page.getByTestId('plan-setup').click()
+  await expect(page.getByTestId('plan-item-grams-0')).toBeVisible(WAIT)
+  await page.getByTestId('plan-item-grams-0').fill('69')
+  await page.getByTestId('plan-save').click()
+  await expect(page.getByTestId('plan-ratio')).toContainText('%', WAIT)
+}
+
+/**
+ * Everything in `seedHousehold` up to the food: the user, the household, Mochi
+ * and today's 1.50 kg. Leaves the page on Weight.
+ */
+export async function seedCat(page: Page, options: SeedOptions): Promise<void> {
   const email = `${options.tag}-${String(Date.now())}@example.com`
 
   await page.goto('/')
@@ -34,7 +71,7 @@ export async function seedHousehold(page: Page, options: SeedOptions): Promise<v
   await page.getByTestId('dev-submit').click()
 
   await expect(page.getByTestId('household-name')).toBeVisible(WAIT)
-  // Named after the tag so seedYesterdayMeal can find this household's docs.
+  // Named after the tag so the REST seeders below can find this household.
   await page.getByTestId('household-name').fill(options.tag)
   await page.getByTestId('household-create').click()
   await expect(tabBar(page)).toBeVisible(WAIT)
@@ -54,32 +91,44 @@ export async function seedHousehold(page: Page, options: SeedOptions): Promise<v
   await page.getByTestId('weight-kg').fill('1.50')
   await page.getByTestId('weight-save').click()
   await expect(page.getByTestId('weight-latest')).toHaveText('1.50 kg', WAIT)
+}
 
-  await tabBar(page).getByRole('link', { name: 'Food' }).click()
-  await expect(page.getByTestId('food-add-open')).toBeVisible(WAIT)
-  // The button is there before the page has loaded, and it moves when the
-  // plan section fills in above it (a few lines of text and a button replace a
-  // short placeholder), so a press that lands in between hits empty space.
-  // The plan and the catalog resolve independently; wait for both.
-  await expect(page.getByTestId('plan-setup')).toBeVisible(WAIT)
-  await expect(page.getByText('No foods yet — add one before setting her plan.')).toBeVisible(WAIT)
-  await page.getByTestId('food-add-open').click()
-  await page.getByTestId('food-name').fill('Test Kibble with a fairly long name')
-  await page.getByTestId('food-type').selectOption('dry')
-  await page.getByTestId('food-kcal-per-gram').fill('3.5')
+export interface FoodSeed {
+  name: string
+  type: 'dry' | 'wet' | 'treat'
+  kcalPerGram: string
+  /** Grams in one tin / pouch / bag. */
+  unitSizeG?: string
+  /** How many are on the shelf when it is added. */
+  openingUnits?: string
+}
+
+/**
+ * Add a food the way a person would: Supplies, "Add food", the form. Leaves
+ * the page on Supplies with the food's stock card showing.
+ */
+export async function addFoodOnSupplies(page: Page, food: FoodSeed): Promise<void> {
+  await tabBar(page).getByRole('link', { name: 'Supplies' }).click()
+  await expect(page.getByRole('heading', { name: 'Supplies', level: 1 })).toBeVisible(WAIT)
+  // The chip is there before the catalog has loaded; the skeleton swaps for
+  // the columns once it has, so wait for the column's own label.
+  await expect(page.getByRole('heading', { name: 'Food', level: 2 })).toBeVisible(WAIT)
+  await page.getByTestId('supplies-add-food').click()
+  await expect(page.getByTestId('food-name')).toBeVisible(WAIT)
+  await page.getByTestId('food-name').fill(food.name)
+  await page.getByTestId('food-type').selectOption(food.type)
+  await page.getByTestId('food-kcal-per-gram').fill(food.kcalPerGram)
+  if (food.unitSizeG !== undefined) await page.getByTestId('food-unit-size').fill(food.unitSizeG)
+  if (food.openingUnits !== undefined) {
+    await page.getByTestId('food-opening-units').fill(food.openingUnits)
+  }
   await page.getByTestId('food-save').click()
 
   // A lost click on Add food would otherwise surface as an empty plan form.
-  await expect(page.getByText('Test Kibble with a fairly long name')).toBeVisible(WAIT)
-
-  // 69 g a day of a 3.5 kcal/g food is 242 kcal — near enough this kitten's
-  // 237 kcal target that the "she's outgrown this" nudge stays quiet.
-  await expect(page.getByTestId('plan-setup')).toBeVisible(WAIT)
-  await page.getByTestId('plan-setup').click()
-  await expect(page.getByTestId('plan-item-grams-0')).toBeVisible(WAIT)
-  await page.getByTestId('plan-item-grams-0').fill('69')
-  await page.getByTestId('plan-save').click()
-  await expect(page.getByTestId('today-meals')).toHaveText('0 of 3', WAIT)
+  await expect(page.getByTestId('food-supply').filter({ hasText: food.name }).first()).toBeVisible(
+    WAIT,
+  )
+  await expect(page.getByTestId('food-name')).toBeHidden(WAIT)
 }
 
 /**
@@ -99,64 +148,74 @@ export async function seedSecondCat(page: Page, name: string): Promise<void> {
   await expect(page.getByRole('button', { name, exact: true })).toBeVisible(WAIT)
 }
 
-/**
- * Opens a Chores add form if it is collapsed. It starts open while its list is
- * empty and closes itself after each save, so the state depends on the moment.
- */
-export async function openAddForm(page: Page, kind: 'litter' | 'water'): Promise<void> {
-  if (await page.getByTestId(`${kind}-location`).first().isVisible()) return
-  await page.getByTestId(`${kind}-add-toggle`).click()
-  await expect(page.getByTestId(`${kind}-location`).first()).toBeVisible(WAIT)
+/** Opens Home's folded "Litter boxes" if it is closed. Leaves the page on Home. */
+export async function openLitterFold(page: Page): Promise<void> {
+  await tabBar(page).getByRole('link', { name: 'Home' }).click()
+  const fold = page.getByTestId('home-litter')
+  await expect(fold).toBeVisible(WAIT)
+  if ((await fold.getAttribute('open')) === null) {
+    await page.getByTestId('home-litter-summary').click()
+  }
+  await expect(fold).toHaveAttribute('open', '', WAIT)
 }
 
 /**
- * Two litter boxes — one fresh, one well past its four weeks — so the Chores
- * page lays out both litter states. Leaves the page on Chores.
+ * Opens the "Add litter box" form inside Home's litter fold. It starts open
+ * while there are no boxes and closes itself after each save, so the state
+ * depends on the moment.
+ */
+export async function openLitterAddForm(page: Page): Promise<void> {
+  await openLitterFold(page)
+  if (await page.getByTestId('litter-location').first().isVisible()) return
+  await page.getByTestId('litter-add-toggle').click()
+  await expect(page.getByTestId('litter-location').first()).toBeVisible(WAIT)
+}
+
+/**
+ * Two litter boxes — one fresh, one well past its four weeks — so Home's
+ * litter fold lays out both states. Leaves the page on Home with it open.
  */
 export async function seedLitterBoxes(page: Page): Promise<void> {
-  await tabBar(page).getByRole('link', { name: 'Chores' }).click()
-  await expect(page.getByTestId('litter-location')).toBeVisible(WAIT)
+  await openLitterAddForm(page)
 
   await page.getByTestId('litter-location').fill('Bathroom')
   await page.getByTestId('litter-save').click()
-  await expect(page.getByText('Bathroom', { exact: true })).toBeVisible(WAIT)
-  // The box shows up the moment it is written, but the form only clears once
-  // the server acks — typing the next one before that would be wiped.
-  await expect(page.getByTestId('litter-location')).toHaveValue('', WAIT)
+  await expect(page.getByTestId('home-litter').getByText('Bathroom', { exact: true })).toBeVisible(
+    WAIT,
+  )
+  // The add form folds away once the server acks — typing the next one
+  // before that would be wiped by the reset.
+  await expect(page.getByTestId('litter-location')).toBeHidden(WAIT)
 
-  await openAddForm(page, 'litter')
+  await openLitterAddForm(page)
   await page.getByTestId('litter-location').fill('Hallway behind the big wardrobe')
   // 38 days is five weeks whichever side of midnight UTC the local day falls.
   await page.getByTestId('litter-date').fill(daysAgoISO(38))
   await page.getByTestId('litter-save').click()
   await expect(page.getByText('5 weeks ago')).toBeVisible(WAIT)
+  await expect(page.getByTestId('litter-location')).toBeHidden(WAIT)
 }
 
 /**
- * Two water bowls — one just filled, one left standing for two days — so the
- * Chores page lays out both water states. The stale one is written straight to
- * the emulator: the UI only ever stamps "now". Leaves the page on Chores.
+ * Two water bowls — one just filled, one left standing for two days — so
+ * Home lays out both water states. The stale one is written straight to the
+ * emulator: the add form defaults to "now". Leaves the page on Home.
  */
 export async function seedWaterBowls(
   page: Page,
   request: APIRequestContext,
   tag: string,
 ): Promise<void> {
-  await tabBar(page).getByRole('link', { name: 'Chores' }).click()
-  await expect(page.getByTestId('water-location')).toBeVisible(WAIT)
+  await tabBar(page).getByRole('link', { name: 'Home' }).click()
+  await expect(page.getByTestId('water-track')).toBeVisible(WAIT)
+  await page.getByTestId('water-track').click()
 
   await page.getByTestId('water-location').fill('Kitchen')
   await page.getByTestId('water-save').click()
-  await expect(page.getByText('Just now')).toBeVisible(WAIT)
-  await expect(page.getByTestId('water-location')).toHaveValue('', WAIT)
+  await expect(page.getByTestId('home-water-age')).toHaveText('changed just now', WAIT)
+  await expect(page.getByTestId('water-location')).toBeHidden(WAIT)
 
-  const household = (await listDocs(request, 'households')).find(
-    (d) => d.fields?.['name']?.stringValue === tag,
-  )
-  const householdPath = household?.name
-  if (householdPath === undefined) throw new Error(`no household named ${tag}`)
-  const relative = householdPath.slice(householdPath.indexOf('/documents/') + 11)
-
+  const relative = await householdPathFor(request, tag)
   const twoDaysAgo = new Date(Date.now() - 49 * 3_600_000).toISOString()
   const response = await request.post(`${EMULATOR}/${relative}/waterBowls`, {
     headers: OWNER,
@@ -170,7 +229,7 @@ export async function seedWaterBowls(
     },
   })
   expect(response.ok(), 'seeding a stale water bowl failed').toBe(true)
-  await expect(page.getByText('Time for fresh water')).toBeVisible(WAIT)
+  await expect(page.getByText('changed 2 days ago')).toBeVisible(WAIT)
 }
 
 // ---------- direct emulator writes ----------
@@ -201,19 +260,27 @@ async function listDocs(request: APIRequestContext, path: string): Promise<RestD
   return body.documents ?? []
 }
 
-/** Resolve `households/<tag>/cats/<first>` to a REST-relative path. */
-async function catPathFor(request: APIRequestContext, tag: string): Promise<string> {
+/** Resolve the household named `tag` to a REST-relative path. */
+export async function householdPathFor(request: APIRequestContext, tag: string): Promise<string> {
   const households = await listDocs(request, 'households')
   const household = households.find((d) => d.fields?.['name']?.stringValue === tag)
   const householdPath = household?.name
   if (householdPath === undefined) throw new Error(`no household named ${tag}`)
   // The REST `name` is a full resource path; keep the part after /documents/.
-  const relative = householdPath.slice(householdPath.indexOf('/documents/') + 11)
+  return relativeOf(householdPath)
+}
 
+function relativeOf(resourceName: string): string {
+  return resourceName.slice(resourceName.indexOf('/documents/') + 11)
+}
+
+/** Resolve `households/<tag>/cats/<first>` to a REST-relative path. */
+async function catPathFor(request: APIRequestContext, tag: string): Promise<string> {
+  const relative = await householdPathFor(request, tag)
   const cats = await listDocs(request, `${relative}/cats`)
   const catPath = cats[0]?.name
   if (catPath === undefined) throw new Error('no cat in that household')
-  return catPath.slice(catPath.indexOf('/documents/') + 11)
+  return relativeOf(catPath)
 }
 
 /**
