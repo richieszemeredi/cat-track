@@ -37,6 +37,8 @@ export function makeFood(overrides: Partial<Food> = {}): Food {
     type: 'dry',
     kcalPerGram: 3.5,
     analysis: null,
+    unit: null,
+    unitSizeG: null,
     archived: false,
     createdBy: 'user-1',
     createdAt: new Date(2026, 0, 10),

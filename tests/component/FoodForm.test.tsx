@@ -18,16 +18,8 @@ const awaitOrQueuedMock = vi.mocked(awaitOrQueued)
 function renderForm(props: { existing?: Food; onDone?: () => void } = {}) {
   const onDone = props.onDone ?? vi.fn()
   const result = props.existing
-    ? render(
-        <FoodForm
-          hid="hh-1"
-          catId="cat-9"
-          uid="user-1"
-          existing={props.existing}
-          onDone={onDone}
-        />,
-      )
-    : render(<FoodForm hid="hh-1" catId="cat-9" uid="user-1" onDone={onDone} />)
+    ? render(<FoodForm hid="hh-1" uid="user-1" existing={props.existing} onDone={onDone} />)
+    : render(<FoodForm hid="hh-1" uid="user-1" onDone={onDone} />)
   return { ...result, onDone }
 }
 
@@ -66,9 +58,8 @@ describe('FoodForm', () => {
 
     expect(addFoodMock).toHaveBeenCalledTimes(1)
     expect(updateFoodMock).not.toHaveBeenCalled()
-    const [hid, catId, uid, input] = firstAddFoodCall()
+    const [hid, uid, input] = firstAddFoodCall()
     expect(hid).toBe('hh-1')
-    expect(catId).toBe('cat-9')
     expect(uid).toBe('user-1')
     // FoodInput shape only — archived defaulting lives inside db.addFood.
     expect(input).toEqual({
@@ -77,6 +68,8 @@ describe('FoodForm', () => {
       type: 'wet',
       kcalPerGram: 1.25,
       analysis: null,
+      unit: null,
+      unitSizeG: null,
     })
   })
 
@@ -92,7 +85,7 @@ describe('FoodForm', () => {
     await waitFor(() => {
       expect(addFoodMock).toHaveBeenCalledTimes(1)
     })
-    const [, , , input] = firstAddFoodCall()
+    const [, , input] = firstAddFoodCall()
     expect(input.kcalPerGram).toBe(3.87)
   })
 
@@ -113,7 +106,7 @@ describe('FoodForm', () => {
     await waitFor(() => {
       expect(addFoodMock).toHaveBeenCalledTimes(1)
     })
-    const [, , , input] = firstAddFoodCall()
+    const [, , input] = firstAddFoodCall()
     expect(input.brand).toBeNull()
     expect(input.type).toBe('dry')
   })
@@ -187,9 +180,8 @@ describe('FoodForm', () => {
     })
 
     expect(addFoodMock).not.toHaveBeenCalled()
-    const [hid, catId, foodId, patch] = firstUpdateFoodCall()
+    const [hid, foodId, patch] = firstUpdateFoodCall()
     expect(hid).toBe('hh-1')
-    expect(catId).toBe('cat-9')
     expect(foodId).toBe('food-7')
     expect(patch).toEqual({
       name: 'Old Kibble',
@@ -197,6 +189,8 @@ describe('FoodForm', () => {
       type: 'dry',
       kcalPerGram: 4.1,
       analysis: null,
+      unit: null,
+      unitSizeG: null,
     })
   })
 
@@ -243,7 +237,7 @@ describe('FoodForm', () => {
       await waitFor(() => {
         expect(addFoodMock).toHaveBeenCalledTimes(1)
       })
-      const [, , , input] = firstAddFoodCall()
+      const [, , input] = firstAddFoodCall()
       expect(input.kcalPerGram).toBe(0.96)
       expect(input.analysis).toEqual({
         proteinPct: 11,
@@ -332,7 +326,7 @@ describe('FoodForm', () => {
       await waitFor(() => {
         expect(addFoodMock).toHaveBeenCalledTimes(1)
       })
-      const [, , , input] = firstAddFoodCall()
+      const [, , input] = firstAddFoodCall()
       expect(input.kcalPerGram).toBe(1.05)
       expect(input.analysis).toBeNull()
     })
@@ -368,7 +362,7 @@ describe('FoodForm', () => {
       await waitFor(() => {
         expect(updateFoodMock).toHaveBeenCalledTimes(1)
       })
-      const [, , , patch] = firstUpdateFoodCall()
+      const [, , patch] = firstUpdateFoodCall()
       // 2.1 NFE -> 38.5 + 55.25 + 7.35 = 101.1 -> 1.01 kcal/g.
       expect(patch.kcalPerGram).toBe(1.01)
       expect(patch.analysis).toEqual({

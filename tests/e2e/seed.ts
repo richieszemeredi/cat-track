@@ -224,7 +224,9 @@ async function catPathFor(request: APIRequestContext, tag: string): Promise<stri
 export async function seedPreviousPlan(request: APIRequestContext, tag: string): Promise<void> {
   const catRelative = await catPathFor(request, tag)
 
-  const foods = await listDocs(request, `${catRelative}/foods`)
+  // Foods belong to the household, not the cat.
+  const householdRelative = catRelative.slice(0, catRelative.indexOf('/cats/'))
+  const foods = await listDocs(request, `${householdRelative}/foods`)
   const foodPath = foods[0]?.name
   if (foodPath === undefined) throw new Error('no food to build a plan from')
   const foodId = foodPath.slice(foodPath.lastIndexOf('/') + 1)

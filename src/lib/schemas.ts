@@ -9,6 +9,7 @@ import {
 } from './catmath'
 import { DEFAULT_LITTER_CHANGE_EVERY_WEEKS, MAX_LITTER_CHANGE_EVERY_WEEKS } from './litter'
 import { MAX_MEALS_PER_DAY, MIN_MEALS_PER_DAY } from './plan'
+import { FOOD_STOCK_KINDS, STOCK_UNITS, type StockUnit } from './stock'
 
 // Zod schemas validate every Firestore READ at the boundary (via safeParse in
 // db.ts) so one corrupt/legacy document degrades gracefully instead of
@@ -96,11 +97,30 @@ export const foodSchema = z.object({
   // Absent on every food written before the label calculator existed, hence
   // the default rather than a bare .nullable() — those docs must keep parsing.
   analysis: foodAnalysisSchema.nullable().default(null),
+  // What the stock is counted in (null = derive from type, see stock.ts) and
+  // how many grams one of them holds. Absent on every food copied from the
+  // legacy per-cat catalog, hence the defaults.
+  unit: z.enum(STOCK_UNITS).nullable().default(null),
+  unitSizeG: z.number().positive().max(20000).nullable().default(null),
   archived: z.boolean(),
   createdBy: z.string().min(1),
   createdAt: timestampToDate,
 })
 export type Food = z.infer<typeof foodSchema> & { id: string }
+export type { StockUnit }
+
+/**
+ * One line of a food's stock log: "bought N" or "count N" (we have exactly
+ * N). Append-only; the level is derived in stock.ts, never stored.
+ */
+export const foodStockEventSchema = z.object({
+  kind: z.enum(FOOD_STOCK_KINDS),
+  units: z.number().min(0).max(10000),
+  at: timestampToDate,
+  createdBy: z.string().min(1),
+  createdAt: timestampToDate,
+})
+export type FoodStockEvent = z.infer<typeof foodStockEventSchema> & { id: string }
 
 export const feedingSchema = z.object({
   datetime: timestampToDate,

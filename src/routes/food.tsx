@@ -124,8 +124,8 @@ function FoodContent({ cat }: { cat: Cat }) {
 
   const weightsQuery = useQuery(weightsQueryOptions(householdId, cat.id))
   useWeightsLive(householdId, cat.id)
-  const foodsQuery = useQuery(foodsQueryOptions(householdId, cat.id))
-  useFoodsLive(householdId, cat.id)
+  const foodsQuery = useQuery(foodsQueryOptions(householdId))
+  useFoodsLive(householdId)
   const feedingsQuery = useQuery(
     feedingsForDayQueryOptions(householdId, cat.id, day.start, day.end),
   )
@@ -316,7 +316,7 @@ function FoodContent({ cat }: { cat: Cat }) {
     if (archived && !window.confirm(`Archive ${food.name}? You can bring it back later.`)) return
     setCatalogError(null)
     try {
-      await awaitOrQueued(updateFood(householdId, cat.id, food.id, { archived }))
+      await awaitOrQueued(updateFood(householdId, food.id, { archived }))
     } catch (err) {
       setCatalogError(err instanceof Error ? err.message : 'Could not update the food.')
     }
@@ -574,7 +574,6 @@ function FoodContent({ cat }: { cat: Cat }) {
             {showAddFood && canEdit && uid !== null ? (
               <FoodForm
                 hid={householdId}
-                catId={cat.id}
                 uid={uid}
                 onDone={() => {
                   setShowAddFood(false)
@@ -646,7 +645,6 @@ function FoodContent({ cat }: { cat: Cat }) {
                         {editingFoodId === food.id && canEdit && uid !== null ? (
                           <FoodForm
                             hid={householdId}
-                            catId={cat.id}
                             uid={uid}
                             existing={food}
                             onDone={() => {

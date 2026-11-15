@@ -15,6 +15,7 @@ import { membershipQueryOptions } from '../lib/db'
 import { HouseholdProvider } from '../lib/household'
 import { type RouterContext } from '../lib/router-context'
 import { useDisplayNameSync } from '../lib/use-display-name-sync'
+import { useLegacyFoodsMigration } from '../lib/use-legacy-foods-migration'
 import { useOnline } from '../lib/use-online'
 
 export const Route = createRootRouteWithContext<RouterContext>()({
@@ -74,6 +75,7 @@ function MembershipGate({ user }: { user: User }) {
 }
 
 function AppShell() {
+  useLegacyFoodsMigration()
   return (
     // The outer box clears the tab bar: below it on a phone, beside it once
     // it becomes a rail at 1024pt. The inner one centres the content in

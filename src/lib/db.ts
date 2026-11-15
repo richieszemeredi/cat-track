@@ -7,10 +7,12 @@ import {
   deleteDoc,
   doc,
   getDocs,
+  getDocsFromServer,
   limit,
   onSnapshot,
   orderBy,
   query,
+  runTransaction,
   serverTimestamp,
   setDoc,
   Timestamp,
@@ -18,6 +20,7 @@ import {
   where,
   writeBatch,
   type CollectionReference,
+  type Query,
   type QuerySnapshot,
 } from 'firebase/firestore'
 import { useEffect } from 'react'
@@ -28,6 +31,7 @@ import {
   catSchema,
   feedingSchema,
   foodSchema,
+  foodStockEventSchema,
   litterBoxSchema,
   waterBowlSchema,
   mealTimeOverrideSchema,
@@ -39,6 +43,7 @@ import {
   type Feeding,
   type Food,
   type FoodAnalysis,
+  type FoodStockEvent,
   type FoodType,
   type LifeStage,
   type LitterBox,
@@ -48,8 +53,10 @@ import {
   type PlanItem,
   type Role,
   type Sex,
+  type StockUnit,
   type WeightEntry,
 } from './schemas'
+import { type FoodStockKind } from './stock'
 
 // The single data-access layer. Every function takes householdId explicitly —
 // today there is exactly one household, but nothing here assumes that, which
@@ -97,8 +104,16 @@ function catsRef(hid: string): CollectionReference {
 function weightsRef(hid: string, catId: string): CollectionReference {
   return collection(db, 'households', hid, 'cats', catId, 'weights')
 }
-function foodsRef(hid: string, catId: string): CollectionReference {
+/** The household's food catalog — the tins on the shelf belong to everyone. */
+function foodsRef(hid: string): CollectionReference {
+  return collection(db, 'households', hid, 'foods')
+}
+/** Superseded per-cat catalog; read only to copy it across (migrateLegacyFoods). */
+function legacyFoodsRef(hid: string, catId: string): CollectionReference {
   return collection(db, 'households', hid, 'cats', catId, 'foods')
+}
+function foodStockRef(hid: string, foodId: string): CollectionReference {
+  return collection(db, 'households', hid, 'foods', foodId, 'stock')
 }
 function feedingsRef(hid: string, catId: string): CollectionReference {
   return collection(db, 'households', hid, 'cats', catId, 'feedings')
@@ -270,28 +285,173 @@ export function useWeightsLive(hid: string, catId: string): void {
   )
 }
 
-export function foodsQueryOptions(hid: string, catId: string) {
+/**
+ * Several listeners at once, one per id, each feeding its own cache key — for
+ * the "every cat" / "every food" reads, where a hook per item would mean hooks
+ * in a loop. `ids` is joined into the effect key, so a new array with the same
+ * ids does not resubscribe.
+ */
+function useLiveEach(
+  ids: readonly string[],
+  listen: (id: string) => {
+    q: Query
+    key: readonly unknown[]
+    parse: (s: QuerySnapshot) => unknown
+  },
+  deps: readonly unknown[],
+): void {
+  const qc = useQueryClient()
+  const idKey = ids.join('\n')
+  useEffect(() => {
+    const unsubs = (idKey === '' ? [] : idKey.split('\n')).map((id) => {
+      const { q, key, parse } = listen(id)
+      return onSnapshot(
+        q,
+        (snap) => {
+          qc.setQueryData(key, parse(snap))
+        },
+        onListenError(qc, key),
+      )
+    })
+    return () => {
+      for (const unsub of unsubs) unsub()
+    }
+    // `listen` is rebuilt every render; its inputs are `deps` + the ids.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [idKey, qc, ...deps])
+}
+
+export function foodsQueryOptions(hid: string) {
   return queryOptions({
-    queryKey: ['foods', hid, catId] as const,
+    queryKey: ['foods', hid] as const,
     queryFn: async () =>
-      parseDocs(foodSchema, await getDocs(query(foodsRef(hid, catId), orderBy('name', 'asc')))),
+      parseDocs(foodSchema, await getDocs(query(foodsRef(hid), orderBy('name', 'asc')))),
     staleTime: Infinity,
   })
 }
 
-export function useFoodsLive(hid: string, catId: string): void {
+export function useFoodsLive(hid: string): void {
   const qc = useQueryClient()
   useEffect(
     () =>
       onSnapshot(
-        query(foodsRef(hid, catId), orderBy('name', 'asc')),
+        query(foodsRef(hid), orderBy('name', 'asc')),
         (snap) => {
-          qc.setQueryData(foodsQueryOptions(hid, catId).queryKey, parseDocs(foodSchema, snap))
+          qc.setQueryData(foodsQueryOptions(hid).queryKey, parseDocs(foodSchema, snap))
         },
-        onListenError(qc, foodsQueryOptions(hid, catId).queryKey),
+        onListenError(qc, foodsQueryOptions(hid).queryKey),
       ),
-    [hid, catId, qc],
+    [hid, qc],
   )
+}
+
+// ---------- food stock ----------
+
+/** One food's stock log, oldest first. */
+export function foodStockQueryOptions(hid: string, foodId: string) {
+  return queryOptions({
+    queryKey: ['foodStock', hid, foodId] as const,
+    queryFn: async () =>
+      parseDocs(
+        foodStockEventSchema,
+        await getDocs(query(foodStockRef(hid, foodId), orderBy('at', 'asc'))),
+      ),
+    staleTime: Infinity,
+  })
+}
+
+/** Live stock logs for several foods at once (one listener each). */
+export function useFoodStocksLive(hid: string, foodIds: readonly string[]): void {
+  useLiveEach(
+    foodIds,
+    (foodId) => ({
+      q: query(foodStockRef(hid, foodId), orderBy('at', 'asc')),
+      key: foodStockQueryOptions(hid, foodId).queryKey,
+      parse: (snap) => parseDocs(foodStockEventSchema, snap),
+    }),
+    [hid],
+  )
+}
+
+export interface FoodStockEventInput {
+  kind: FoodStockKind
+  units: number
+  at: Date
+}
+
+export function addFoodStockEvent(
+  hid: string,
+  foodId: string,
+  uid: string,
+  input: FoodStockEventInput,
+): Promise<unknown> {
+  return addDoc(foodStockRef(hid, foodId), {
+    kind: input.kind,
+    units: input.units,
+    at: Timestamp.fromDate(input.at),
+    createdBy: uid,
+    createdAt: serverTimestamp(),
+  })
+}
+
+// ---------- legacy foods migration ----------
+
+/** The fields a per-cat food could carry — copied across, nothing else. */
+const LEGACY_FOOD_KEYS = [
+  'name',
+  'brand',
+  'type',
+  'kcalPerGram',
+  'analysis',
+  'archived',
+  'createdBy',
+  'createdAt',
+] as const
+
+/**
+ * Copy every food from the superseded per-cat catalogs into the household's,
+ * under the SAME id (feedings and plan items point at it), with its fields
+ * verbatim — original createdBy and createdAt included, no unit. Idempotent:
+ * a food already in the household collection is never overwritten, which a
+ * transaction re-checks so a second phone migrating at the same moment can't
+ * clobber an edit made in between. Server reads only: acting on an empty
+ * offline cache would mistake every food for missing. Resolves to the number
+ * of foods copied.
+ */
+export async function migrateLegacyFoods(hid: string, catIds: readonly string[]): Promise<number> {
+  const legacy = new Map<string, Record<string, unknown>>()
+  for (const catId of catIds) {
+    const snap = await getDocsFromServer(legacyFoodsRef(hid, catId))
+    for (const d of snap.docs) {
+      const data = d.data()
+      if (!foodSchema.safeParse(data).success) {
+        console.error(`[db] not migrating malformed food at ${d.ref.path}`)
+        continue
+      }
+      if (legacy.has(d.id)) continue
+      const copy: Record<string, unknown> = {}
+      for (const key of LEGACY_FOOD_KEYS) if (key in data) copy[key] = data[key]
+      legacy.set(d.id, copy)
+    }
+  }
+  if (legacy.size === 0) return 0
+
+  const existing = await getDocsFromServer(foodsRef(hid))
+  const have = new Set(existing.docs.map((d) => d.id))
+  const missing = [...legacy].filter(([id]) => !have.has(id))
+  if (missing.length === 0) return 0
+
+  return runTransaction(db, async (tx) => {
+    const refs = missing.map(([id, data]) => ({ ref: doc(foodsRef(hid), id), data }))
+    const snaps = await Promise.all(refs.map(({ ref }) => tx.get(ref)))
+    let copied = 0
+    refs.forEach(({ ref, data }, i) => {
+      if (snaps[i]?.exists() === true) return
+      tx.set(ref, data)
+      copied += 1
+    })
+    return copied
+  })
 }
 
 /** Feedings within [dayStart, dayEnd) — used for "today" totals. */
@@ -351,6 +511,53 @@ export function useFeedingsForDayLive(
         ),
       ),
     [hid, catId, startMs, endMs, qc],
+  )
+}
+
+/**
+ * A cat's feedings from `since` on — what the food stock counts down by. A
+ * range on `datetime` alone, so no composite index is needed.
+ */
+export function feedingsSinceQueryOptions(hid: string, catId: string, since: Date) {
+  return queryOptions({
+    queryKey: ['feedingsSince', hid, catId, since.toISOString()] as const,
+    queryFn: async () =>
+      parseDocs(
+        feedingSchema,
+        await getDocs(
+          query(
+            feedingsRef(hid, catId),
+            where('datetime', '>=', Timestamp.fromDate(since)),
+            orderBy('datetime', 'asc'),
+          ),
+        ),
+      ),
+    staleTime: Infinity,
+  })
+}
+
+/** Live feedings since `since` for several cats; nothing while `since` is null. */
+export function useFeedingsSinceLive(
+  hid: string,
+  catIds: readonly string[],
+  since: Date | null,
+): void {
+  const sinceMs = since?.getTime() ?? null
+  useLiveEach(
+    sinceMs === null ? [] : catIds,
+    (catId) => {
+      const from = new Date(sinceMs ?? 0)
+      return {
+        q: query(
+          feedingsRef(hid, catId),
+          where('datetime', '>=', Timestamp.fromDate(from)),
+          orderBy('datetime', 'asc'),
+        ),
+        key: feedingsSinceQueryOptions(hid, catId, from).queryKey,
+        parse: (snap) => parseDocs(feedingSchema, snap),
+      }
+    },
+    [hid, sinceMs],
   )
 }
 
@@ -537,6 +744,38 @@ export function usePlanItemsLive(hid: string, catId: string, planId: string | nu
   }, [hid, catId, planId, qc])
 }
 
+/** usePlansLive for several cats at once. */
+export function usePlansLiveForCats(hid: string, catIds: readonly string[]): void {
+  useLiveEach(
+    catIds,
+    (catId) => ({
+      q: query(plansRef(hid, catId), orderBy('effectiveFrom', 'desc'), limit(PLANS_LIMIT)),
+      key: plansQueryOptions(hid, catId).queryKey,
+      parse: (snap) => sortPlans(parseDocs(planSchema, snap)),
+    }),
+    [hid],
+  )
+}
+
+/** usePlanItemsLive for several plans at once, each named `catId/planId`. */
+export function usePlanItemsLiveForPlans(
+  hid: string,
+  plans: readonly { catId: string; planId: string }[],
+): void {
+  useLiveEach(
+    plans.map(({ catId, planId }) => `${catId}/${planId}`),
+    (path) => {
+      const [catId = '', planId = ''] = path.split('/')
+      return {
+        q: query(planItemsRef(hid, catId, planId)),
+        key: planItemsQueryOptions(hid, catId, planId).queryKey,
+        parse: (snap) => parseDocs(planItemSchema, snap),
+      }
+    },
+    [hid],
+  )
+}
+
 // ---------- litter boxes ----------
 
 export function litterBoxesQueryOptions(hid: string) {
@@ -711,29 +950,48 @@ export interface FoodInput {
   kcalPerGram: number
   /** The label constituents kcalPerGram was calculated from, if it was. */
   analysis: FoodAnalysis | null
+  /** What it comes in; null = derive from type (stock.ts unitFor). */
+  unit: StockUnit | null
+  /** Grams in one tin / pouch / bag; null = unknown, stock won't count down. */
+  unitSizeG: number | null
 }
 
+/**
+ * Add a household food. With `openingUnits`, the opening stock count goes in
+ * the same batch, so a food never lands without the count typed beside it.
+ */
 export function addFood(
   hid: string,
-  catId: string,
   uid: string,
   input: FoodInput,
+  openingUnits: number | null = null,
 ): Promise<unknown> {
-  return addDoc(foodsRef(hid, catId), {
+  const foodDoc = doc(foodsRef(hid))
+  const batch = writeBatch(db)
+  batch.set(foodDoc, {
     ...input,
     archived: false,
     createdBy: uid,
     createdAt: serverTimestamp(),
   })
+  if (openingUnits !== null) {
+    batch.set(doc(foodStockRef(hid, foodDoc.id)), {
+      kind: 'count',
+      units: openingUnits,
+      at: Timestamp.now(),
+      createdBy: uid,
+      createdAt: serverTimestamp(),
+    })
+  }
+  return batch.commit()
 }
 
 export function updateFood(
   hid: string,
-  catId: string,
   foodId: string,
   patch: Partial<FoodInput & { archived: boolean }>,
 ): Promise<unknown> {
-  return updateDoc(doc(foodsRef(hid, catId), foodId), { ...patch })
+  return updateDoc(doc(foodsRef(hid), foodId), { ...patch })
 }
 
 export interface LitterBoxInput {
@@ -954,6 +1212,7 @@ export type {
   Cat,
   Feeding,
   Food,
+  FoodStockEvent,
   LitterBox,
   MealTimeOverride,
   Plan,

@@ -97,13 +97,11 @@ function resolveDraft(draft: AnalysisDraft, type: FoodType): ResolvedDraft | nul
 
 export function FoodForm({
   hid,
-  catId,
   uid,
   existing,
   onDone,
 }: {
   hid: string
-  catId: string
   uid: string
   existing?: Food
   onDone: () => void
@@ -169,12 +167,13 @@ export function FoodForm({
       type,
       kcalPerGram: kcalNum,
       analysis,
+      // Not asked here yet: kept as they were, null for a new food.
+      unit: existing?.unit ?? null,
+      unitSizeG: existing?.unitSizeG ?? null,
     }
     try {
       // 'confirmed' and 'queued' both count as success (offline-first).
-      await awaitOrQueued(
-        existing ? updateFood(hid, catId, existing.id, input) : addFood(hid, catId, uid, input),
-      )
+      await awaitOrQueued(existing ? updateFood(hid, existing.id, input) : addFood(hid, uid, input))
       onDone()
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not save the food — please try again.')
