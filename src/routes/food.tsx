@@ -1,69 +1,26 @@
-import { useQueries, useQuery } from '@tanstack/react-query'
 import { createFileRoute, Link } from '@tanstack/react-router'
-import { format, isSameDay, isValid, parse } from 'date-fns'
 import { AnimatePresence } from 'motion/react'
-import { useState, type SubmitEvent } from 'react'
+import { useState } from 'react'
 import { PoppingNumber } from '../components/AnimatedNumber'
 import { CatSwitcher } from '../components/CatSwitcher'
 import { ErrorCard } from '../components/ErrorCard'
 import { FoodForm } from '../components/FoodForm'
-import { ListRow, StackRow } from '../components/ListRow'
-import { LogMealForm } from '../components/LogMealForm'
-import { MealTick } from '../components/MealTick'
+import { ListRow } from '../components/ListRow'
+import { MealChecklist } from '../components/MealChecklist'
+import { OffPlanList } from '../components/OffPlanList'
+import { OutgrownNudge } from '../components/OutgrownNudge'
 import { PlanForm } from '../components/PlanForm'
+import { PlanHistory } from '../components/PlanHistory'
+import { RerMerMath } from '../components/RerMerMath'
+import { SectionError, Skeleton } from '../components/SectionStatus'
 import { useAuth } from '../lib/auth'
-import {
-  LIFE_STAGE_LABELS,
-  MER_MULTIPLIERS,
-  mer,
-  rer,
-  roundGrams,
-  roundKcal,
-  roundKg,
-} from '../lib/catmath'
-import {
-  addFeedings,
-  awaitOrQueued,
-  deleteFeeding,
-  deleteFeedings,
-  deletePlan,
-  feedingsForDayQueryOptions,
-  foodsQueryOptions,
-  mealTimeOverridesForDayQueryOptions,
-  planItemsQueryOptions,
-  plansQueryOptions,
-  retimeFeedings,
-  setMealTimeOverride,
-  updateFood,
-  useFeedingsForDayLive,
-  useFoodsLive,
-  useMealTimeOverridesForDayLive,
-  usePlanItemsLive,
-  usePlansLive,
-  useWeightsLive,
-  weightsQueryOptions,
-  type Cat,
-  type Feeding,
-  type Food,
-  type MealTimeOverride,
-  type Plan,
-  type PlanItem,
-} from '../lib/db'
+import { roundGrams, roundKcal } from '../lib/catmath'
+import { awaitOrQueued, updateFood, type Cat, type Food } from '../lib/db'
 import { useHousehold } from '../lib/household'
-import {
-  adjustedMealTimes,
-  isOutgrown,
-  mealComposition,
-  planMealTimes,
-  planDailyGrams,
-  planDailyKcal,
-  planTargetRatio,
-  scaleItemsToTarget,
-} from '../lib/plan'
+import { isOutgrown, planDailyGrams } from '../lib/plan'
 import { type FoodType } from '../lib/schemas'
-import { dailyKcalTarget, effectiveLifeStage, sumGrams, sumKcal } from '../lib/target'
 import { useBounceWhenDone } from '../lib/use-animated-number'
-import { useToday } from '../lib/use-today'
+import { useCatDay } from '../lib/use-cat-day'
 
 export const Route = createFileRoute('/food')({
   component: FoodPage,
@@ -71,18 +28,6 @@ export const Route = createFileRoute('/food')({
 })
 
 const DISCLAIMER = 'Estimates only — always confirm with your vet.'
-
-function Skeleton() {
-  return <div className="h-16 animate-pulse rounded-squishy bg-sand" />
-}
-
-function SectionError({ label }: { label: string }) {
-  return (
-    <p role="alert" className="gutter text-sm font-semibold text-danger">
-      {label}
-    </p>
-  )
-}
 
 function FoodPage() {
   const { activeCat, catsLoading } = useHousehold()
@@ -119,198 +64,37 @@ function FoodContent({ cat }: { cat: Cat }) {
   const { householdId, canEdit } = useHousehold()
   const { user } = useAuth()
   const uid = user?.uid ?? null
-  const day = useToday()
-  const now = new Date()
-
-  const weightsQuery = useQuery(weightsQueryOptions(householdId, cat.id))
-  useWeightsLive(householdId, cat.id)
-  const foodsQuery = useQuery(foodsQueryOptions(householdId))
-  useFoodsLive(householdId)
-  const feedingsQuery = useQuery(
-    feedingsForDayQueryOptions(householdId, cat.id, day.start, day.end),
-  )
-  useFeedingsForDayLive(householdId, cat.id, day.start, day.end)
-  const plansQuery = useQuery(plansQueryOptions(householdId, cat.id))
-  usePlansLive(householdId, cat.id)
-  const overridesQuery = useQuery(
-    mealTimeOverridesForDayQueryOptions(householdId, cat.id, day.start, day.end),
-  )
-  useMealTimeOverridesForDayLive(householdId, cat.id, day.start, day.end)
-
-  const plans = plansQuery.data ?? []
-  // Plans come back newest first and are never edited, so [0] is the one in
-  // force and everything after it is history.
-  const plan = plans[0] ?? null
-  const planItemsQuery = useQuery({
-    ...planItemsQueryOptions(householdId, cat.id, plan?.id ?? '__none__'),
-    enabled: plan !== null,
-  })
-  usePlanItemsLive(householdId, cat.id, plan?.id ?? null)
+  const catDay = useCatDay(cat)
+  const {
+    now,
+    weightsQuery,
+    foodsQuery,
+    feedingsQuery,
+    plansQuery,
+    latestWeightKg,
+    target,
+    foods,
+    activeFoods,
+    kcalPerGram,
+    plans,
+    plan,
+    planItems,
+    times,
+    ratio,
+    offPlan,
+    givenCount,
+    eatenKcal,
+  } = catDay
+  const planDailyKcalValue = catDay.planDailyKcal
 
   const [editingPlan, setEditingPlan] = useState(false)
-  const [showOffPlanForm, setShowOffPlanForm] = useState(false)
   const [showAddFood, setShowAddFood] = useState(false)
   const [editingFoodId, setEditingFoodId] = useState<string | null>(null)
   const [showArchived, setShowArchived] = useState(false)
   const [historyOpen, setHistoryOpen] = useState(false)
-  const [mealError, setMealError] = useState<string | null>(null)
   const [catalogError, setCatalogError] = useState<string | null>(null)
-  const [busyMeal, setBusyMeal] = useState<number | null>(null)
 
-  const latestWeightKg = weightsQuery.data?.at(-1)?.weightKg ?? null
-  const target = dailyKcalTarget(cat, latestWeightKg, now)
-  const feedings = feedingsQuery.data ?? []
-  const foods = foodsQuery.data ?? []
-  const activeFoods = foods.filter((f) => !f.archived)
   const archivedFoods = foods.filter((f) => f.archived)
-  const planItems = plan === null ? [] : (planItemsQuery.data ?? [])
-
-  const kcalPerGram = new Map(foods.map((food) => [food.id, food.kcalPerGram]))
-  const times = plan === null ? [] : planMealTimes(plan)
-  const planDailyKcalValue = planDailyKcal(planItems, kcalPerGram)
-  const ratio = planTargetRatio(planDailyKcalValue, target)
-
-  // A feeding belongs to a planned bowl only if it names THIS plan — a tick
-  // left over from yesterday's plan must not mark today's bowl as given.
-  const givenByMeal = new Map<number, Feeding[]>()
-  const offPlan: Feeding[] = []
-  for (const feeding of feedings) {
-    if (plan !== null && feeding.planId === plan.id && feeding.mealIndex !== null) {
-      const existing = givenByMeal.get(feeding.mealIndex) ?? []
-      givenByMeal.set(feeding.mealIndex, [...existing, feeding])
-    } else {
-      offPlan.push(feeding)
-    }
-  }
-  const givenCount = [...givenByMeal.keys()].filter((index) => index < times.length).length
-  const eatenKcal = sumKcal(feedings)
-
-  // A meal's own actual time, first-feeding-wins (a flavour switch's two
-  // lines share one meal and were written with the same datetime) — this is
-  // what pushes the rest of the day's not-yet-given bowls off the plan's
-  // fixed clock and onto how the day has actually gone.
-  const givenAtByMeal = new Map<number, Date>()
-  for (const [mealIndex, entries] of givenByMeal) {
-    const first = entries[0]
-    if (first !== undefined) givenAtByMeal.set(mealIndex, first.datetime)
-  }
-
-  // Today's nudges to the plan's clock, keyed like the feedings above: an
-  // override only counts for the plan it was written against, since a revision
-  // re-times every bowl anyway and its meal 2 need not be the old meal 2.
-  const overridesForDay = overridesQuery.data ?? []
-  const overrideByMeal = new Map<number, MealTimeOverride>()
-  for (const override of overridesForDay) {
-    if (override.planId !== plan?.id) continue
-    const existing = overrideByMeal.get(override.mealIndex)
-    // Two phones nudging the same bowl at once leaves two docs; newest wins.
-    if (existing === undefined || override.createdAt > existing.createdAt) {
-      overrideByMeal.set(override.mealIndex, override)
-    }
-  }
-  const movedAtByMeal = new Map(
-    [...overrideByMeal].map(([mealIndex, override]) => [mealIndex, override.overrideAt]),
-  )
-  const adjustedTimes = adjustedMealTimes(times, day.start, givenAtByMeal, movedAtByMeal)
-
-  async function toggleMeal(mealIndex: number): Promise<void> {
-    if (plan === null || uid === null) return
-    setMealError(null)
-    setBusyMeal(mealIndex)
-    try {
-      const already = givenByMeal.get(mealIndex)
-      if (already !== undefined && already.length > 0) {
-        await awaitOrQueued(
-          deleteFeedings(
-            householdId,
-            cat.id,
-            already.map((entry) => entry.id),
-          ),
-        )
-        return
-      }
-
-      const lines = mealComposition(plan, planItems, mealIndex)
-      // The tick logs the bowl's own (possibly already-shifted) due time, not
-      // the moment of the tap — a quick tap after feeding her fast shouldn't
-      // need a follow-up edit just to fix the time back to when it happened.
-      const datetime = adjustedTimes[mealIndex] ?? day.start
-      const inputs = lines
-        .map((line) => ({
-          datetime,
-          foodId: line.foodId,
-          foodNameSnapshot: line.name,
-          amountG: roundGrams(line.grams),
-          kcal: roundKcal(line.grams * (kcalPerGram.get(line.foodId) ?? 0)),
-          note: null,
-          planId: plan.id,
-          mealIndex,
-        }))
-        // A ramp's first step can round the incoming food down to nothing;
-        // amountG must stay positive or the rules reject the whole batch.
-        .filter((input) => input.amountG > 0)
-
-      if (inputs.length === 0) {
-        setMealError('That bowl works out to nothing — check the plan amounts.')
-        return
-      }
-      // 'confirmed' and 'queued' both count as success (offline-first).
-      await awaitOrQueued(addFeedings(householdId, cat.id, uid, inputs))
-    } catch (err) {
-      setMealError(err instanceof Error ? err.message : 'Could not update the meal.')
-    } finally {
-      setBusyMeal(null)
-    }
-  }
-
-  // One control, two destinations. A bowl already ticked off is a logged fact,
-  // so re-timing it rewrites its feedings; a bowl still owed is a plan for the
-  // rest of the day, so it writes an override both phones can see — the plan
-  // itself stays untouched either way.
-  async function setMealTime(mealIndex: number, timeStr: string): Promise<void> {
-    if (plan === null || uid === null) return
-    const datetime = parse(timeStr, 'HH:mm', day.start)
-    if (!isValid(datetime)) {
-      setMealError('Pick a valid time.')
-      return
-    }
-    setMealError(null)
-    setBusyMeal(mealIndex)
-    try {
-      const already = givenByMeal.get(mealIndex) ?? []
-      // 'confirmed' and 'queued' both count as success (offline-first).
-      if (already.length > 0) {
-        await awaitOrQueued(retimeFeedings(householdId, cat.id, uid, already, datetime))
-        return
-      }
-      await awaitOrQueued(
-        setMealTimeOverride(
-          householdId,
-          cat.id,
-          uid,
-          { planId: plan.id, mealIndex, overrideAt: datetime },
-          overridesForDay
-            .filter((entry) => entry.planId === plan.id && entry.mealIndex === mealIndex)
-            .map((entry) => entry.id),
-        ),
-      )
-    } catch (err) {
-      setMealError(err instanceof Error ? err.message : 'Could not update the time.')
-    } finally {
-      setBusyMeal(null)
-    }
-  }
-
-  async function removeFeeding(entry: Feeding): Promise<void> {
-    if (!window.confirm(`Delete this meal (${entry.foodNameSnapshot})?`)) return
-    setMealError(null)
-    try {
-      // 'confirmed' and 'queued' both count as success (offline-first).
-      await awaitOrQueued(deleteFeeding(householdId, cat.id, entry.id))
-    } catch (err) {
-      setMealError(err instanceof Error ? err.message : 'Could not delete the meal.')
-    }
-  }
 
   async function setFoodArchived(food: Food, archived: boolean): Promise<void> {
     if (archived && !window.confirm(`Archive ${food.name}? You can bring it back later.`)) return
@@ -429,125 +213,37 @@ function FoodContent({ cat }: { cat: Cat }) {
                 ) : null}
               </div>
 
-              {planItemsQuery.isLoading ? (
-                <Skeleton />
-              ) : planItems.length === 0 ? (
-                <p className="gutter text-sm text-ink-soft">
-                  This plan has no foods on it — edit it to add one.
-                </p>
-              ) : (
-                <>
-                  <ul className="surface divide-y divide-sand">
-                    {times.map((time, mealIndex) => (
-                      <MealRow
-                        key={time + String(mealIndex)}
-                        time={time}
-                        adjustedAt={adjustedTimes[mealIndex] ?? day.start}
-                        mealIndex={mealIndex}
-                        plan={plan}
-                        items={planItems}
-                        kcalPerGram={kcalPerGram}
-                        given={givenByMeal.get(mealIndex) ?? []}
-                        busy={busyMeal === mealIndex}
-                        canEdit={canEdit}
-                        onToggle={() => {
-                          void toggleMeal(mealIndex)
-                        }}
-                        onSetTime={(timeStr) => {
-                          void setMealTime(mealIndex, timeStr)
-                        }}
-                      />
-                    ))}
-                    <li className="flex items-center justify-between gap-3 px-4 py-3">
-                      <span className="text-sm text-ink-soft tabular-nums">
-                        {roundGrams(planDailyGrams(planItems))} g · {roundKcal(planDailyKcalValue)}{' '}
-                        kcal a day
+              <MealChecklist
+                cat={cat}
+                day={catDay}
+                footer={
+                  <li className="flex items-center justify-between gap-3 px-4 py-3">
+                    <span className="text-sm text-ink-soft tabular-nums">
+                      {roundGrams(planDailyGrams(planItems))} g · {roundKcal(planDailyKcalValue)}{' '}
+                      kcal a day
+                    </span>
+                    {ratio === null ? null : (
+                      <span
+                        data-testid="plan-ratio"
+                        className={`text-sm font-semibold tabular-nums ${
+                          isOutgrown(planDailyKcalValue, target)
+                            ? 'text-coral-ink'
+                            : 'text-positive'
+                        }`}
+                      >
+                        {Math.round(ratio * 100)}% of target
                       </span>
-                      {ratio === null ? null : (
-                        <span
-                          data-testid="plan-ratio"
-                          className={`text-sm font-semibold tabular-nums ${
-                            isOutgrown(planDailyKcalValue, target)
-                              ? 'text-coral-ink'
-                              : 'text-positive'
-                          }`}
-                        >
-                          {Math.round(ratio * 100)}% of target
-                        </span>
-                      )}
-                    </li>
-                  </ul>
-                </>
-              )}
-              {mealError === null ? null : <SectionError label={mealError} />}
+                    )}
+                  </li>
+                }
+              />
             </section>
           ) : null}
 
           {/* 3. Anything off-plan: a treat, a stolen bite, a tin that wasn't on
           the plan. Typed, because by definition it isn't predictable. */}
-          <section className="flex flex-col gap-3">
-            <div className="gutter flex items-center justify-between gap-2">
-              <h2 className="section-label">Anything else</h2>
-              {canEdit && uid !== null && activeFoods.length > 0 ? (
-                <button
-                  type="button"
-                  data-testid="off-plan-open"
-                  onClick={() => {
-                    setShowOffPlanForm((v) => !v)
-                  }}
-                  className="btn-chip"
-                >
-                  {showOffPlanForm ? 'Close' : 'Add'}
-                </button>
-              ) : null}
-            </div>
-
-            {showOffPlanForm && canEdit && uid !== null ? (
-              <div className="surface p-4">
-                <LogMealForm hid={householdId} catId={cat.id} uid={uid} foods={activeFoods} />
-              </div>
-            ) : null}
-
-            {offPlan.length === 0 ? (
-              <p className="gutter text-sm text-ink-soft">Nothing off-plan today.</p>
-            ) : (
-              <>
-                <ul className="surface divide-y divide-sand">
-                  <AnimatePresence initial={false}>
-                    {offPlan.map((entry, index) => (
-                      <ListRow key={entry.id} order={index}>
-                        <div className="flex items-center gap-3 px-4 py-3">
-                          <span className="text-sm text-ink-soft tabular-nums">
-                            {format(entry.datetime, 'HH:mm')}
-                          </span>
-                          <span className="min-w-0 flex-1 truncate font-medium">
-                            {entry.foodNameSnapshot}
-                          </span>
-                          <span className="shrink-0 text-sm text-ink-soft tabular-nums">
-                            {roundGrams(entry.amountG)} g · {roundKcal(entry.kcal)} kcal
-                          </span>
-                          {canEdit ? (
-                            <button
-                              type="button"
-                              aria-label="Delete meal"
-                              onClick={() => {
-                                void removeFeeding(entry)
-                              }}
-                              className="btn-icon"
-                            >
-                              ×
-                            </button>
-                          ) : null}
-                        </div>
-                      </ListRow>
-                    ))}
-                  </AnimatePresence>
-                </ul>
-                <p className="gutter text-sm text-ink-soft tabular-nums">
-                  Total: {roundGrams(sumGrams(offPlan))} g · {roundKcal(sumKcal(offPlan))} kcal
-                </p>
-              </>
-            )}
+          <section>
+            <OffPlanList cat={cat} feedings={offPlan} foods={activeFoods} heading="Anything else" />
           </section>
         </div>
 
@@ -792,387 +488,6 @@ function TodayProgress({
         {roundKcal(eatenKcal)} of {roundKcal(planKcal)} kcal
         {left > 0 ? ` · ${String(left)} ${left === 1 ? 'bowl' : 'bowls'} left` : ' · all done'}
       </p>
-    </div>
-  )
-}
-
-function OutgrownNudge({
-  plan,
-  items,
-  kcalPerGram,
-  dailyKcal,
-  targetKcal,
-  latestWeightKg,
-  canEdit,
-  onBump,
-}: {
-  plan: Plan
-  items: PlanItem[]
-  kcalPerGram: ReadonlyMap<string, number>
-  dailyKcal: number
-  targetKcal: number
-  latestWeightKg: number | null
-  canEdit: boolean
-  onBump: () => void
-}) {
-  if (items.length === 0) return null
-
-  const suggested = scaleItemsToTarget(items, kcalPerGram, targetKcal, plan.mealsPerDay)
-  const share = Math.round((dailyKcal / targetKcal) * 100)
-
-  return (
-    <section
-      data-testid="plan-outgrown"
-      className="mx-4 flex flex-col gap-3 rounded-squishy bg-coral-soft p-4"
-    >
-      <h2 className="section-label text-coral-ink">
-        {share < 100 ? "She's outgrown this plan" : 'This plan is over her target'}
-      </h2>
-      <p className="text-base">
-        {plan.setAtWeightKg === null || latestWeightKg === null
-          ? `This plan covers about ${String(share)}% of what she needs now.`
-          : `She was ${String(roundKg(plan.setAtWeightKg))} kg when you set this plan and she's ${String(roundKg(latestWeightKg))} kg now. ${String(roundKcal(dailyKcal))} kcal a day covers about ${String(share)}% of what she needs.`}
-      </p>
-      {suggested === null ? null : (
-        <p className="text-sm text-ink-soft tabular-nums">
-          {suggested
-            .map((item) => `${String(roundGrams(item.amountPerDayG))} g ${item.foodNameSnapshot}`)
-            .join(' + ')}{' '}
-          a day would put her back on target at {roundKcal(targetKcal)} kcal.
-        </p>
-      )}
-      {canEdit ? (
-        <button type="button" onClick={onBump} className="btn-primary self-start">
-          Adjust the plan
-        </button>
-      ) : null}
-    </section>
-  )
-}
-
-function MealRow({
-  time,
-  adjustedAt,
-  mealIndex,
-  plan,
-  items,
-  kcalPerGram,
-  given,
-  busy,
-  canEdit,
-  onToggle,
-  onSetTime,
-}: {
-  /** The plan's own clock for this bowl, before today's nudges and cascades. */
-  time: string
-  /** When this bowl is due — or, once ticked, when it actually happened. */
-  adjustedAt: Date
-  mealIndex: number
-  plan: Plan
-  items: PlanItem[]
-  kcalPerGram: ReadonlyMap<string, number>
-  given: Feeding[]
-  busy: boolean
-  canEdit: boolean
-  onToggle: () => void
-  onSetTime: (timeStr: string) => void
-}) {
-  const lines = mealComposition(plan, items, mealIndex)
-  const grams = lines.reduce((total, line) => total + line.grams, 0)
-  const kcal = lines.reduce(
-    (total, line) => total + line.grams * (kcalPerGram.get(line.foodId) ?? 0),
-    0,
-  )
-  // A bowl of one food IS its own total, and printing both says 23 g twice per
-  // row, ten times down a five-meal day. The meal total only earns its line
-  // when there is more than one food to add up.
-  const isSingleFood = lines.length === 1
-  const isGiven = given.length > 0
-  // One time per row: when the bowl happened if it has, when it is due if it
-  // hasn't. Both come from adjustedAt, which already resolves to the feeding's
-  // own datetime once a bowl is ticked.
-  const shownTime = format(adjustedAt, 'HH:mm')
-
-  const [editingTime, setEditingTime] = useState(false)
-  const [timeValue, setTimeValue] = useState(shownTime)
-
-  // The tick is the whole point of keeping a daily record: one bowl goes down,
-  // and the other phone can see that it did. It is the most-used tap in the
-  // app, so it gets to feel done — on the other phone too, when it lands live.
-  const tick = <MealTick given={isGiven} />
-  // The time fades to the same soft grey as the food lines beside the tick
-  // rather than switching in a frame.
-  const timeClass = `font-medium tabular-nums transition-colors duration-200 ease-squishy ${
-    isGiven ? 'text-ink-soft' : ''
-  }`
-
-  return (
-    <li className="flex items-start gap-3 px-4 py-3">
-      {canEdit ? (
-        <button
-          type="button"
-          data-testid={`meal-tick-${String(mealIndex)}`}
-          aria-label={isGiven ? `Undo the ${shownTime} meal` : `Mark the ${shownTime} meal given`}
-          aria-pressed={isGiven}
-          disabled={busy}
-          onClick={onToggle}
-          className="-my-1 -ml-2 flex h-11 w-11 shrink-0 items-center justify-center rounded-full transition duration-150 ease-squishy active:scale-95 disabled:opacity-60"
-        >
-          {tick}
-        </button>
-      ) : (
-        <span className="-my-1 -ml-2 flex h-11 w-11 shrink-0 items-center justify-center">
-          {tick}
-        </span>
-      )}
-
-      <div className="flex min-w-0 flex-1 flex-col gap-1">
-        <div className="flex items-baseline justify-between gap-2">
-          {canEdit && !editingTime ? (
-            <button
-              type="button"
-              data-testid={`meal-time-${String(mealIndex)}`}
-              disabled={busy}
-              onClick={() => {
-                setTimeValue(shownTime)
-                setEditingTime(true)
-              }}
-              className="-mx-2 -my-1 flex min-h-9 shrink-0 items-baseline gap-1.5 rounded px-2 py-1 active:bg-sand disabled:opacity-60"
-            >
-              <span className={timeClass}>{shownTime}</span>
-              <span className="text-xs text-ink-soft">edit</span>
-            </button>
-          ) : (
-            <span className={timeClass}>{shownTime}</span>
-          )}
-          {isSingleFood ? null : (
-            <span className="shrink-0 text-sm text-ink-soft tabular-nums">
-              {roundGrams(grams)} g · {roundKcal(kcal)} kcal
-            </span>
-          )}
-        </div>
-        {/* One line per food. Two lines is what a flavour switch looks like. */}
-        {lines.map((line) => (
-          <div
-            key={line.foodId}
-            className="flex items-baseline justify-between gap-2 text-sm text-ink-soft"
-          >
-            <span className="min-w-0 truncate">{line.name}</span>
-            <span className="shrink-0 tabular-nums">
-              {roundGrams(line.grams)} g{isSingleFood ? ` · ${String(roundKcal(kcal))} kcal` : ''}
-            </span>
-          </div>
-        ))}
-        {editingTime ? (
-          <form
-            className="flex flex-wrap items-center gap-2"
-            onSubmit={(e: SubmitEvent<HTMLFormElement>) => {
-              e.preventDefault()
-              onSetTime(timeValue)
-              setEditingTime(false)
-            }}
-          >
-            <input
-              type="time"
-              required
-              data-testid={`meal-time-input-${String(mealIndex)}`}
-              value={timeValue}
-              onChange={(e) => {
-                setTimeValue(e.target.value)
-              }}
-              className="field w-auto"
-            />
-            <button
-              type="submit"
-              data-testid={`meal-time-save-${String(mealIndex)}`}
-              className="btn-chip"
-            >
-              Save
-            </button>
-            <button
-              type="button"
-              className="btn-chip"
-              onClick={() => {
-                setEditingTime(false)
-              }}
-            >
-              Cancel
-            </button>
-          </form>
-        ) : shownTime === time ? null : (
-          // The row leads with the time that applies today — early, late or
-          // moved on purpose. This is the plan's own clock, kept as a footnote
-          // so a day that ran off schedule still says what it ran off from.
-          <span className="text-xs text-ink-soft">Planned {time}</span>
-        )}
-      </div>
-    </li>
-  )
-}
-
-function PlanHistory({
-  hid,
-  catId,
-  plans,
-  kcalPerGram,
-  canEdit,
-}: {
-  hid: string
-  catId: string
-  plans: Plan[]
-  kcalPerGram: ReadonlyMap<string, number>
-  canEdit: boolean
-}) {
-  const [error, setError] = useState<string | null>(null)
-  // One small read per plan, and only once this section is open. A cat that
-  // reaches twenty on fortnightly revisions has a few hundred documents here.
-  const itemQueries = useQueries({
-    queries: plans.map((plan) => planItemsQueryOptions(hid, catId, plan.id)),
-  })
-
-  async function remove(plan: Plan, isCurrent: boolean): Promise<void> {
-    const prompt = isCurrent
-      ? 'Delete this plan and go back to the previous one?'
-      : 'Delete this plan from the history?'
-    if (!window.confirm(prompt)) return
-    setError(null)
-    try {
-      await awaitOrQueued(deletePlan(hid, catId, plan.id))
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Could not delete the plan.')
-    }
-  }
-
-  return (
-    <div className="flex flex-col gap-4">
-      <AnimatePresence initial={false}>
-        {plans.map((plan, index) => {
-          const items = itemQueries[index]?.data ?? []
-          const until = plans[index - 1]?.effectiveFrom ?? null
-          const meals = plan.mealsPerDay
-          const window =
-            plan.mealTimes.length > 0
-              ? plan.mealTimes.join(' · ')
-              : `${plan.firstMealAt}–${plan.lastMealAt}`
-
-          return (
-            <StackRow key={plan.id} order={index} gap="1rem">
-              <div className="flex gap-3">
-                <span
-                  aria-hidden="true"
-                  className={`mt-1.5 h-3 w-3 shrink-0 rounded-full ${
-                    index === 0 ? 'bg-coral' : 'border-2 border-sand-deep'
-                  }`}
-                />
-                <div className="flex min-w-0 flex-1 flex-col gap-0.5">
-                  <span
-                    className={`text-sm tabular-nums ${index === 0 ? 'font-semibold text-coral-ink' : 'text-ink-soft'}`}
-                  >
-                    {/* A plan revised the same day it was set never really ran, and
-                        "24 Aug – 24 Aug" reads as a bug rather than as a same-day
-                        change of mind. */}
-                    {until === null
-                      ? `Since ${format(plan.effectiveFrom, 'd MMM')}`
-                      : isSameDay(plan.effectiveFrom, until)
-                        ? `${format(plan.effectiveFrom, 'd MMM')} · replaced the same day`
-                        : `${format(plan.effectiveFrom, 'd MMM')} – ${format(until, 'd MMM')}`}
-                  </span>
-                  <span className="font-medium tabular-nums">
-                    {meals} {meals === 1 ? 'meal' : 'meals'} · {window}
-                  </span>
-                  <span className="text-sm text-ink-soft tabular-nums">
-                    {items.length === 0
-                      ? '—'
-                      : items
-                          .map(
-                            (item) =>
-                              `${String(roundGrams(item.amountPerDayG))} g ${item.foodNameSnapshot}`,
-                          )
-                          .join(' + ')}{' '}
-                    a day
-                  </span>
-                  <span className="text-sm text-ink-soft tabular-nums">
-                    {roundKcal(planDailyKcal(items, kcalPerGram))} kcal
-                    {plan.setAtWeightKg === null
-                      ? ''
-                      : ` · she was ${String(roundKg(plan.setAtWeightKg))} kg`}
-                  </span>
-                </div>
-                {canEdit ? (
-                  <button
-                    type="button"
-                    aria-label={
-                      index === 0
-                        ? 'Delete this plan and go back to the previous one'
-                        : 'Delete this plan'
-                    }
-                    onClick={() => {
-                      void remove(plan, index === 0)
-                    }}
-                    className="btn-icon"
-                  >
-                    ×
-                  </button>
-                ) : null}
-              </div>
-            </StackRow>
-          )
-        })}
-      </AnimatePresence>
-      {error === null ? null : (
-        <p role="alert" className="text-sm font-semibold text-danger">
-          {error}
-        </p>
-      )}
-    </div>
-  )
-}
-
-function RerMerMath({
-  cat,
-  latestWeightKg,
-  now,
-}: {
-  cat: Cat
-  latestWeightKg: number | null
-  now: Date
-}) {
-  const stage = effectiveLifeStage(cat, now)
-  const multiplier = cat.merMultiplierOverride ?? MER_MULTIPLIERS[stage]
-
-  if (latestWeightKg === null) {
-    return (
-      <p className="text-sm text-ink-soft">
-        Once you log a weight, the resting (RER) and daily (MER) calorie math shows up here.
-      </p>
-    )
-  }
-
-  const merValue = mer({
-    weightKg: latestWeightKg,
-    lifeStage: stage,
-    idealWeightKg: cat.idealWeightKg,
-    merMultiplierOverride: cat.merMultiplierOverride,
-  })
-
-  return (
-    <div className="flex flex-col gap-1">
-      <p className="text-sm">
-        <span className="font-semibold">RER</span> (resting) = 70 × kg
-        <sup aria-hidden="true">0.75</sup> ≈{' '}
-        <span className="font-semibold">{roundKcal(rer(latestWeightKg))} kcal/day</span> at{' '}
-        {roundKg(latestWeightKg)} kg
-      </p>
-      <p className="text-sm">
-        <span className="font-semibold">MER</span> (daily target) = {multiplier} × RER ≈{' '}
-        <span className="font-semibold">{roundKcal(merValue)} kcal/day</span> —{' '}
-        {LIFE_STAGE_LABELS[stage]}
-      </p>
-      {stage === 'weight_loss' && cat.idealWeightKg !== null ? (
-        <p className="text-xs text-ink-soft">
-          For weight loss the RER is based on the ideal weight ({roundKg(cat.idealWeightKg)} kg).
-        </p>
-      ) : null}
     </div>
   )
 }
