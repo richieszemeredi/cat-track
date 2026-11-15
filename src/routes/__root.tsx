@@ -17,6 +17,7 @@ import { type RouterContext } from '../lib/router-context'
 import { SuppliesProvider } from '../lib/supplies'
 import { useDisplayNameSync } from '../lib/use-display-name-sync'
 import { useLegacyFoodsMigration } from '../lib/use-legacy-foods-migration'
+import { useLegacyLitterMigration } from '../lib/use-legacy-litter-migration'
 import { useOnline } from '../lib/use-online'
 
 export const Route = createRootRouteWithContext<RouterContext>()({
@@ -77,6 +78,7 @@ function MembershipGate({ user }: { user: User }) {
 
 function AppShell() {
   useLegacyFoodsMigration()
+  useLegacyLitterMigration()
   return (
     // One supplies state for every screen and the tab bar's dot.
     <SuppliesProvider>

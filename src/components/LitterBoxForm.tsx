@@ -13,7 +13,7 @@ import {
   MAX_BAGS_PER_SWAP,
   weeksLabel,
 } from '../lib/litter'
-import { bagsLabel } from '../lib/stock'
+import { bagsLabel, LEGACY_LITTER_ID } from '../lib/stock'
 
 const FIELD_CLASS = 'field mt-1'
 
@@ -74,7 +74,15 @@ export function LitterBoxForm({
     }
 
     setBusy(true)
-    const input = { location: trimmed, lastChangedAt, changeEveryWeeks: everyWeeks, bagsPerSwap }
+    const input = {
+      location: trimmed,
+      lastChangedAt,
+      changeEveryWeeks: everyWeeks,
+      bagsPerSwap,
+      // A box keeps its kind; a new one takes the legacy kind until the form
+      // offers a choice.
+      litterId: existing === undefined ? LEGACY_LITTER_ID : existing.litterId,
+    }
     awaitOrQueued(
       existing === undefined
         ? addLitterBox(hid, uid, input)

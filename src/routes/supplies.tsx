@@ -21,6 +21,7 @@ import {
   foodMeta,
   foodSubLine,
   litterLowLine,
+  litterMeta,
   litterSubLine,
 } from '../lib/supply-lines'
 import { useNow } from '../lib/use-now'
@@ -252,34 +253,50 @@ function FoodCard({
 function LitterColumn() {
   const { householdId: hid, canEdit } = useHousehold()
   const { user } = useAuth()
-  const { litter } = useSupplies()
+  const { litters } = useSupplies()
   const now = useNow()
   const uid = canEdit ? (user?.uid ?? null) : null
-  const { state } = litter
 
   return (
     <div className="page-column">
       <section className="flex flex-col gap-3">
         {/* As tall as the Food header with its chip, so the two columns line up. */}
         <h2 className="section-label gutter flex min-h-10 items-center">Litter</h2>
-        <StockCard
-          testId="litter-supply"
-          title="Litter"
-          meta={null}
-          unit="bag"
-          stock={state.stock}
-          sub={litterSubLine(state, now)}
-          low={litterLowLine(state)}
-          lastBought={lastBoughtOf(litter.events, (e) => e.bags)}
-          max={MAX_LITTER_BAGS}
-          record={
-            uid === null
-              ? null
-              : (kind: StockRecordKind, bags: number) =>
-                  addLitterStockEvent(hid, uid, { kind, bags, at: new Date() })
-          }
-          edit={null}
-        />
+        {litters.length === 0 ? (
+          <p className="gutter text-sm text-ink-soft">No litter added yet.</p>
+        ) : (
+          <div className="flex flex-col gap-3">
+            <AnimatePresence initial={false}>
+              {litters.map(({ litter, events, boxes, state }, index) => (
+                <StackRow key={litter.id} order={index} gap="0.75rem">
+                  <StockCard
+                    testId="litter-supply"
+                    title={litter.name}
+                    meta={litterMeta(litter, boxes)}
+                    unit="bag"
+                    stock={state.stock}
+                    sub={litterSubLine(state, now)}
+                    low={litterLowLine(state)}
+                    lastBought={lastBoughtOf(events, (e) => e.bags)}
+                    max={MAX_LITTER_BAGS}
+                    record={
+                      uid === null
+                        ? null
+                        : (kind: StockRecordKind, bags: number) =>
+                            addLitterStockEvent(hid, uid, {
+                              litterId: litter.id,
+                              kind,
+                              bags,
+                              at: new Date(),
+                            })
+                    }
+                    edit={null}
+                  />
+                </StackRow>
+              ))}
+            </AnimatePresence>
+          </div>
+        )}
         <p className="gutter text-sm text-ink-soft">
           A full swap takes its box’s bags off. Top-ups aren’t counted — recount now and then.
         </p>

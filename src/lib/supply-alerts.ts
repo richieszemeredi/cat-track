@@ -4,7 +4,14 @@ import { bagsLabel, type FoodStockState, type LitterStockState } from './stock'
 /** One "Needs attention" line: **title** · detail, linking to `to`. */
 export type SupplyAlert =
   | { kind: 'food'; key: string; foodId: string; title: string; detail: string; to: '/supplies' }
-  | { kind: 'litter'; key: string; title: string; detail: string; to: '/supplies' }
+  | {
+      kind: 'litter'
+      key: string
+      litterId: string
+      title: string
+      detail: string
+      to: '/supplies'
+    }
   | { kind: 'litterBox'; key: string; boxId: string; title: string; detail: string; to: '/' }
 
 function foodDetail(daysLeft: number | null): string {
@@ -13,17 +20,18 @@ function foodDetail(daysLeft: number | null): string {
 }
 
 /**
- * Home's "Needs attention" lines, in order: each low food, low litter, then
- * each box overdue its full clean (which links to Home, where the boxes are).
+ * Home's "Needs attention" lines, in order: each low food, each low litter
+ * kind, then each box overdue its full clean (which links to Home, where the
+ * boxes are). Pass only the ACTIVE foods and kinds — archived ones never alert.
  */
 export function supplyAlerts({
   foods,
-  litter,
+  litters,
   boxes,
   today,
 }: {
   foods: Iterable<{ food: { id: string; name: string }; state: FoodStockState }>
-  litter: LitterStockState
+  litters: Iterable<{ litter: { id: string; name: string }; state: LitterStockState }>
   boxes: readonly {
     id: string
     location: string
@@ -44,12 +52,14 @@ export function supplyAlerts({
       to: '/supplies',
     })
   }
-  if (litter.low && litter.stock !== null) {
+  for (const { litter, state } of litters) {
+    if (!state.low || state.stock === null) continue
     alerts.push({
       kind: 'litter',
-      key: 'litter',
-      title: 'Order litter',
-      detail: `${bagsLabel(litter.stock.shown)} left`,
+      key: `litter-${litter.id}`,
+      litterId: litter.id,
+      title: `Order ${litter.name}`,
+      detail: `${bagsLabel(state.stock.shown)} left`,
       to: '/supplies',
     })
   }

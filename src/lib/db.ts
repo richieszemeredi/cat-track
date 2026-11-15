@@ -7,6 +7,7 @@ import {
   collectionGroup,
   deleteDoc,
   doc,
+  getDocFromServer,
   getDocs,
   getDocsFromServer,
   limit,
@@ -34,6 +35,7 @@ import {
   foodSchema,
   foodStockEventSchema,
   litterBoxSchema,
+  litterSchema,
   litterStockEventSchema,
   waterBowlSchema,
   mealTimeOverrideSchema,
@@ -48,7 +50,9 @@ import {
   type FoodStockEvent,
   type FoodType,
   type LifeStage,
+  type LitterBagUnit,
   type LitterBox,
+  type LitterKind,
   type LitterStockEvent,
   type WaterBowl,
   type MealTimeOverride,
@@ -59,7 +63,7 @@ import {
   type StockUnit,
   type WeightEntry,
 } from './schemas'
-import { type FoodStockKind, type LitterStockKind } from './stock'
+import { LEGACY_LITTER_ID, type FoodStockKind, type LitterStockKind } from './stock'
 
 // The single data-access layer. Every function takes householdId explicitly —
 // today there is exactly one household, but nothing here assumes that, which
@@ -129,6 +133,10 @@ function mealTimeOverridesRef(hid: string, catId: string): CollectionReference {
 }
 function litterBoxesRef(hid: string): CollectionReference {
   return collection(db, 'households', hid, 'litterBoxes')
+}
+/** The household's litter catalog — each kind is counted in its own bags. */
+function littersRef(hid: string): CollectionReference {
+  return collection(db, 'households', hid, 'litters')
 }
 function litterStockRef(hid: string): CollectionReference {
   return collection(db, 'households', hid, 'litterStock')
@@ -811,6 +819,33 @@ export function useLitterBoxesLive(hid: string): void {
   )
 }
 
+// ---------- litter kinds ----------
+
+/** Every litter kind, archived included, by name. */
+export function littersQueryOptions(hid: string) {
+  return queryOptions({
+    queryKey: ['litters', hid] as const,
+    queryFn: async () =>
+      parseDocs(litterSchema, await getDocs(query(littersRef(hid), orderBy('name', 'asc')))),
+    staleTime: Infinity,
+  })
+}
+
+export function useLittersLive(hid: string): void {
+  const qc = useQueryClient()
+  useEffect(
+    () =>
+      onSnapshot(
+        query(littersRef(hid), orderBy('name', 'asc')),
+        (snap) => {
+          qc.setQueryData(littersQueryOptions(hid).queryKey, parseDocs(litterSchema, snap))
+        },
+        onListenError(qc, littersQueryOptions(hid).queryKey),
+      ),
+    [hid, qc],
+  )
+}
+
 // ---------- litter stock ----------
 
 /** The household's litter stock log, oldest first. */
@@ -1038,6 +1073,8 @@ export interface LitterBoxInput {
   lastChangedAt: Date
   changeEveryWeeks: number
   bagsPerSwap: number
+  /** The litter kind it takes; null = none chosen (a swap then counts no bags). */
+  litterId: string | null
 }
 
 export function addLitterBox(hid: string, uid: string, input: LitterBoxInput): Promise<unknown> {
@@ -1046,6 +1083,7 @@ export function addLitterBox(hid: string, uid: string, input: LitterBoxInput): P
     lastChangedAt: Timestamp.fromDate(input.lastChangedAt),
     changeEveryWeeks: input.changeEveryWeeks,
     bagsPerSwap: input.bagsPerSwap,
+    litterId: input.litterId,
     createdBy: uid,
     createdAt: serverTimestamp(),
   })
@@ -1065,33 +1103,39 @@ export function updateLitterBox(
 
 /**
  * "Replaced today": the box's last full clean moves to the day of `at`, and
- * its bags come off the litter stock — in ONE batch, so the stock never
+ * its bags come off ITS litter kind's stock — in ONE batch, so the stock never
  * counts a swap the box doesn't show, or the other way round. The event keeps
  * the real time, so it sorts correctly against a recount made earlier today.
- * Editing a box's date in its form is a correction, not a swap, and goes
- * through updateLitterBox instead.
+ * A box with no kind chosen only moves its date: there is no stock to draw
+ * from. Editing a box's date in its form is a correction, not a swap, and
+ * goes through updateLitterBox instead.
  */
 export function replaceLitterBox(
   hid: string,
   uid: string,
-  box: Pick<LitterBox, 'id' | 'bagsPerSwap'>,
+  box: Pick<LitterBox, 'id' | 'bagsPerSwap' | 'litterId'>,
   at: Date,
 ): Promise<unknown> {
   const batch = writeBatch(db)
   batch.update(doc(litterBoxesRef(hid), box.id), {
     lastChangedAt: Timestamp.fromDate(startOfDay(at)),
   })
-  batch.set(doc(litterStockRef(hid)), {
-    kind: 'swap',
-    bags: box.bagsPerSwap,
-    at: Timestamp.fromDate(at),
-    createdBy: uid,
-    createdAt: serverTimestamp(),
-  })
+  if (box.litterId !== null) {
+    batch.set(doc(litterStockRef(hid)), {
+      kind: 'swap',
+      bags: box.bagsPerSwap,
+      litterId: box.litterId,
+      at: Timestamp.fromDate(at),
+      createdBy: uid,
+      createdAt: serverTimestamp(),
+    })
+  }
   return batch.commit()
 }
 
 export interface LitterStockEventInput {
+  /** The litter kind these bags are. */
+  litterId: string
   kind: LitterStockKind
   bags: number
   at: Date
@@ -1105,9 +1149,94 @@ export function addLitterStockEvent(
   return addDoc(litterStockRef(hid), {
     kind: input.kind,
     bags: input.bags,
+    litterId: input.litterId,
     at: Timestamp.fromDate(input.at),
     createdBy: uid,
     createdAt: serverTimestamp(),
+  })
+}
+
+export interface LitterInput {
+  name: string
+  /** Descriptive only ("10 L bags"); null = unknown. */
+  bagSize: number | null
+  bagUnit: LitterBagUnit | null
+}
+
+/**
+ * Add a litter kind. With `openingBags`, the opening stock count goes in the
+ * same batch, so a kind never lands without the count typed beside it.
+ */
+export function addLitter(
+  hid: string,
+  uid: string,
+  input: LitterInput,
+  openingBags: number | null = null,
+): Promise<unknown> {
+  const litterDoc = doc(littersRef(hid))
+  const batch = writeBatch(db)
+  batch.set(litterDoc, {
+    name: input.name,
+    bagSize: input.bagSize,
+    bagUnit: input.bagUnit,
+    archived: false,
+    createdBy: uid,
+    createdAt: serverTimestamp(),
+  })
+  if (openingBags !== null) {
+    batch.set(doc(litterStockRef(hid)), {
+      kind: 'count',
+      bags: openingBags,
+      litterId: litterDoc.id,
+      at: Timestamp.now(),
+      createdBy: uid,
+      createdAt: serverTimestamp(),
+    })
+  }
+  return batch.commit()
+}
+
+export function updateLitter(
+  hid: string,
+  litterId: string,
+  patch: Partial<LitterInput & { archived: boolean }>,
+): Promise<unknown> {
+  return updateDoc(doc(littersRef(hid), litterId), { ...patch })
+}
+
+// ---------- legacy litter migration ----------
+
+/**
+ * Give the household's pre-kinds litter a name: every stock event and box
+ * written before kinds has no litterId and reads as LEGACY_LITTER_ID, so a
+ * household with any of them gets a `litters/default` doc ("Litter", no bag
+ * size) for the owner to rename. Nothing else is rewritten. Idempotent: it
+ * never overwrites the doc, which a transaction re-checks so a second phone
+ * migrating at the same moment can't clobber a rename made in between.
+ * Server reads only — an empty offline cache would look like "no litter".
+ * Resolves to whether it created the doc.
+ */
+export async function migrateLegacyLitter(hid: string, uid: string): Promise<boolean> {
+  const legacyRef = doc(littersRef(hid), LEGACY_LITTER_ID)
+  if ((await getDocFromServer(legacyRef)).exists()) return false
+
+  const [boxes, events] = await Promise.all([
+    getDocsFromServer(query(litterBoxesRef(hid), limit(1))),
+    getDocsFromServer(query(litterStockRef(hid), limit(1))),
+  ])
+  if (boxes.empty && events.empty) return false
+
+  return runTransaction(db, async (tx) => {
+    if ((await tx.get(legacyRef)).exists()) return false
+    tx.set(legacyRef, {
+      name: 'Litter',
+      bagSize: null,
+      bagUnit: null,
+      archived: false,
+      createdBy: uid,
+      createdAt: serverTimestamp(),
+    })
+    return true
   })
 }
 
@@ -1302,7 +1431,9 @@ export type {
   Feeding,
   Food,
   FoodStockEvent,
+  LitterBagUnit,
   LitterBox,
+  LitterKind,
   LitterStockEvent,
   MealTimeOverride,
   Plan,

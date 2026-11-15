@@ -6,6 +6,7 @@ import {
   foodsQueryOptions,
   foodStockQueryOptions,
   litterBoxesQueryOptions,
+  littersQueryOptions,
   litterStockQueryOptions,
   planItemsQueryOptions,
   plansQueryOptions,
@@ -13,6 +14,7 @@ import {
   useFoodsLive,
   useFoodStocksLive,
   useLitterBoxesLive,
+  useLittersLive,
   useLitterStockLive,
   usePlanItemsLiveForPlans,
   usePlansLiveForCats,
@@ -20,6 +22,7 @@ import {
   type Food,
   type FoodStockEvent,
   type LitterBox,
+  type LitterKind,
   type LitterStockEvent,
   type PlanItem,
 } from './db'
@@ -27,6 +30,8 @@ import { useHousehold } from './household'
 import {
   foodStockSince,
   foodStockState,
+  litterBoxesOfKind,
+  litterEventsOfKind,
   litterStockState,
   type FoodStockState,
   type LitterStockState,
@@ -47,9 +52,11 @@ export interface FoodSupply {
   state: FoodStockState
 }
 
-export interface LitterSupply {
-  /** The litter stock log, oldest first. */
+export interface LitterKindSupply {
+  litter: LitterKind
+  /** This kind's stock log, oldest first. */
   events: LitterStockEvent[]
+  /** The boxes that take this kind. */
   boxes: LitterBox[]
   state: LitterStockState
 }
@@ -61,12 +68,19 @@ export interface SuppliesState {
   activeFoods: Food[]
   /** Stock per ACTIVE food, by food id (archived foods aren't tracked). */
   foodSupplies: ReadonlyMap<string, FoodSupply>
-  litter: LitterSupply
-  /** Food low, then litter low, then overdue boxes. */
+  /** Every litter kind, archived included, by name. */
+  litterKinds: LitterKind[]
+  /** The litter kinds not archived, by name. */
+  activeLitterKinds: LitterKind[]
+  /** Stock per ACTIVE litter kind, by name (archived kinds aren't tracked). */
+  litters: LitterKindSupply[]
+  /** Every litter box, oldest first, whatever kind it takes. */
+  boxes: LitterBox[]
+  /** Food low, then each litter kind low, then overdue boxes. */
   alerts: SupplyAlert[]
   /** Any food or litter low — the Supplies tab's dot. Overdue boxes don't count. */
   anyLow: boolean
-  /** True until foods, stock logs, boxes, plans and feedings have all loaded once. */
+  /** True until foods, litters, stock logs, boxes, plans and feedings have all loaded once. */
   loading: boolean
   /** Any of those reads failed. */
   isError: boolean
@@ -75,6 +89,7 @@ export interface SuppliesState {
 const SuppliesContext = createContext<SuppliesState | null>(null)
 
 const EMPTY_FOODS: Food[] = []
+const EMPTY_LITTERS: LitterKind[] = []
 const EMPTY_FOOD_EVENTS: FoodStockEvent[] = []
 const EMPTY_LITTER_EVENTS: LitterStockEvent[] = []
 const EMPTY_BOXES: LitterBox[] = []
@@ -96,7 +111,11 @@ export function SuppliesProvider({ children }: { children: ReactNode }) {
   })
   useFoodStocksLive(hid, activeFoodIds)
 
-  // ---- litter ----
+  // ---- litter: the kinds, one shared stock log, the boxes ----
+  const littersQuery = useQuery(littersQueryOptions(hid))
+  useLittersLive(hid)
+  const litterKinds = littersQuery.data ?? EMPTY_LITTERS
+  const activeLitterKinds = useMemo(() => litterKinds.filter((l) => !l.archived), [litterKinds])
   const litterStockQuery = useQuery(litterStockQueryOptions(hid))
   useLitterStockLive(hid)
   const boxesQuery = useQuery(litterBoxesQueryOptions(hid))
@@ -155,16 +174,23 @@ export function SuppliesProvider({ children }: { children: ReactNode }) {
     })
   }
 
-  const litter: LitterSupply = {
-    events: litterEvents,
-    boxes,
-    state: litterStockState({ events: litterEvents, boxes, today }),
-  }
+  // Events naming a kind that doesn't exist (or is archived) count for nothing.
+  const litters: LitterKindSupply[] = activeLitterKinds.map((litter) => {
+    const events = litterEventsOfKind(litterEvents, litter.id)
+    const kindBoxes = litterBoxesOfKind(boxes, litter.id)
+    return {
+      litter,
+      events,
+      boxes: kindBoxes,
+      state: litterStockState({ events, boxes: kindBoxes, today }),
+    }
+  })
 
-  const alerts = supplyAlerts({ foods: foodSupplies.values(), litter: litter.state, boxes, today })
+  const alerts = supplyAlerts({ foods: foodSupplies.values(), litters, boxes, today })
 
   const all = [
     foodsQuery,
+    littersQuery,
     litterStockQuery,
     boxesQuery,
     ...stockQueries,
@@ -177,7 +203,10 @@ export function SuppliesProvider({ children }: { children: ReactNode }) {
     foods,
     activeFoods,
     foodSupplies,
-    litter,
+    litterKinds,
+    activeLitterKinds,
+    litters,
+    boxes,
     alerts,
     anyLow: anySupplyLow(alerts),
     loading: all.some((q) => q.isLoading),
