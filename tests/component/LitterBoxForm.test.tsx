@@ -29,6 +29,7 @@ const EXISTING: LitterBox = {
   lastChangedAt: new Date(2026, 8, 1),
   changeEveryWeeks: 6,
   bagsPerSwap: 2,
+  litterId: 'default',
   createdBy: 'user-1',
   createdAt: new Date(2026, 8, 1),
 }

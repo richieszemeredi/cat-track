@@ -6,6 +6,10 @@ import {
   foodStockSince,
   foodStockState,
   litterBoxDueOn,
+  LEGACY_LITTER_ID,
+  litterBoxesOfKind,
+  litterEventsOfKind,
+  litterKindStockState,
   litterStockState,
   ORDER_LEAD_DAYS,
   unitCountLabel,
@@ -397,5 +401,88 @@ describe('litter stock', () => {
     expect(s.stock).toMatchObject({ level: -2, shown: 0 })
     expect(s.swapsLeft).toBe(0)
     expect(s.low).toBe(true)
+  })
+})
+
+describe('litter stock, per kind', () => {
+  function kindEvent(
+    litterId: string,
+    kind: LitterStockEventLike['kind'],
+    bags: number,
+    when: Date,
+  ): LitterStockEventLike & { litterId: string } {
+    return { ...litterEvent(kind, bags, when), litterId }
+  }
+
+  function kindBox(
+    litterId: string | null,
+    changed: Date,
+    bagsPerSwap = 1,
+  ): LitterBoxLike & { litterId: string | null } {
+    return { ...box(changed, 4, bagsPerSwap), litterId }
+  }
+
+  const events = [
+    kindEvent('clumping', 'count', 5, at(1)),
+    kindEvent('silica', 'count', 2, at(1)),
+    kindEvent('clumping', 'swap', 2, at(10)),
+    kindEvent('silica', 'bought', 3, at(11)),
+    // Names no kind the household has: nobody's stock.
+    kindEvent('gone', 'bought', 40, at(12)),
+  ]
+
+  it('keeps only the kind’s own events', () => {
+    expect(litterEventsOfKind(events, 'silica').map((e) => e.bags)).toEqual([2, 3])
+    expect(litterEventsOfKind(events, 'nope')).toEqual([])
+  })
+
+  it('splits the boxes by kind; a box with no kind belongs to none', () => {
+    const boxes = [kindBox('clumping', at(10)), kindBox(null, at(10)), kindBox('silica', at(10))]
+    expect(litterBoxesOfKind(boxes, 'clumping')).toEqual([boxes[0]])
+    expect(litterBoxesOfKind(boxes, 'silica')).toEqual([boxes[2]])
+  })
+
+  it('draws a swap off its own kind only', () => {
+    const boxes = [kindBox('clumping', at(10), 2), kindBox('silica', at(10), 1)]
+    const clumping = litterKindStockState({ litterId: 'clumping', events, boxes, today: TODAY })
+    const silica = litterKindStockState({ litterId: 'silica', events, boxes, today: TODAY })
+    expect(clumping.stock).toMatchObject({ level: 3, exact: false })
+    expect(silica.stock).toMatchObject({ level: 5, exact: false })
+    expect(clumping.reserve).toBe(2)
+    expect(silica.reserve).toBe(1)
+  })
+
+  it('judges low against the kind’s own boxes', () => {
+    // Clumping: 3 bags, its 2-bag box is due Nov 17 (inside the lead time),
+    // leaving 1 — under one full swap. Silica's box is nowhere near due.
+    const boxes = [kindBox('clumping', new Date(2026, 9, 20), 2), kindBox('silica', at(14), 1)]
+    const clumping = litterKindStockState({ litterId: 'clumping', events, boxes, today: TODAY })
+    const silica = litterKindStockState({ litterId: 'silica', events, boxes, today: TODAY })
+    expect(clumping.dueSoonBags).toBe(2)
+    expect(clumping.low).toBe(true)
+    expect(silica.dueSoonBags).toBe(0)
+    expect(silica.low).toBe(false)
+  })
+
+  it('is never low for a kind no box uses', () => {
+    const s = litterKindStockState({
+      litterId: 'silica',
+      events: [kindEvent('silica', 'count', 0, at(10))],
+      boxes: [kindBox('clumping', new Date(2026, 9, 20), 2)],
+      today: TODAY,
+    })
+    expect(s.stock).toMatchObject({ level: 0 })
+    expect(s.low).toBe(false)
+  })
+
+  it('reads legacy events and boxes as the default kind', () => {
+    const legacy = litterKindStockState({
+      litterId: LEGACY_LITTER_ID,
+      events: [kindEvent(LEGACY_LITTER_ID, 'count', 4, at(1)), ...events],
+      boxes: [kindBox(LEGACY_LITTER_ID, at(14), 3)],
+      today: TODAY,
+    })
+    expect(legacy.stock).toMatchObject({ level: 4, exact: true })
+    expect(legacy.reserve).toBe(3)
   })
 })

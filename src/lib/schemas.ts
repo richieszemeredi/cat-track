@@ -14,7 +14,13 @@ import {
   MAX_LITTER_CHANGE_EVERY_WEEKS,
 } from './litter'
 import { MAX_MEALS_PER_DAY, MIN_MEALS_PER_DAY } from './plan'
-import { FOOD_STOCK_KINDS, LITTER_STOCK_KINDS, STOCK_UNITS, type StockUnit } from './stock'
+import {
+  FOOD_STOCK_KINDS,
+  LEGACY_LITTER_ID,
+  LITTER_STOCK_KINDS,
+  STOCK_UNITS,
+  type StockUnit,
+} from './stock'
 
 // Zod schemas validate every Firestore READ at the boundary (via safeParse in
 // db.ts) so one corrupt/legacy document degrades gracefully instead of
@@ -218,6 +224,10 @@ export const litterBoxSchema = z.object({
   // Bags a full swap of this box takes — what "Replaced today" draws off the
   // litter stock. Absent on every box from before stock was tracked.
   bagsPerSwap: z.number().int().min(1).max(MAX_BAGS_PER_SWAP).default(DEFAULT_BAGS_PER_SWAP),
+  // Which litter kind the box takes. ABSENT (a box from before kinds) means
+  // the legacy kind; an explicit null means none was chosen — the box was
+  // added while the household had no kinds — and a swap then counts no bags.
+  litterId: z.string().min(1).max(128).nullable().default(LEGACY_LITTER_ID),
   createdBy: z.string().min(1),
   createdAt: timestampToDate,
 })
@@ -231,11 +241,32 @@ export type LitterBox = z.infer<typeof litterBoxSchema> & { id: string }
 export const litterStockEventSchema = z.object({
   kind: z.enum(LITTER_STOCK_KINDS),
   bags: z.number().min(0).max(1000),
+  // Which litter kind the bags are. Absent on every event from before kinds
+  // existed, which all belong to the legacy kind.
+  litterId: z.string().min(1).max(128).default(LEGACY_LITTER_ID),
   at: timestampToDate,
   createdBy: z.string().min(1),
   createdAt: timestampToDate,
 })
 export type LitterStockEvent = z.infer<typeof litterStockEventSchema> & { id: string }
+
+export const LITTER_BAG_UNITS = ['kg', 'L'] as const
+export type LitterBagUnit = (typeof LITTER_BAG_UNITS)[number]
+
+/**
+ * A kind of litter the household buys — the catalog its stock and boxes name
+ * by id, like foods. The bag size is descriptive only ("10 L bags"); stock is
+ * counted in bags of the kind and never converted. Archived, never deleted.
+ */
+export const litterSchema = z.object({
+  name: z.string().min(1).max(80),
+  bagSize: z.number().positive().max(1000).nullable().default(null),
+  bagUnit: z.enum(LITTER_BAG_UNITS).nullable().default(null),
+  archived: z.boolean().default(false),
+  createdBy: z.string().min(1),
+  createdAt: timestampToDate,
+})
+export type LitterKind = z.infer<typeof litterSchema> & { id: string }
 
 /**
  * A water bowl and when its water was last replaced — what the cats drank is

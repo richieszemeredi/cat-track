@@ -21,6 +21,13 @@ export type FoodStockKind = (typeof FOOD_STOCK_KINDS)[number]
 export const LITTER_STOCK_KINDS = ['bought', 'count', 'swap'] as const
 export type LitterStockKind = (typeof LITTER_STOCK_KINDS)[number]
 
+/**
+ * The litter kind every stock event and box written before kinds existed
+ * belongs to: their missing `litterId` reads as this (schemas.ts), and the
+ * legacy migration creates `litters/default` so it has a name.
+ */
+export const LEGACY_LITTER_ID = 'default'
+
 // ---------- units ----------
 
 /** What a food comes in when nobody said: wet is tinned, dry and treats bagged. */
@@ -311,4 +318,45 @@ export function litterStockState({
     swapsLeft,
     low: stock !== null && boxes.length > 0 && stock.level - dueSoonBags < reserve,
   }
+}
+
+// ---------- litter, per kind ----------
+
+/** This kind's events — an event naming another (or no existing) kind is ignored. */
+export function litterEventsOfKind<E extends { litterId: string }>(
+  events: readonly E[],
+  litterId: string,
+): E[] {
+  return events.filter((e) => e.litterId === litterId)
+}
+
+/** The boxes filled with this kind; a box with no kind chosen (null) is nobody's. */
+export function litterBoxesOfKind<B extends { litterId: string | null }>(
+  boxes: readonly B[],
+  litterId: string,
+): B[] {
+  return boxes.filter((b) => b.litterId === litterId)
+}
+
+/**
+ * One litter kind's stock: `litterStockState` over that kind's events and the
+ * boxes that take it, so a swap only ever draws bags off its own kind and the
+ * reserve is the biggest swap of THOSE boxes.
+ */
+export function litterKindStockState({
+  litterId,
+  events,
+  boxes,
+  today,
+}: {
+  litterId: string
+  events: readonly (LitterStockEventLike & { litterId: string })[]
+  boxes: readonly (LitterBoxLike & { litterId: string | null })[]
+  today: Date
+}): LitterStockState {
+  return litterStockState({
+    events: litterEventsOfKind(events, litterId),
+    boxes: litterBoxesOfKind(boxes, litterId),
+    today,
+  })
 }
