@@ -74,10 +74,10 @@ not in a pile-up.
 - Screens: five tabs, in this order — Home `/`, Weight `/weight`, Plan `/plan`, Supplies
   `/supplies`, Profile `/profile`. There is no Food or Chores screen any more: bowls are
   ticked on Home, the plan lives on Plan, the food catalog and stock on Supplies, and water
-  and litter boxes on Home. While any food or the litter is low, the Supplies tab wears a
+  and litter boxes on Home. While any food or litter is low, the Supplies tab wears a
   small coral dot (`aria-hidden`; the link's name gains ", needs restocking").
 - Home is the day's tasks, for every cat at once: "Needs attention" (one link row per low
-  food, low litter or overdue box; the section is absent when nothing is due), then each
+  food, low litter kind or overdue box; the section is absent when nothing is due), then each
   cat's planned bowls (`MealChecklist`, grams only — no kcal, no meter, no "2 of 3"), the
   water right under the last cat's bowls (`HomeWater`), one weight row per cat (`WeightRow`:
   latest, trend, and an inline kg field until she's weighed today), and two folds:
@@ -140,6 +140,13 @@ not in a pile-up.
   ("was due Nov 5 · 10 days overdue"). Only the "Replaced today" button counts as a swap: in
   ONE batch (`db.replaceLitterBox`) it moves the date and writes a litter-stock `swap` of the
   box's `bagsPerSwap`; editing the date in the form does not.
+  A box also names the litter kind it takes, `litterId`, and its `bagsPerSwap` is bags OF
+  THAT KIND; the swap is written against it. `LitterBoxForm`'s "Litter" select offers the
+  active kinds (plus the box's own, if archived since) and starts a new box on the first;
+  with no kinds at all the field gives way to "Add a litter on Supplies to count its bags."
+  and a new box saves `litterId: null`, whose "Replaced today" only moves the date. With
+  two or more active kinds each row names its kind softly after the location ("Bathroom ·
+  Clumping"); with one, nothing — every box takes it.
 - `src/lib/water.ts` + `HomeWater` — water bowls track when the water was last REPLACED, never
   what a cat drank. Same shape as litter boxes (household-level `households/{hid}/waterBowls`,
   a `location` and one `lastChangedAt`, edited in place, no history) with two deliberate
@@ -173,33 +180,50 @@ not in a pile-up.
   (original `createdBy`/`createdAt`; retired keys dropped). It never overwrites a household
   doc and only logs on failure. Same ids is the whole point: plans and feedings keep
   resolving. The legacy path is read for nothing else, and its rules stay as they were.
+- Litter is a household catalog too, like foods: `households/{hid}/litters/{litterId}` — a
+  `name`, a DESCRIPTIVE `bagSize` + `bagUnit` (`'kg' | 'L'`, both nullable: "10 L bags",
+  never in the maths — stock is counted in bags of the kind) and `archived` (never deleted).
+  Kinds came after boxes and litter stock, so an ABSENT `litterId` on a box or a stock event
+  reads as `LEGACY_LITTER_ID` (`'default'`), while a box's explicit null means no kind was
+  chosen; the rules read the key with `get('litterId', 'default')` so an older cached build
+  still writes. `use-legacy-litter-migration.ts` (once per session, for an editor, the
+  foods migration's pattern) creates `litters/default` ("Litter", no size) in a transaction
+  that never overwrites, for a household with any box or litter stock and no such doc —
+  nothing else is rewritten; the owner renames it on Supplies.
 - Stock is an append-only log, never a stored figure: `foods/{foodId}/stock/{eventId}`
   (`kind: 'bought' | 'count'`, `units`) and `households/{hid}/litterStock/{eventId}`
-  (`'bought' | 'count' | 'swap'`, `bags`), each with `at`. `src/lib/stock.ts` (pure,
+  (`'bought' | 'count' | 'swap'`, `bags`, `litterId`), each with `at`. `src/lib/stock.ts` (pure,
   unit-tested) derives the level: anchor on the latest `count` (by `at`, then `createdAt`),
   add purchases after it, subtract what was used after it; no count yet, it runs from the
   first purchase; no events, untracked ("Not counted yet"). Food "used" is the grams of
   feedings (every cat) of that food after the anchor ÷ `unitSizeG` — so counts are LOOSE,
-  fractional tins and all, and with no size nothing is used up. Litter "used" is the `swap`
-  bags. The figure is `exact` ("5 tins") only while nothing was bought or used since the
+  fractional tins and all, and with no size nothing is used up. Litter is worked out PER
+  KIND (`litterKindStockState`: that kind's events and the boxes that take it; an event
+  naming no existing kind counts for nothing), and its "used" is the `swap` bags. The figure is `exact` ("5 tins") only while nothing was bought or used since the
   count, otherwise "about 5"; shown as max(0, round(level)). One threshold for both,
   `ORDER_LEAD_DAYS = 7` (the delivery lead time): a food is low when its days left —
   level × size ÷ the grams a day of every cat's CURRENT plan — fall under it (no plan use or
-  no size: no run-out date, never low). Litter is low when the level minus the bags of every
-  swap due within the lead time (overdue included) is under the RESERVE — the largest
-  `bagsPerSwap` of any box — i.e. after this week's swaps there would not be one full swap
-  left. No boxes or untracked: never low. `supply-lines.ts` and `supply-alerts.ts` hold the
+  no size: no run-out date, never low). A litter kind is low when the level minus the bags of
+  every swap of its boxes due within the lead time (overdue included) is under the RESERVE —
+  the largest `bagsPerSwap` of its boxes — i.e. after this week's swaps there would not be
+  one full swap left. No boxes or untracked: never low. Archived foods and kinds never are. `supply-lines.ts` and `supply-alerts.ts` hold the
   wording (Supplies' lines, Home's attention rows), unit-tested as strings.
 - `src/lib/supplies.tsx` — `SuppliesProvider`, mounted once in the shell inside the
-  household, loads the foods, each food's stock log, the litter stock and boxes, every cat's
+  household, loads the foods, each food's stock log, the litter kinds, the litter stock and
+  boxes, every cat's
   current plan + items, and each cat's feedings since the earliest food anchor (floored to
   the day; one single-field range per cat, so no composite index). `useSupplies()` gives
-  each food's stock state, the litter's, Home's `alerts` and `anyLow` for the tab dot.
+  each food's stock state, one `LitterKindSupply` per active kind (`litters`), the boxes,
+  Home's `alerts` ("Order {name}" per low food or kind) and `anyLow` for the tab dot.
   Supplies renders it with `StockCard` (figure, when it was last known for sure, the danger
   line, "Bought more" / "Recount" / "Edit" chips whose panels open inline, one at a time)
   and `Stepper` (− / + round buttons around a typed whole number). Adding a food (`FoodForm`)
   asks what it comes in, how big one is and — on add only — how many are on the shelf,
-  which writes a `count`.
+  which writes a `count`. The Litter column mirrors the Food one: "Add litter" opens
+  `LitterForm` in place (a name, the bag size with a kg / L choice that starts on L, and on
+  add only "Bags in stock"); each kind's card reads "10 L bags · Bathroom, Hall"
+  (`litterMeta`); Edit opens the form with an "Archive" chip; no kinds reads "No litter
+  added yet." Archived foods and kinds both sit behind "Show archived (n)" (`ArchivedList`).
 - Retiring a field: drop it from the Zod schema (z.object strips unknown keys, so old docs
   keep parsing), from the `*Input` type in `db.ts`, and from the rules' `hasOnly` list —
   that last step is what stops it coming back. Retired so far: `bodyConditionScore`
@@ -271,10 +295,11 @@ Run `npm run test:visual` and **look at the PNGs** it writes to
 
 Each tab is opened by its tab-bar link and waited on by URL (a tap WebKit drops is
 retried), then every screen is swept with one cat and again with two (a long-named second cat), with
-everything seeded that can show: a full "Needs attention", both folds open with their
-forms, a water bowl's edit and add forms, Plan's folds open, Supplies with a stock panel
-open and the food form (edit and add, stock fields included) — and the whole sweep again
-in dark mode.
+everything seeded that can show: two litter kinds (one long-named, its box overdue and its
+stock low), a full "Needs attention", both folds open with their forms (the box form with
+its litter picker), a water bowl's edit and add forms, Plan's folds open, Supplies with a
+stock panel open and the food and litter forms (edit and add, stock fields included) — and
+the whole sweep again in dark mode.
 
 Add an assertion there whenever a layout bug is found on a real phone. Two that already
 paid for themselves: the weigh-in form's stacked-rows check pins a two-column grid that
