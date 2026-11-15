@@ -1,6 +1,7 @@
 # CatTrack
 
-Shared PWA for a two-person household tracking a kitten's food (calories) and weight.
+Shared PWA for a two-person household tracking a kitten's food (calories), weight, and the
+supplies and chores around her (food and litter stock, litter boxes, water bowls).
 Installed via Safari Add-to-Home-Screen on two iPhones (and usable on an iPad or a
 desktop browser); no App Store. Free Firebase Spark tier only — **no feature may require the Blaze plan** (no Cloud Storage, no
 Cloud Functions, no SSR hosting).
@@ -70,16 +71,34 @@ not in a pile-up.
   placeholder name that self-corrects the moment the invited member's own client loads.
 - `src/lib/household.tsx` — `useHousehold()`: `householdId`, `role`, `canEdit`, `cats`,
   `activeCat`, `selectCat`. Viewers (`role: 'viewer'`) must not see mutating UI.
+- Screens: five tabs, in this order — Home `/`, Weight `/weight`, Plan `/plan`, Supplies
+  `/supplies`, Profile `/profile`. There is no Food or Chores screen any more: bowls are
+  ticked on Home, the plan lives on Plan, the food catalog and stock on Supplies, and water
+  and litter boxes on Home. While any food or the litter is low, the Supplies tab wears a
+  small coral dot (`aria-hidden`; the link's name gains ", needs restocking").
+- Home is the day's tasks, for every cat at once: "Needs attention" (one link row per low
+  food, low litter or overdue box; the section is absent when nothing is due), then each
+  cat's planned bowls (`MealChecklist`, grams only — no kcal, no meter, no "2 of 3"), the
+  water right under the last cat's bowls (`HomeWater`), one weight row per cat (`WeightRow`:
+  latest, trend, and an inline kg field until she's weighed today), and two folds:
+  "Anything off-plan" (`OffPlanList` + `LogMealForm` per cat) and "Litter boxes"
+  (`LitterFold`; an overdue box's attention row opens it). No calories and no disclaimer on
+  Home — those live on Plan. From 768pt: meals + water left; attention, weight, folds right.
+  `use-cat-day.ts` is the per-cat data Home and Plan share: `useCatPlan(cat)` (current plan,
+  items, target, ratio) and `useCatDay(cat)` (that plus today's feedings, overrides, the
+  ticks by meal and the off-plan list) — one query set, so the ticks and counts agree.
+- Plan shows the plan as it reads on paper (`PlanSummaryRows`: meals and times, a row per
+  food, kcal against target), "Change the plan" opening the full-page `PlanForm`, the
+  `OutgrownNudge`, and folded "How the target works" (`RerMerMath`) and history. One cat:
+  plan left, folds right. Several: one self-contained block per cat (a column each from
+  768pt), no switcher.
 - Several cats per household: `activeCat` is the cat chosen on THIS device (localStorage per
   household, `selected-cat.ts`; never Firestore — what one phone is looking at says nothing
-  about the other), else the first created. `/food`, `/weight` and `/profile` show it, with
-  a `CatSwitcher` of name chips that exists only from two cats, and key their body by cat
-  id so a half-typed form never carries over. Home shows every cat, not the
-  selected one (`CatToday`: the big-number `full` view for one cat, a `compact` block
-  each from two), then the household's litter boxes once (`LitterGlance`, read-only, outside
-  every cat's block). It deliberately has no food list and no shortcut buttons — the tab bar
-  is the navigation. Cats are added from Profile ("Add another cat"); removing one is not built
-  (it would orphan the cat's weights, foods and plans).
+  about the other), else the first created. Only Weight and Profile show one cat at a time,
+  with a `CatSwitcher` of name chips that exists only from two cats, and key their body by
+  cat id so a half-typed form never carries over; Home and Plan show every cat. Cats are
+  added from Profile ("Add another cat"); removing one is not built (it would orphan the
+  cat's weights, feedings and plans).
 - `src/lib/catmath.ts` — pure, unit-tested RER/MER/growth-band math. Sanity anchor:
   5 kg neutered adult → RER ≈ 234, MER ≈ 281 kcal/day. Any UI showing derived calories
   needs the "Estimates only — always confirm with your vet." disclaimer.
@@ -111,37 +130,81 @@ not in a pile-up.
   overlapping date ranges. `db.sortPlans` breaks a same-day tie on `createdAt` — ordering on
   `effectiveFrom` alone let two revisions saved on one day fall back to document id, which
   could leave the FIRST one in force.
-- `src/lib/litter.ts` + `LitterSection` — litter boxes are HOUSEHOLD-level (`households/{hid}/litterBoxes`,
-  not under a cat): a `location` and one `lastChangedAt` date, nothing else. Unlike the log
-  collections they are edited in place — "replaced today" just moves the date forward — and
-  there is no history. Age is counted in calendar days and floored to weeks;
-  each box carries its own `changeEveryWeeks` (default 4, max 52). No
-  reminders: the screen is the reminder.
-- `src/lib/water.ts` + `WaterSection` — water bowls track when the water was last REPLACED, never what
-  a cat drank. Same shape as litter boxes (household-level `households/{hid}/waterBowls`, a
-  `location` and one `lastChangedAt`, edited in place, no history) with two deliberate
+- `src/lib/litter.ts` + `LitterFold` — litter boxes are HOUSEHOLD-level
+  (`households/{hid}/litterBoxes`, not under a cat): a `location`, one `lastChangedAt` date,
+  `changeEveryWeeks` (default 4, max 52) and `bagsPerSwap` (1–20, default 1). Unlike the
+  log collections they are edited in place, and there is no history. Days are calendar days;
+  a box is due on `lastChangedAt + changeEveryWeeks` weeks (`stock.litterBoxDueOn`), and due
+  ON that day. Each row reads "Last swap · Oct 8 · 5 weeks ago" and "Next swap · Dec 13 · in
+  4 weeks" (`lastSwapLine` / `nextSwapLine`); past due, the whole next-swap line turns danger
+  ("was due Nov 5 · 10 days overdue"). Only the "Replaced today" button counts as a swap: in
+  ONE batch (`db.replaceLitterBox`) it moves the date and writes a litter-stock `swap` of the
+  box's `bagsPerSwap`; editing the date in the form does not.
+- `src/lib/water.ts` + `HomeWater` — water bowls track when the water was last REPLACED, never
+  what a cat drank. Same shape as litter boxes (household-level `households/{hid}/waterBowls`,
+  a `location` and one `lastChangedAt`, edited in place, no history) with two deliberate
   differences: it is a full timestamp and the age is ELAPSED HOURS (`useNow`, a minute tick —
   `useToday` only moves at midnight), and the stale limit is one fixed 24 h, not per bowl.
-  Both live on ONE tab, `/chores` (a section per column from 768pt; the tab bar stayed at five).
-  Like a litter box, the date AND time are editable (separate date and time inputs) for the
-  morning-rush case of refilling the bowl without logging it; untouched, a new bowl takes the time
-  of the save. No reminders: the screen is the reminder.
+  On Home, one row per bowl ("Water", or each location once there are several), "changed
+  6 h ago" (danger past 24 h), a "Refreshed" chip (disabled under a minute) and "Edit" (the
+  form, with date AND time for the morning-rush refill nobody logged, and "Add another
+  bowl"). No bowls: a "Track water" chip. No reminders anywhere: the screen is the reminder.
 - Data model: `households/{hid}/members/{uid}` (roles owner|editor|viewer, source of truth
-  for access) and `households/{hid}/cats/{catId}/{weights|foods|feedings|plans}` — append-only
+  for access) and `households/{hid}/cats/{catId}/{weights|feedings|plans}` — append-only
   log docs so two phones never clobber each other. `plans/{planId}/items/{itemId}` holds the
   day's mix, one document per food, because rules cannot iterate a list: as its own document
   every item gets the same `hasOnly` validation as everything else. A feeding carries
   `planId` + `mealIndex` when it ticks off a planned bowl, and both null when it is off-plan
   (the `LogMealForm` hatch). `/invites` is reserved for the public launch.
+- Foods belong to the HOUSEHOLD: `households/{hid}/foods/{foodId}` — one catalog every cat's
+  plan and feedings name by `foodId`. Besides the energy fields a food has `unit` (`tin` |
+  `pouch` | `bag`, null = follow the type: wet → tin, dry and treat → bag) and `unitSizeG`
+  (grams in one; null = unknown), both `.default(null)`.
   A food's `analysis` map (the five label percentages, nullable) is the one nested map in
   the model: it is non-null only while `kcalPerGram` is the calculator's own output, so
   hand-editing the kcal field clears it and a stored analysis always explains the stored
   kcal. Rules validate it with `hasAll` as well as `hasOnly` — a half-filled map would let
   the figure be re-derived from constituents it never saw.
+- Foods used to live per cat (`cats/{catId}/foods`). `use-legacy-foods-migration.ts` copies
+  them up automatically: once per app session, for a member who can edit, once the cats
+  have loaded, `db.migrateLegacyFoods` reads every cat's legacy foods and the household's
+  (server reads only — an empty offline cache would look like "everything missing") and, in a
+  transaction, `set`s each legacy doc whose id is missing under the SAME id, fields verbatim
+  (original `createdBy`/`createdAt`; retired keys dropped). It never overwrites a household
+  doc and only logs on failure. Same ids is the whole point: plans and feedings keep
+  resolving. The legacy path is read for nothing else, and its rules stay as they were.
+- Stock is an append-only log, never a stored figure: `foods/{foodId}/stock/{eventId}`
+  (`kind: 'bought' | 'count'`, `units`) and `households/{hid}/litterStock/{eventId}`
+  (`'bought' | 'count' | 'swap'`, `bags`), each with `at`. `src/lib/stock.ts` (pure,
+  unit-tested) derives the level: anchor on the latest `count` (by `at`, then `createdAt`),
+  add purchases after it, subtract what was used after it; no count yet, it runs from the
+  first purchase; no events, untracked ("Not counted yet"). Food "used" is the grams of
+  feedings (every cat) of that food after the anchor ÷ `unitSizeG` — so counts are LOOSE,
+  fractional tins and all, and with no size nothing is used up. Litter "used" is the `swap`
+  bags. The figure is `exact` ("5 tins") only while nothing was bought or used since the
+  count, otherwise "about 5"; shown as max(0, round(level)). One threshold for both,
+  `ORDER_LEAD_DAYS = 7` (the delivery lead time): a food is low when its days left —
+  level × size ÷ the grams a day of every cat's CURRENT plan — fall under it (no plan use or
+  no size: no run-out date, never low). Litter is low when the level minus the bags of every
+  swap due within the lead time (overdue included) is under the RESERVE — the largest
+  `bagsPerSwap` of any box — i.e. after this week's swaps there would not be one full swap
+  left. No boxes or untracked: never low. `supply-lines.ts` and `supply-alerts.ts` hold the
+  wording (Supplies' lines, Home's attention rows), unit-tested as strings.
+- `src/lib/supplies.tsx` — `SuppliesProvider`, mounted once in the shell inside the
+  household, loads the foods, each food's stock log, the litter stock and boxes, every cat's
+  current plan + items, and each cat's feedings since the earliest food anchor (floored to
+  the day; one single-field range per cat, so no composite index). `useSupplies()` gives
+  each food's stock state, the litter's, Home's `alerts` and `anyLow` for the tab dot.
+  Supplies renders it with `StockCard` (figure, when it was last known for sure, the danger
+  line, "Bought more" / "Recount" / "Edit" chips whose panels open inline, one at a time)
+  and `Stepper` (− / + round buttons around a typed whole number). Adding a food (`FoodForm`)
+  asks what it comes in, how big one is and — on add only — how many are on the shelf,
+  which writes a `count`.
 - Retiring a field: drop it from the Zod schema (z.object strips unknown keys, so old docs
   keep parsing), from the `*Input` type in `db.ts`, and from the rules' `hasOnly` list —
   that last step is what stops it coming back. Retired so far: `bodyConditionScore`
   (weights), `packageSizeG` (foods), `mealType` (feedings, replaced by an editable time).
+  Retired screens: `/food` and `/chores` (and with them `CatToday` and `LitterGlance`).
   The whole "repeat a previous day" feature (`repeat.ts`, `RepeatDayCard`) is gone too: it
   was the data model apologising for itself, and the plan subsumes it. Same for a plan's
   `transition` (the food-switch ramp): it split a bowl across two foods via
@@ -194,11 +257,21 @@ Run `npm run test:visual` and **look at the PNGs** it writes to
 - nothing crosses either viewport edge, and the page never scrolls sideways;
 - no control escapes the card it lives in (`.surface`);
 - no button, link or `summary` is under 36px in either direction;
+- no chip or button in a card sits on the card's edge (a class name that ran into the
+  next, `self-startmx-4`, once stretched a chip across its whole card);
 - one text column per page column — every `.gutter` element starts exactly one
   card-padding inside the cards of the column it sits in;
+- a Needs-attention detail ("· about 1 day left") never splits across lines, and no
+  danger line ends on one stray word ("— time to / order");
 - from 768pt the two `.page-column`s sit side by side, each ≥ 343pt; below it they stack;
 - the main nav is a full-width bottom bar below 1024pt and a full-height left rail from
   it, with no content underneath.
+
+Every screen is swept with one cat and again with two (a long-named second cat), with
+everything seeded that can show: a full "Needs attention", both folds open with their
+forms, a water bowl's edit and add forms, Plan's folds open, Supplies with a stock panel
+open and the food form (edit and add, stock fields included) — and the whole sweep again
+in dark mode.
 
 Add an assertion there whenever a layout bug is found on a real phone. Two that already
 paid for themselves: the weigh-in form's stacked-rows check pins a two-column grid that
@@ -207,8 +280,9 @@ time input punched out through the right edge of its card while still sitting we
 inside the screen.
 
 `a two-food bowl shows both foods and holds its layout` is the widest row the app can
-produce — two food names, two gram figures and a meal total in one checklist row — so it
-is the first place a layout regression will show.
+produce — two food names, two gram figures and a meal total in one checklist row on
+Home — so it is the first place a layout regression will show. It also lays out Plan with
+that two-food plan and its history open.
 
 **Playwright's WebKit is not iOS Safari.** It sizes `input[type=date|time]` correctly
 where a real iPhone sizes them from the native picker and ignores `width:100%` — that
@@ -252,9 +326,10 @@ Five rules keep it from drifting back into generic-app territory:
 
 1. **One accent.** Coral on cream and ink. `positive` (green) and `danger` (red) are
    TEXT-only signals — never surfaces — so colour always means something.
-2. **One big number per screen.** `text-5xl` for the figure the screen exists to show
-   (kcal eaten, latest weight); `section-label` for headings; body text at normal weight.
-   Bolding everything emphasises nothing.
+2. **At most one big number per screen.** `text-5xl` for the figure a screen exists to
+   show (Weight's latest weight); a supply's stock on Supplies is a `text-2xl` figure per
+   card. Home has none — it is a list of tasks. `section-label` for headings; body text at
+   normal weight. Bolding everything emphasises nothing.
 3. **Cards are objects, not paragraphs.** `.surface` is for forms and grouped lists.
    Sections are a quiet label plus content — not another white rounded box.
    Page-level text carries `.gutter` so it lines up with the text inside cards; without
@@ -285,7 +360,7 @@ Motion is a feedback channel, not decoration — the same restraint as the palet
   (`squishy`, `glide`, `fade`) rather than per-component numbers. A list whose rows come
   and go wraps them in `ListRow` (`StackRow` for a gap-spaced stack) inside
   `<AnimatePresence initial={false}>`, so opening a screen never grows every row in.
-  A big figure tweens through `AnimatedNumber`; a small "N of M" count pops through
+  A big figure tweens through `AnimatedNumber`; a small count (a stock figure) pops through
   `PoppingNumber`.
 - **Nothing loops.** One-shot only: no confetti, no bouncing paw, no animation on
   the growth chart (a live update would redraw the curve).
