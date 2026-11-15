@@ -14,6 +14,7 @@ import { Route as ChoresRouteImport } from './routes/chores'
 import { Route as FoodRouteImport } from './routes/food'
 import { Route as PlanRouteImport } from './routes/plan'
 import { Route as ProfileRouteImport } from './routes/profile'
+import { Route as SuppliesRouteImport } from './routes/supplies'
 import { Route as WeightRouteImport } from './routes/weight'
 
 const IndexRoute = IndexRouteImport.update({
@@ -41,6 +42,11 @@ const ProfileRoute = ProfileRouteImport.update({
   path: '/profile',
   getParentRoute: () => rootRouteImport,
 } as any)
+const SuppliesRoute = SuppliesRouteImport.update({
+  id: '/supplies',
+  path: '/supplies',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const WeightRoute = WeightRouteImport.update({
   id: '/weight',
   path: '/weight',
@@ -53,6 +59,7 @@ export interface FileRoutesByFullPath {
   '/food': typeof FoodRoute
   '/plan': typeof PlanRoute
   '/profile': typeof ProfileRoute
+  '/supplies': typeof SuppliesRoute
   '/weight': typeof WeightRoute
 }
 export interface FileRoutesByTo {
@@ -61,6 +68,7 @@ export interface FileRoutesByTo {
   '/food': typeof FoodRoute
   '/plan': typeof PlanRoute
   '/profile': typeof ProfileRoute
+  '/supplies': typeof SuppliesRoute
   '/weight': typeof WeightRoute
 }
 export interface FileRoutesById {
@@ -70,14 +78,24 @@ export interface FileRoutesById {
   '/food': typeof FoodRoute
   '/plan': typeof PlanRoute
   '/profile': typeof ProfileRoute
+  '/supplies': typeof SuppliesRoute
   '/weight': typeof WeightRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/chores' | '/food' | '/plan' | '/profile' | '/weight'
+  fullPaths:
+    '/' | '/chores' | '/food' | '/plan' | '/profile' | '/supplies' | '/weight'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/chores' | '/food' | '/plan' | '/profile' | '/weight'
-  id: '__root__' | '/' | '/chores' | '/food' | '/plan' | '/profile' | '/weight'
+  to: '/' | '/chores' | '/food' | '/plan' | '/profile' | '/supplies' | '/weight'
+  id:
+    | '__root__'
+    | '/'
+    | '/chores'
+    | '/food'
+    | '/plan'
+    | '/profile'
+    | '/supplies'
+    | '/weight'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -86,6 +104,7 @@ export interface RootRouteChildren {
   FoodRoute: typeof FoodRoute
   PlanRoute: typeof PlanRoute
   ProfileRoute: typeof ProfileRoute
+  SuppliesRoute: typeof SuppliesRoute
   WeightRoute: typeof WeightRoute
 }
 
@@ -126,6 +145,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ProfileRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/supplies': {
+      id: '/supplies'
+      path: '/supplies'
+      fullPath: '/supplies'
+      preLoaderRoute: typeof SuppliesRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/weight': {
       id: '/weight'
       path: '/weight'
@@ -142,6 +168,7 @@ const rootRouteChildren: RootRouteChildren = {
   FoodRoute: FoodRoute,
   PlanRoute: PlanRoute,
   ProfileRoute: ProfileRoute,
+  SuppliesRoute: SuppliesRoute,
   WeightRoute: WeightRoute,
 }
 export const routeTree = rootRouteImport

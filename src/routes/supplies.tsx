@@ -1,0 +1,289 @@
+import { createFileRoute } from '@tanstack/react-router'
+import { AnimatePresence } from 'motion/react'
+import { useState } from 'react'
+import { ErrorCard } from '../components/ErrorCard'
+import { FoodForm } from '../components/FoodForm'
+import { ListRow, StackRow } from '../components/ListRow'
+import { StockCard, type StockRecordKind } from '../components/StockCard'
+import { useAuth } from '../lib/auth'
+import {
+  addFoodStockEvent,
+  addLitterStockEvent,
+  awaitOrQueued,
+  updateFood,
+  type Food,
+} from '../lib/db'
+import { useHousehold } from '../lib/household'
+import { unitFor } from '../lib/stock'
+import { useSupplies, type FoodSupply } from '../lib/supplies'
+import {
+  foodLowLine,
+  foodMeta,
+  foodSubLine,
+  litterLowLine,
+  litterSubLine,
+} from '../lib/supply-lines'
+import { useNow } from '../lib/use-now'
+
+export const Route = createFileRoute('/supplies')({
+  component: SuppliesPage,
+  errorComponent: ({ error, reset }) => <ErrorCard error={error} onRetry={reset} />,
+})
+
+// The rules' caps on one stock event.
+const MAX_FOOD_UNITS = 10000
+const MAX_LITTER_BAGS = 1000
+
+/** The size of the most recent purchase in a log kept oldest first. */
+function lastBoughtOf<T extends { kind: string }>(
+  events: readonly T[],
+  amount: (event: T) => number,
+): number | null {
+  for (let i = events.length - 1; i >= 0; i--) {
+    const event = events[i]
+    if (event?.kind === 'bought') return amount(event)
+  }
+  return null
+}
+
+function SuppliesPage() {
+  const { loading, isError } = useSupplies()
+  // Skeleton only for the first load: adding a food starts a new stock read,
+  // and blanking the screen for it would throw away the form mid-save.
+  const [ready, setReady] = useState(!loading)
+  if (!loading && !ready) setReady(true)
+
+  return (
+    <main className="flex flex-col gap-7 p-4">
+      <h1 className="page-title gutter">Supplies</h1>
+      {isError ? (
+        <p role="alert" className="gutter text-sm font-semibold text-danger">
+          Couldn’t load all of your supplies — please try again.
+        </p>
+      ) : null}
+      {ready ? (
+        <div className="page-columns">
+          <FoodColumn />
+          <LitterColumn />
+        </div>
+      ) : (
+        <div className="page-solo h-40 animate-pulse rounded-squishy bg-sand" />
+      )}
+    </main>
+  )
+}
+
+function FoodColumn() {
+  const { householdId: hid, canEdit } = useHousehold()
+  const { user } = useAuth()
+  const { foods, activeFoods, foodSupplies } = useSupplies()
+  const now = useNow()
+  const [adding, setAdding] = useState(false)
+  const [showArchived, setShowArchived] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  const uid = canEdit ? (user?.uid ?? null) : null
+  const archivedFoods = foods.filter((f) => f.archived)
+
+  async function setArchived(food: Food, archived: boolean): Promise<void> {
+    if (archived && !window.confirm(`Archive ${food.name}? You can bring it back later.`)) return
+    setError(null)
+    try {
+      await awaitOrQueued(updateFood(hid, food.id, { archived }))
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not update the food.')
+    }
+  }
+
+  return (
+    <div className="page-column">
+      <section className="flex flex-col gap-3">
+        <div className="gutter flex items-center justify-between gap-2">
+          <h2 className="section-label">Food</h2>
+          {uid === null ? null : (
+            <button
+              type="button"
+              data-testid="supplies-add-food"
+              aria-expanded={adding}
+              onClick={() => {
+                setAdding((v) => !v)
+              }}
+              className="btn-chip"
+            >
+              {adding ? 'Close' : 'Add food'}
+            </button>
+          )}
+        </div>
+
+        {adding && uid !== null ? (
+          <FoodForm
+            hid={hid}
+            uid={uid}
+            onDone={() => {
+              setAdding(false)
+            }}
+          />
+        ) : null}
+
+        {activeFoods.length === 0 ? (
+          <p className="gutter text-sm text-ink-soft">No foods yet.</p>
+        ) : (
+          <div className="flex flex-col gap-3">
+            <AnimatePresence initial={false}>
+              {activeFoods.map((food, index) => {
+                const supply = foodSupplies.get(food.id)
+                return supply === undefined ? null : (
+                  <StackRow key={food.id} order={index} gap="0.75rem">
+                    <FoodCard
+                      supply={supply}
+                      hid={hid}
+                      uid={uid}
+                      now={now}
+                      onArchive={() => {
+                        void setArchived(food, true)
+                      }}
+                    />
+                  </StackRow>
+                )
+              })}
+            </AnimatePresence>
+          </div>
+        )}
+
+        {archivedFoods.length > 0 ? (
+          <div className="flex flex-col gap-2">
+            <button
+              type="button"
+              aria-expanded={showArchived}
+              onClick={() => {
+                setShowArchived((v) => !v)
+              }}
+              className="gutter min-h-10 self-start text-sm font-semibold text-coral-ink underline underline-offset-2"
+            >
+              {showArchived ? 'Hide archived' : `Show archived (${String(archivedFoods.length)})`}
+            </button>
+            {showArchived ? (
+              <ul className="surface divide-y divide-sand">
+                <AnimatePresence initial={false}>
+                  {archivedFoods.map((food, index) => (
+                    <ListRow key={food.id} order={index}>
+                      <div className="flex items-center gap-3 px-4 py-3">
+                        <span className="min-w-0 flex-1 truncate text-sm text-ink-soft">
+                          {food.name}
+                        </span>
+                        {uid === null ? null : (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              void setArchived(food, false)
+                            }}
+                            className="btn-chip"
+                          >
+                            Unarchive
+                          </button>
+                        )}
+                      </div>
+                    </ListRow>
+                  ))}
+                </AnimatePresence>
+              </ul>
+            ) : null}
+          </div>
+        ) : null}
+
+        {error === null ? null : (
+          <p role="alert" className="gutter text-sm font-semibold text-danger">
+            {error}
+          </p>
+        )}
+      </section>
+    </div>
+  )
+}
+
+function FoodCard({
+  supply,
+  hid,
+  uid,
+  now,
+  onArchive,
+}: {
+  supply: FoodSupply
+  hid: string
+  /** null for a viewer: no controls. */
+  uid: string | null
+  now: Date
+  onArchive: () => void
+}) {
+  const { food, events, state } = supply
+  return (
+    <StockCard
+      testId="food-supply"
+      title={food.name}
+      meta={foodMeta(food)}
+      unit={unitFor(food)}
+      stock={state.stock}
+      sub={foodSubLine(food, state, now)}
+      low={foodLowLine(state)}
+      lastBought={lastBoughtOf(events, (e) => e.units)}
+      max={MAX_FOOD_UNITS}
+      record={
+        uid === null
+          ? null
+          : (kind: StockRecordKind, units: number) =>
+              addFoodStockEvent(hid, food.id, uid, { kind, units, at: new Date() })
+      }
+      edit={
+        uid === null
+          ? null
+          : (close) => (
+              <>
+                <FoodForm hid={hid} uid={uid} existing={food} onDone={close} />
+                <button type="button" onClick={onArchive} className="btn-chip self-start">
+                  Archive
+                </button>
+              </>
+            )
+      }
+    />
+  )
+}
+
+function LitterColumn() {
+  const { householdId: hid, canEdit } = useHousehold()
+  const { user } = useAuth()
+  const { litter } = useSupplies()
+  const now = useNow()
+  const uid = canEdit ? (user?.uid ?? null) : null
+  const { state } = litter
+
+  return (
+    <div className="page-column">
+      <section className="flex flex-col gap-3">
+        {/* As tall as the Food header with its chip, so the two columns line up. */}
+        <h2 className="section-label gutter flex min-h-10 items-center">Litter</h2>
+        <StockCard
+          testId="litter-supply"
+          title="Litter"
+          meta={null}
+          unit="bag"
+          stock={state.stock}
+          sub={litterSubLine(state, now)}
+          low={litterLowLine(state)}
+          lastBought={lastBoughtOf(litter.events, (e) => e.bags)}
+          max={MAX_LITTER_BAGS}
+          record={
+            uid === null
+              ? null
+              : (kind: StockRecordKind, bags: number) =>
+                  addLitterStockEvent(hid, uid, { kind, bags, at: new Date() })
+          }
+          edit={null}
+        />
+        <p className="gutter text-sm text-ink-soft">
+          A full swap takes its box’s bags off. Top-ups aren’t counted — recount now and then.
+        </p>
+      </section>
+    </div>
+  )
+}
