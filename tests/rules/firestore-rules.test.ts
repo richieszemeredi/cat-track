@@ -16,6 +16,7 @@ import {
   getDoc,
   getDocs,
   query,
+  serverTimestamp,
   setDoc,
   Timestamp,
   updateDoc,
@@ -135,6 +136,18 @@ function foodStock(createdBy: string) {
 
 function litterStock(createdBy: string) {
   return { kind: 'bought', bags: 2, at: ENTRY_DATE, createdBy, createdAt: CREATED_AT }
+}
+
+/** A litter kind as the client writes it: createdAt is the server's clock. */
+function litterKind(createdBy: string) {
+  return {
+    name: 'Clumping',
+    bagSize: 10,
+    bagUnit: 'L',
+    archived: false,
+    createdBy,
+    createdAt: serverTimestamp(),
+  }
 }
 
 function feeding(createdBy: string) {
@@ -656,6 +669,158 @@ describe('litter stock', () => {
     })
     batch.set(doc(collection(db, stock)), { ...litterStock('alice'), kind: 'swap', bags: 2 })
     await assertSucceeds(batch.commit())
+  })
+})
+
+describe('litter kinds', () => {
+  const litters = `${H1}/litters`
+
+  it('allows editors to add a kind, viewers and outsiders not', async () => {
+    await assertSucceeds(setDoc(doc(authedDb('bob'), `${litters}/l1`), litterKind('bob')))
+    await assertSucceeds(addDoc(collection(authedDb('alice'), litters), litterKind('alice')))
+    await assertFails(addDoc(collection(authedDb('vera'), litters), litterKind('vera')))
+    await assertFails(addDoc(collection(authedDb('mallory'), litters), litterKind('mallory')))
+    await assertFails(addDoc(collection(unauthedDb(), litters), litterKind('bob')))
+  })
+
+  it('allows an unknown bag size and unit, and leaving both keys out', async () => {
+    await assertSucceeds(
+      addDoc(collection(authedDb('bob'), litters), {
+        ...litterKind('bob'),
+        bagSize: null,
+        bagUnit: null,
+      }),
+    )
+    const bare: Record<string, unknown> = litterKind('bob')
+    delete bare['bagSize']
+    delete bare['bagUnit']
+    await assertSucceeds(addDoc(collection(authedDb('bob'), litters), bare))
+    await assertSucceeds(
+      addDoc(collection(authedDb('bob'), litters), { ...litterKind('bob'), bagUnit: 'kg' }),
+    )
+  })
+
+  it.each([
+    ['an empty name', { name: '' }],
+    ['an over-long name', { name: 'x'.repeat(81) }],
+    ['a numeric name', { name: 5 }],
+    ['a zero bag size', { bagSize: 0 }],
+    ['a negative bag size', { bagSize: -1 }],
+    ['an absurd bag size', { bagSize: 1001 }],
+    ['a string bag size', { bagSize: '10' }],
+    ['an unknown unit', { bagUnit: 'lb' }],
+    ['a non-bool archived', { archived: 'no' }],
+    ['an extra field', { colour: 'grey' }],
+    ['a foreign createdBy', { createdBy: 'alice' }],
+    ['a client-clock createdAt', { createdAt: CREATED_AT }],
+  ])('denies %s', async (_label, patch) => {
+    await assertFails(
+      addDoc(collection(authedDb('bob'), litters), { ...litterKind('bob'), ...patch }),
+    )
+  })
+
+  it('denies leaving out the name or archived', async () => {
+    const noName: Record<string, unknown> = litterKind('bob')
+    delete noName['name']
+    await assertFails(addDoc(collection(authedDb('bob'), litters), noName))
+    const noArchived: Record<string, unknown> = litterKind('bob')
+    delete noArchived['archived']
+    await assertFails(addDoc(collection(authedDb('bob'), litters), noArchived))
+  })
+
+  it('lets members read, outsiders not', async () => {
+    await seedDoc(`${litters}/l1`, { ...litterKind('bob'), createdAt: CREATED_AT })
+    await assertSucceeds(getDoc(doc(authedDb('vera'), `${litters}/l1`)))
+    await assertFails(getDoc(doc(authedDb('mallory'), `${litters}/l1`)))
+  })
+
+  it('lets an editor rename, resize and archive a kind, but pins who and when', async () => {
+    await seedDoc(`${litters}/l1`, { ...litterKind('bob'), createdAt: CREATED_AT })
+    const ref = doc(authedDb('alice'), `${litters}/l1`)
+    await assertSucceeds(updateDoc(ref, { name: 'Silica', bagSize: 5, bagUnit: 'kg' }))
+    await assertSucceeds(updateDoc(ref, { archived: true }))
+    await assertSucceeds(updateDoc(ref, { bagSize: null, bagUnit: null }))
+    await assertFails(updateDoc(ref, { name: '' }))
+    await assertFails(updateDoc(ref, { bagSize: 2000 }))
+    await assertFails(updateDoc(ref, { createdBy: 'alice' }))
+    await assertFails(updateDoc(ref, { createdAt: serverTimestamp() }))
+    await assertFails(updateDoc(ref, { extra: true }))
+    await assertFails(updateDoc(doc(authedDb('vera'), `${litters}/l1`), { name: 'Silica' }))
+  })
+
+  it('never lets anyone delete a kind', async () => {
+    await seedDoc(`${litters}/l1`, { ...litterKind('bob'), createdAt: CREATED_AT })
+    await assertFails(deleteDoc(doc(authedDb('alice'), `${litters}/l1`)))
+    await assertFails(deleteDoc(doc(authedDb('bob'), `${litters}/l1`)))
+  })
+
+  it('allows the legacy kind to be created under the id "default"', async () => {
+    await assertSucceeds(
+      setDoc(doc(authedDb('bob'), `${litters}/default`), {
+        name: 'Litter',
+        bagSize: null,
+        bagUnit: null,
+        archived: false,
+        createdBy: 'bob',
+        createdAt: serverTimestamp(),
+      }),
+    )
+  })
+
+  it('allows a new kind and its opening count in one batch', async () => {
+    const db = authedDb('bob')
+    const batch = writeBatch(db)
+    const kind = doc(collection(db, litters))
+    batch.set(kind, litterKind('bob'))
+    batch.set(doc(collection(db, `${H1}/litterStock`)), {
+      ...litterStock('bob'),
+      kind: 'count',
+      litterId: kind.id,
+    })
+    await assertSucceeds(batch.commit())
+  })
+})
+
+describe('litter stock: kinds', () => {
+  const stock = `${H1}/litterStock`
+
+  it('allows an event with a litterId, and one without (an older build)', async () => {
+    await assertSucceeds(
+      addDoc(collection(authedDb('bob'), stock), { ...litterStock('bob'), litterId: 'l1' }),
+    )
+    await assertSucceeds(addDoc(collection(authedDb('bob'), stock), litterStock('bob')))
+  })
+
+  it.each([null, '', 'x'.repeat(129), 5])('denies a litterId of %s', async (litterId) => {
+    await assertFails(
+      addDoc(collection(authedDb('bob'), stock), { ...litterStock('bob'), litterId }),
+    )
+  })
+})
+
+describe('litter boxes: kinds', () => {
+  const boxes = `${H1}/litterBoxes`
+
+  it('allows a box with a kind, with none chosen (null), and without the key', async () => {
+    await assertSucceeds(
+      addDoc(collection(authedDb('bob'), boxes), { ...litterBox('bob'), litterId: 'l1' }),
+    )
+    await assertSucceeds(
+      addDoc(collection(authedDb('bob'), boxes), { ...litterBox('bob'), litterId: null }),
+    )
+    await assertSucceeds(addDoc(collection(authedDb('bob'), boxes), litterBox('bob')))
+  })
+
+  it.each(['', 'x'.repeat(129), 5, true])('denies a litterId of %s', async (litterId) => {
+    await assertFails(addDoc(collection(authedDb('bob'), boxes), { ...litterBox('bob'), litterId }))
+  })
+
+  it('lets an editor point an old box at a kind, and back to none', async () => {
+    await seedDoc(`${boxes}/old`, litterBox('bob'))
+    const ref = doc(authedDb('alice'), `${boxes}/old`)
+    await assertSucceeds(updateDoc(ref, { litterId: 'l1' }))
+    await assertSucceeds(updateDoc(ref, { litterId: null }))
+    await assertFails(updateDoc(ref, { litterId: '' }))
   })
 })
 

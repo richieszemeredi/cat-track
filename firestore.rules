@@ -146,8 +146,13 @@ service cloud.firestore {
         function validLitterBoxData() {
           return request.resource.data.keys().hasOnly([
               'location', 'lastChangedAt', 'changeEveryWeeks', 'bagsPerSwap',
-              'createdBy', 'createdAt'
+              'litterId', 'createdBy', 'createdAt'
             ]) &&
+            // Which litter kind the box takes. Absent on boxes from before
+            // kinds existed (they read as the legacy 'default' kind); null
+            // when the household had no kind to pick yet.
+            (request.resource.data.get('litterId', 'default') == null ||
+              validString(request.resource.data.get('litterId', 'default'), 128)) &&
             // get() with a default: boxes written before the interval was per
             // box have no such key, and reading an absent key denies outright.
             request.resource.data.get('changeEveryWeeks', 4) is int &&
@@ -171,6 +176,42 @@ service cloud.firestore {
         allow delete: if isEditor(hid);
       }
 
+      // ---------- litter kinds (household catalog) ----------
+      // Each kind of litter the household buys, counted in its own bags. Like
+      // foods, never deleted — archived instead, so old stock events and boxes
+      // keep a name to point at. The bag size is descriptive only. No exists()
+      // check from the stock log or boxes onto these docs: membership already
+      // spends the per-request get() budget, and an unknown litterId is simply
+      // ignored client-side.
+      match /litters/{litterId} {
+        function validLitterData() {
+          return request.resource.data.keys().hasOnly([
+              'name', 'bagSize', 'bagUnit', 'archived', 'createdBy', 'createdAt'
+            ]) &&
+            request.resource.data.keys().hasAll([
+              'name', 'archived', 'createdBy', 'createdAt'
+            ]) &&
+            validString(request.resource.data.name, 80) &&
+            (request.resource.data.get('bagSize', null) == null ||
+              (request.resource.data.get('bagSize', null) is number &&
+               request.resource.data.get('bagSize', null) > 0 &&
+               request.resource.data.get('bagSize', null) <= 1000)) &&
+            (request.resource.data.get('bagUnit', null) == null ||
+              request.resource.data.get('bagUnit', null) in ['kg', 'L']) &&
+            request.resource.data.archived is bool &&
+            request.resource.data.createdAt is timestamp;
+        }
+        allow read: if isMember(hid);
+        allow create: if isEditor(hid) && validLitterData() &&
+          request.resource.data.createdBy == request.auth.uid &&
+          request.resource.data.createdAt == request.time;
+        // Who added it and when stay pinned once written.
+        allow update: if isEditor(hid) && validLitterData() &&
+          request.resource.data.createdBy == resource.data.createdBy &&
+          request.resource.data.createdAt == resource.data.createdAt;
+        allow delete: if false;
+      }
+
       // ---------- litter stock (append-only log) ----------
       // A loose count of bags on the shelf: "bought N" adds, "count N" says
       // "we have exactly N", and a box's full swap draws its bags off. The
@@ -179,8 +220,12 @@ service cloud.firestore {
       match /litterStock/{eventId} {
         function validLitterStockData() {
           return request.resource.data.keys().hasOnly([
-              'kind', 'bags', 'at', 'createdBy', 'createdAt'
+              'kind', 'bags', 'litterId', 'at', 'createdBy', 'createdAt'
             ]) &&
+            // Which litter kind the bags are. get() with a default: a phone
+            // still running a build from before kinds writes no such key, and
+            // those events belong to the legacy 'default' kind.
+            validString(request.resource.data.get('litterId', 'default'), 128) &&
             request.resource.data.kind in ['bought', 'count', 'swap'] &&
             request.resource.data.bags is number &&
             request.resource.data.bags >= 0 &&
