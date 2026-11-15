@@ -243,7 +243,11 @@ function NeedsAttention({
     <>
       <span className="min-w-0 flex-1 text-sm">
         <span className="font-semibold">{alert.title}</span>{' '}
-        <span className="text-danger">· {alert.detail}</span>
+        {/* One unit: when the line wraps, "about 1 day left" moves down
+        whole rather than leaving "day left" orphaned on a line of its own. */}
+        <span data-testid="home-attention-detail" className="whitespace-nowrap text-danger">
+          · {alert.detail}
+        </span>
       </span>
       <FoldChevron turns={false} />
     </>
