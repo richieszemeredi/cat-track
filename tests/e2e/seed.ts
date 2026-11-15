@@ -209,16 +209,19 @@ export async function openLitterAddForm(page: Page): Promise<void> {
 
 /**
  * Two litter boxes — one fresh, one well past its four weeks — so Home's
- * litter fold lays out both states. Leaves the page on Home with it open.
+ * litter fold lays out both states. The fresh one takes whichever kind the
+ * form starts on; `staleKind` names the litter the stale one takes, when
+ * there is a choice. Leaves the page on Home with it open.
  */
-export async function seedLitterBoxes(page: Page): Promise<void> {
+export async function seedLitterBoxes(page: Page, staleKind?: string): Promise<void> {
   await openLitterAddForm(page)
 
   await page.getByTestId('litter-location').fill('Bathroom')
   await page.getByTestId('litter-save').click()
-  await expect(page.getByTestId('home-litter').getByText('Bathroom', { exact: true })).toBeVisible(
-    WAIT,
-  )
+  // The row, not the bare name: with two kinds the name is followed by its kind.
+  await expect(
+    page.getByTestId('home-litter').getByRole('listitem').filter({ hasText: 'Bathroom' }),
+  ).toBeVisible(WAIT)
   // The add form folds away once the server acks — typing the next one
   // before that would be wiped by the reset.
   await expect(page.getByTestId('litter-location')).toBeHidden(WAIT)
@@ -227,6 +230,9 @@ export async function seedLitterBoxes(page: Page): Promise<void> {
   await page.getByTestId('litter-location').fill('Hallway behind the big wardrobe')
   // 38 days is five weeks whichever side of midnight UTC the local day falls.
   await page.getByTestId('litter-date').fill(daysAgoISO(38))
+  if (staleKind !== undefined) {
+    await page.getByTestId('litter-kind').selectOption({ label: staleKind })
+  }
   await page.getByTestId('litter-save').click()
   await expect(page.getByText('· 5 weeks ago')).toBeVisible(WAIT)
   await expect(page.getByTestId('litter-location')).toBeHidden(WAIT)

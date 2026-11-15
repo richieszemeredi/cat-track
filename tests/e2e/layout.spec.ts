@@ -1,8 +1,8 @@
 import { expect, test, type APIRequestContext, type Page } from '@playwright/test'
 import {
   addFoodOnSupplies,
+  addLitterOnSupplies,
   openLitterAddForm,
-  openLitterFold,
   seedHousehold,
   seedLastWeeksWeighIn,
   seedLitterBoxes,
@@ -407,18 +407,24 @@ async function documentScrollsSideways(page: Page): Promise<boolean> {
   })
 }
 
+/** The second litter kind: a long name, for every line that carries one. */
+const LONG_LITTER = 'Silica crystals, unscented, large grain'
+
 /**
  * Everything a screen can show at once, short of a second cat: a superseded
- * plan, a week-old weigh-in (so the weekly trend line), a fresh and an overdue
- * litter box, a fresh and a stale water bowl, and a food and the litter both
- * running low — so Home leads with a full "Needs attention" and the Supplies
- * dot is on the tab bar.
+ * plan, a week-old weigh-in (so the weekly trend line), two litter kinds, a
+ * fresh and an overdue litter box (one of each kind, so Home names them), a
+ * fresh and a stale water bowl, and a food and a litter both running low —
+ * so Home leads with a full "Needs attention" and the Supplies dot is on the
+ * tab bar.
  */
 async function seedEverything(page: Page, request: APIRequestContext, tag: string): Promise<void> {
   await seedHousehold(page, { tag })
   await seedPreviousPlan(request, tag)
   await seedLastWeeksWeighIn(request, tag)
-  await seedLitterBoxes(page)
+  await addLitterOnSupplies(page, { name: 'Clumping', bagSize: '10', openingBags: '6' })
+  await addLitterOnSupplies(page, { name: LONG_LITTER, bagSize: '3,8', bagUnit: 'kg' })
+  await seedLitterBoxes(page, LONG_LITTER)
   await seedWaterBowls(page, request, tag)
 
   await tabBar(page).getByRole('link', { name: 'Supplies' }).click()
@@ -439,8 +445,16 @@ async function seedEverything(page: Page, request: APIRequestContext, tag: strin
   await kibble.getByTestId('food-supply-count-save').click()
   await expect(kibble).toContainText('time to order', WAIT)
 
-  const litter = page.getByTestId('litter-supply')
-  await litter.getByTestId('litter-supply-recount').click()
+  // The kind the overdue box takes, down to one bag: its swap is due, so
+  // nothing would be left after it.
+  const litter = page.getByTestId('litter-supply').filter({ hasText: LONG_LITTER })
+  // A tap WebKit drops leaves the panel shut; tap again until it opens.
+  await expect(async () => {
+    if (!(await litter.getByTestId('litter-supply-count-amount').isVisible())) {
+      await litter.getByTestId('litter-supply-recount').click()
+    }
+    await expect(litter.getByTestId('litter-supply-count-amount')).toBeVisible({ timeout: 2_000 })
+  }).toPass(WAIT)
   await litter.getByTestId('litter-supply-count-amount').fill('1')
   await litter.getByTestId('litter-supply-count-save').click()
   await expect(litter).toContainText('time to order', WAIT)
@@ -520,7 +534,11 @@ test('every screen fits the viewport without sideways scroll', async ({
   const kibble = page.getByTestId('food-supply').first()
   await kibble.getByTestId('food-supply-bought').click()
   await expect(kibble.getByTestId('food-supply-bought-amount')).toBeVisible(WAIT)
-  await page.getByTestId('litter-supply').getByTestId('litter-supply-recount').click()
+  await page
+    .getByTestId('litter-supply')
+    .filter({ hasText: LONG_LITTER })
+    .getByTestId('litter-supply-recount')
+    .click()
   await audit('Supplies', 'supplies-panels', false)
   await kibble.getByTestId('food-supply-edit').click()
   await expect(kibble.getByTestId('food-name')).toBeVisible(WAIT)
@@ -528,6 +546,14 @@ test('every screen fits the viewport without sideways scroll', async ({
   await page.getByTestId('supplies-add-food').click()
   await expect(page.getByTestId('food-opening-units')).toBeVisible(WAIT)
   await audit('Supplies', 'supplies-add-food', false)
+  // The litter form, editing the long-named kind and adding one.
+  const longLitter = page.getByTestId('litter-supply').filter({ hasText: LONG_LITTER })
+  await longLitter.getByTestId('litter-supply-edit').click()
+  await expect(longLitter.getByTestId('litter-kind-name')).toBeVisible(WAIT)
+  await audit('Supplies', 'supplies-edit-litter', false)
+  await page.getByTestId('supplies-add-litter').click()
+  await expect(page.getByTestId('litter-kind-opening-bags')).toBeVisible(WAIT)
+  await audit('Supplies', 'supplies-add-litter', false)
 
   // ---- two cats ----
   // A second cat with a long name, so the switcher chips, the per-cat blocks
@@ -756,8 +782,10 @@ test.describe('in dark mode', () => {
       await sweep(name.toLowerCase())
     }
 
-    // What only shows once opened: Home's folds and the stock panels.
-    await openLitterFold(page)
+    // What only shows once opened: Home's folds (the box form with its
+    // litter picker) and the stock panels and forms.
+    await openLitterAddForm(page)
+    await expect(page.getByTestId('litter-kind')).toBeVisible(WAIT)
     await page.getByTestId('home-off-plan-summary').click()
     await sweep('home-folds')
 
@@ -765,6 +793,10 @@ test.describe('in dark mode', () => {
     await page.getByTestId('food-supply').first().getByTestId('food-supply-bought').click()
     await page.getByTestId('supplies-add-food').click()
     await expect(page.getByTestId('food-opening-units')).toBeVisible(WAIT)
+    const longLitter = page.getByTestId('litter-supply').filter({ hasText: LONG_LITTER })
+    await longLitter.getByTestId('litter-supply-edit').click()
+    await page.getByTestId('supplies-add-litter').click()
+    await expect(page.getByTestId('litter-kind-opening-bags')).toBeVisible(WAIT)
     await sweep('supplies-panels')
   })
 
