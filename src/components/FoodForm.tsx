@@ -1,4 +1,4 @@
-import { useState, type SubmitEvent } from 'react'
+import { useId, useState, type SubmitEvent } from 'react'
 import {
   analysisSumPct,
   kcalPer100gFromAnalysis,
@@ -11,6 +11,7 @@ import {
 import { addFood, awaitOrQueued, updateFood, type Food } from '../lib/db'
 import { DECIMAL_INPUT_PROPS, parseDecimal } from '../lib/numbers'
 import { type FoodType } from '../lib/schemas'
+import { defaultUnitForType, STOCK_UNITS, unitNoun, type StockUnit } from '../lib/stock'
 
 const INPUT_CLASS = 'field'
 
@@ -59,6 +60,20 @@ const ANALYSIS_FIELDS: {
     placeholder: (t) => (t === 'wet' ? 'e.g. 78' : 'e.g. 8'),
   },
 ]
+
+const UNIT_SIZE_MAX_G = 20000
+const OPENING_UNITS_MAX = 10000
+
+/** "tin" -> "Tin", for a label that starts with the unit. */
+function capitalise(word: string): string {
+  return word.charAt(0).toUpperCase() + word.slice(1)
+}
+
+/** A whole number typed on the numeric keypad; null when empty or not one. */
+function parseWholeNumber(raw: string): number | null {
+  const trimmed = raw.trim()
+  return /^\d+$/.test(trimmed) ? Number(trimmed) : null
+}
 
 interface ResolvedDraft {
   analysis: FoodAnalysis
@@ -117,6 +132,16 @@ export function FoodForm({
   // the kcal field by hand clears it, so a saved analysis always explains the
   // saved kcal figure.
   const [analysis, setAnalysis] = useState<FoodAnalysis | null>(existing?.analysis ?? null)
+  // The unit follows the type (wet -> tins, dry -> bags) until it is picked
+  // by hand; untouched, it is saved as null so it keeps following the type.
+  const [pickedUnit, setPickedUnit] = useState<StockUnit | null>(existing?.unit ?? null)
+  const unit = pickedUnit ?? defaultUnitForType(type)
+  const [unitSize, setUnitSize] = useState(
+    existing?.unitSizeG == null ? '' : String(existing.unitSizeG),
+  )
+  const [openingUnits, setOpeningUnits] = useState('')
+  // Two forms can be open at once (adding one food while editing another).
+  const ids = useId()
   const [error, setError] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
 
@@ -158,6 +183,23 @@ export function FoodForm({
       setError('kcal per gram must be between 0.01 and 10.')
       return
     }
+    const unitSizeG = parseDecimal(unitSize)
+    if (
+      unitSize.trim() !== '' &&
+      (unitSizeG === null || unitSizeG < 1 || unitSizeG > UNIT_SIZE_MAX_G)
+    ) {
+      setError(`${capitalise(unit)} size must be between 1 and ${String(UNIT_SIZE_MAX_G)} g.`)
+      return
+    }
+    const opening = existing ? null : parseWholeNumber(openingUnits)
+    if (
+      !existing &&
+      openingUnits.trim() !== '' &&
+      (opening === null || opening > OPENING_UNITS_MAX)
+    ) {
+      setError(`${capitalise(unitNoun(unit, 2))} in stock must be a whole number.`)
+      return
+    }
     setError(null)
     setSaving(true)
     const trimmedBrand = brand.trim()
@@ -167,13 +209,14 @@ export function FoodForm({
       type,
       kcalPerGram: kcalNum,
       analysis,
-      // Not asked here yet: kept as they were, null for a new food.
-      unit: existing?.unit ?? null,
-      unitSizeG: existing?.unitSizeG ?? null,
+      unit: pickedUnit,
+      unitSizeG,
     }
     try {
       // 'confirmed' and 'queued' both count as success (offline-first).
-      await awaitOrQueued(existing ? updateFood(hid, existing.id, input) : addFood(hid, uid, input))
+      await awaitOrQueued(
+        existing ? updateFood(hid, existing.id, input) : addFood(hid, uid, input, opening),
+      )
       onDone()
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not save the food — please try again.')
@@ -329,6 +372,92 @@ export function FoodForm({
           <p className="text-xs text-ink-soft">Estimates only — always confirm with your vet.</p>
         </div>
       </details>
+
+      <div
+        role="group"
+        aria-labelledby={`${ids}-stock`}
+        className="flex flex-col gap-3 border-t border-sand pt-3"
+      >
+        <p id={`${ids}-stock`} className="section-label">
+          Stock
+        </p>
+
+        <div className="flex flex-col gap-1 text-sm font-semibold">
+          <span id={`${ids}-unit`}>Comes in</span>
+          <div role="group" aria-labelledby={`${ids}-unit`} className="flex gap-2">
+            {STOCK_UNITS.map((u) => {
+              const selected = u === unit
+              return (
+                <button
+                  key={u}
+                  type="button"
+                  data-testid={`food-unit-${u}`}
+                  aria-pressed={selected}
+                  onClick={() => {
+                    setPickedUnit(u)
+                  }}
+                  className={`min-h-11 flex-1 rounded-full text-sm font-semibold active:scale-[0.98] ${
+                    selected ? 'bg-coral text-on-coral' : 'border border-sand-deep bg-surface'
+                  }`}
+                >
+                  {capitalise(unitNoun(u, 2))}
+                </button>
+              )
+            })}
+          </div>
+        </div>
+
+        {/* Labelled by id rather than by wrapping: the unit after the field
+        would otherwise become part of its accessible name. */}
+        <div className="flex flex-col gap-1 text-sm font-semibold">
+          <label htmlFor={`${ids}-size`}>{capitalise(unit)} size (optional)</label>
+          <span className="flex items-center gap-2">
+            <input
+              {...DECIMAL_INPUT_PROPS}
+              id={`${ids}-size`}
+              data-testid="food-unit-size"
+              value={unitSize}
+              placeholder={unit === 'bag' ? 'e.g. 2000' : 'e.g. 400'}
+              onChange={(e) => {
+                setUnitSize(e.target.value)
+              }}
+              className={`${INPUT_CLASS} max-w-32 tabular-nums`}
+            />
+            <span aria-hidden="true" className="font-normal text-ink-soft">
+              g
+            </span>
+          </span>
+        </div>
+
+        {existing ? null : (
+          <div className="flex flex-col gap-1 text-sm font-semibold">
+            <label htmlFor={`${ids}-opening`}>
+              {capitalise(unitNoun(unit, 2))} in stock (optional)
+            </label>
+            <span className="flex items-center gap-2">
+              <input
+                type="text"
+                inputMode="numeric"
+                autoComplete="off"
+                id={`${ids}-opening`}
+                aria-describedby={`${ids}-opening-hint`}
+                data-testid="food-opening-units"
+                value={openingUnits}
+                onChange={(e) => {
+                  setOpeningUnits(e.target.value)
+                }}
+                className={`${INPUT_CLASS} max-w-32 tabular-nums`}
+              />
+              <span aria-hidden="true" className="font-normal text-ink-soft">
+                {unitNoun(unit, 2)}
+              </span>
+            </span>
+            <span id={`${ids}-opening-hint`} className="text-xs font-normal text-ink-soft">
+              Leave empty to not track this one.
+            </span>
+          </div>
+        )}
+      </div>
 
       {error === null ? null : (
         <p role="alert" className="text-sm font-semibold text-danger">

@@ -375,6 +375,118 @@ describe('FoodForm', () => {
     })
   })
 
+  describe('stock', () => {
+    it('follows the type for what it comes in until a unit is picked by hand', async () => {
+      const user = userEvent.setup()
+      renderForm()
+
+      // Dry by default: bagged.
+      expect(screen.getByTestId('food-unit-bag')).toHaveAttribute('aria-pressed', 'true')
+      expect(screen.getByLabelText('Bag size (optional)')).toBeInTheDocument()
+
+      await user.selectOptions(screen.getByTestId('food-type'), 'wet')
+      expect(screen.getByTestId('food-unit-tin')).toHaveAttribute('aria-pressed', 'true')
+      expect(screen.getByLabelText('Tin size (optional)')).toBeInTheDocument()
+      expect(screen.getByLabelText('Tins in stock (optional)')).toBeInTheDocument()
+
+      // Picked by hand, it stays put when the type changes.
+      await user.click(screen.getByTestId('food-unit-pouch'))
+      await user.selectOptions(screen.getByTestId('food-type'), 'dry')
+      expect(screen.getByTestId('food-unit-pouch')).toHaveAttribute('aria-pressed', 'true')
+      expect(screen.getByLabelText('Pouches in stock (optional)')).toBeInTheDocument()
+    })
+
+    it('saves the unit, a comma unit size and the opening count on add', async () => {
+      const user = userEvent.setup()
+      renderForm()
+
+      await user.type(screen.getByTestId('food-name'), 'Pouch Mix')
+      await user.selectOptions(screen.getByTestId('food-type'), 'wet')
+      await user.type(screen.getByTestId('food-kcal-per-gram'), '0,9')
+      await user.click(screen.getByTestId('food-unit-pouch'))
+      await user.type(screen.getByTestId('food-unit-size'), '85,5')
+      await user.type(screen.getByTestId('food-opening-units'), '12')
+      await user.click(screen.getByTestId('food-save'))
+
+      await waitFor(() => {
+        expect(addFoodMock).toHaveBeenCalledTimes(1)
+      })
+      const [, , input, opening] = firstAddFoodCall()
+      expect(input.unit).toBe('pouch')
+      expect(input.unitSizeG).toBe(85.5)
+      expect(opening).toBe(12)
+    })
+
+    it('leaves the unit null while it only follows the type, and skips the count when empty', async () => {
+      const user = userEvent.setup()
+      renderForm()
+
+      await user.type(screen.getByTestId('food-name'), 'Kibble')
+      await user.type(screen.getByTestId('food-kcal-per-gram'), '3,6')
+      await user.click(screen.getByTestId('food-save'))
+
+      await waitFor(() => {
+        expect(addFoodMock).toHaveBeenCalledTimes(1)
+      })
+      const [, , input, opening] = firstAddFoodCall()
+      expect(input.unit).toBeNull()
+      expect(input.unitSizeG).toBeNull()
+      expect(opening).toBeNull()
+    })
+
+    it('rejects a count that is not a whole number', async () => {
+      const user = userEvent.setup()
+      renderForm()
+
+      await user.type(screen.getByTestId('food-name'), 'Kibble')
+      await user.type(screen.getByTestId('food-kcal-per-gram'), '3,6')
+      await user.type(screen.getByTestId('food-opening-units'), '2,5')
+      await user.click(screen.getByTestId('food-save'))
+
+      expect(await screen.findByRole('alert')).toHaveTextContent(
+        'Bags in stock must be a whole number.',
+      )
+      expect(addFoodMock).not.toHaveBeenCalled()
+    })
+
+    it('rejects a unit size of nothing', async () => {
+      const user = userEvent.setup()
+      renderForm()
+
+      await user.type(screen.getByTestId('food-name'), 'Kibble')
+      await user.type(screen.getByTestId('food-kcal-per-gram'), '3,6')
+      await user.type(screen.getByTestId('food-unit-size'), '0')
+      await user.click(screen.getByTestId('food-save'))
+
+      expect(await screen.findByRole('alert')).toHaveTextContent(
+        'Bag size must be between 1 and 20000 g.',
+      )
+      expect(addFoodMock).not.toHaveBeenCalled()
+    })
+
+    it('edits the unit and size but never asks for an opening count', async () => {
+      const user = userEvent.setup()
+      const existing = makeFood({ id: 'food-9', type: 'wet', unit: 'tin', unitSizeG: 400 })
+      renderForm({ existing })
+
+      expect(screen.queryByTestId('food-opening-units')).not.toBeInTheDocument()
+      expect(screen.getByTestId('food-unit-tin')).toHaveAttribute('aria-pressed', 'true')
+      const size = screen.getByTestId('food-unit-size')
+      expect(size).toHaveValue('400')
+
+      await user.clear(size)
+      await user.type(size, '200')
+      await user.click(screen.getByRole('button', { name: /save changes/i }))
+
+      await waitFor(() => {
+        expect(updateFoodMock).toHaveBeenCalledTimes(1)
+      })
+      const [, , patch] = firstUpdateFoodCall()
+      expect(patch.unit).toBe('tin')
+      expect(patch.unitSizeG).toBe(200)
+    })
+  })
+
   it('calls onDone without saving when Cancel is clicked', async () => {
     const user = userEvent.setup()
     const { onDone } = renderForm()
