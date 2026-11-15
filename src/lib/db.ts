@@ -1,4 +1,5 @@
 import { queryOptions, useQueryClient, type QueryClient } from '@tanstack/react-query'
+import { startOfDay } from 'date-fns'
 import { type User } from 'firebase/auth'
 import {
   addDoc,
@@ -33,6 +34,7 @@ import {
   foodSchema,
   foodStockEventSchema,
   litterBoxSchema,
+  litterStockEventSchema,
   waterBowlSchema,
   mealTimeOverrideSchema,
   memberSchema,
@@ -47,6 +49,7 @@ import {
   type FoodType,
   type LifeStage,
   type LitterBox,
+  type LitterStockEvent,
   type WaterBowl,
   type MealTimeOverride,
   type Plan,
@@ -56,7 +59,7 @@ import {
   type StockUnit,
   type WeightEntry,
 } from './schemas'
-import { type FoodStockKind } from './stock'
+import { type FoodStockKind, type LitterStockKind } from './stock'
 
 // The single data-access layer. Every function takes householdId explicitly —
 // today there is exactly one household, but nothing here assumes that, which
@@ -126,6 +129,9 @@ function mealTimeOverridesRef(hid: string, catId: string): CollectionReference {
 }
 function litterBoxesRef(hid: string): CollectionReference {
   return collection(db, 'households', hid, 'litterBoxes')
+}
+function litterStockRef(hid: string): CollectionReference {
+  return collection(db, 'households', hid, 'litterStock')
 }
 function waterBowlsRef(hid: string): CollectionReference {
   return collection(db, 'households', hid, 'waterBowls')
@@ -805,6 +811,39 @@ export function useLitterBoxesLive(hid: string): void {
   )
 }
 
+// ---------- litter stock ----------
+
+/** The household's litter stock log, oldest first. */
+export function litterStockQueryOptions(hid: string) {
+  return queryOptions({
+    queryKey: ['litterStock', hid] as const,
+    queryFn: async () =>
+      parseDocs(
+        litterStockEventSchema,
+        await getDocs(query(litterStockRef(hid), orderBy('at', 'asc'))),
+      ),
+    staleTime: Infinity,
+  })
+}
+
+export function useLitterStockLive(hid: string): void {
+  const qc = useQueryClient()
+  useEffect(
+    () =>
+      onSnapshot(
+        query(litterStockRef(hid), orderBy('at', 'asc')),
+        (snap) => {
+          qc.setQueryData(
+            litterStockQueryOptions(hid).queryKey,
+            parseDocs(litterStockEventSchema, snap),
+          )
+        },
+        onListenError(qc, litterStockQueryOptions(hid).queryKey),
+      ),
+    [hid, qc],
+  )
+}
+
 // ---------- water bowls ----------
 
 export function waterBowlsQueryOptions(hid: string) {
@@ -998,6 +1037,7 @@ export interface LitterBoxInput {
   location: string
   lastChangedAt: Date
   changeEveryWeeks: number
+  bagsPerSwap: number
 }
 
 export function addLitterBox(hid: string, uid: string, input: LitterBoxInput): Promise<unknown> {
@@ -1005,6 +1045,7 @@ export function addLitterBox(hid: string, uid: string, input: LitterBoxInput): P
     location: input.location,
     lastChangedAt: Timestamp.fromDate(input.lastChangedAt),
     changeEveryWeeks: input.changeEveryWeeks,
+    bagsPerSwap: input.bagsPerSwap,
     createdBy: uid,
     createdAt: serverTimestamp(),
   })
@@ -1020,6 +1061,54 @@ export function updateLitterBox(
     data['lastChangedAt'] = Timestamp.fromDate(patch.lastChangedAt)
   }
   return updateDoc(doc(litterBoxesRef(hid), boxId), data)
+}
+
+/**
+ * "Replaced today": the box's last full clean moves to the day of `at`, and
+ * its bags come off the litter stock — in ONE batch, so the stock never
+ * counts a swap the box doesn't show, or the other way round. The event keeps
+ * the real time, so it sorts correctly against a recount made earlier today.
+ * Editing a box's date in its form is a correction, not a swap, and goes
+ * through updateLitterBox instead.
+ */
+export function replaceLitterBox(
+  hid: string,
+  uid: string,
+  box: Pick<LitterBox, 'id' | 'bagsPerSwap'>,
+  at: Date,
+): Promise<unknown> {
+  const batch = writeBatch(db)
+  batch.update(doc(litterBoxesRef(hid), box.id), {
+    lastChangedAt: Timestamp.fromDate(startOfDay(at)),
+  })
+  batch.set(doc(litterStockRef(hid)), {
+    kind: 'swap',
+    bags: box.bagsPerSwap,
+    at: Timestamp.fromDate(at),
+    createdBy: uid,
+    createdAt: serverTimestamp(),
+  })
+  return batch.commit()
+}
+
+export interface LitterStockEventInput {
+  kind: LitterStockKind
+  bags: number
+  at: Date
+}
+
+export function addLitterStockEvent(
+  hid: string,
+  uid: string,
+  input: LitterStockEventInput,
+): Promise<unknown> {
+  return addDoc(litterStockRef(hid), {
+    kind: input.kind,
+    bags: input.bags,
+    at: Timestamp.fromDate(input.at),
+    createdBy: uid,
+    createdAt: serverTimestamp(),
+  })
 }
 
 export function deleteLitterBox(hid: string, boxId: string): Promise<unknown> {
@@ -1214,6 +1303,7 @@ export type {
   Food,
   FoodStockEvent,
   LitterBox,
+  LitterStockEvent,
   MealTimeOverride,
   Plan,
   PlanItem,

@@ -1,12 +1,12 @@
 import { useQuery } from '@tanstack/react-query'
-import { format, startOfDay } from 'date-fns'
+import { format } from 'date-fns'
 import { AnimatePresence } from 'motion/react'
 import { useState } from 'react'
 import { useAuth } from '../lib/auth'
 import {
   awaitOrQueued,
   litterBoxesQueryOptions,
-  updateLitterBox,
+  replaceLitterBox,
   useLitterBoxesLive,
   type LitterBox,
 } from '../lib/db'
@@ -107,11 +107,11 @@ function LitterBoxRow({
 
   const handleReplacedToday = () => {
     setError(null)
-    awaitOrQueued(updateLitterBox(hid, box.id, { lastChangedAt: startOfDay(new Date()) })).catch(
-      (err: unknown) => {
-        setError(err instanceof Error ? err.message : 'Could not save.')
-      },
-    )
+    if (uid === null) return
+    // A swap: the date moves AND the box's bags come off the litter stock.
+    awaitOrQueued(replaceLitterBox(hid, uid, box, new Date())).catch((err: unknown) => {
+      setError(err instanceof Error ? err.message : 'Could not save.')
+    })
   }
 
   return (

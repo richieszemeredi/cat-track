@@ -9,6 +9,11 @@ export const DEFAULT_LITTER_CHANGE_EVERY_WEEKS = 4
 /** The longest interval a box may be set to; mirrored in the rules. */
 export const MAX_LITTER_CHANGE_EVERY_WEEKS = 52
 
+/** Bags of litter one full swap of a box takes, unless it says otherwise. */
+export const DEFAULT_BAGS_PER_SWAP = 1
+/** The most a box may be set to; mirrored in the rules. */
+export const MAX_BAGS_PER_SWAP = 20
+
 export interface LitterAge {
   /** Whole calendar days since the last full clean; never negative. */
   days: number

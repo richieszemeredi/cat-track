@@ -7,9 +7,14 @@ import {
   type FoodType,
   type LifeStage,
 } from './catmath'
-import { DEFAULT_LITTER_CHANGE_EVERY_WEEKS, MAX_LITTER_CHANGE_EVERY_WEEKS } from './litter'
+import {
+  DEFAULT_BAGS_PER_SWAP,
+  DEFAULT_LITTER_CHANGE_EVERY_WEEKS,
+  MAX_BAGS_PER_SWAP,
+  MAX_LITTER_CHANGE_EVERY_WEEKS,
+} from './litter'
 import { MAX_MEALS_PER_DAY, MIN_MEALS_PER_DAY } from './plan'
-import { FOOD_STOCK_KINDS, STOCK_UNITS, type StockUnit } from './stock'
+import { FOOD_STOCK_KINDS, LITTER_STOCK_KINDS, STOCK_UNITS, type StockUnit } from './stock'
 
 // Zod schemas validate every Firestore READ at the boundary (via safeParse in
 // db.ts) so one corrupt/legacy document degrades gracefully instead of
@@ -210,10 +215,27 @@ export const litterBoxSchema = z.object({
     .min(1)
     .max(MAX_LITTER_CHANGE_EVERY_WEEKS)
     .default(DEFAULT_LITTER_CHANGE_EVERY_WEEKS),
+  // Bags a full swap of this box takes — what "Replaced today" draws off the
+  // litter stock. Absent on every box from before stock was tracked.
+  bagsPerSwap: z.number().int().min(1).max(MAX_BAGS_PER_SWAP).default(DEFAULT_BAGS_PER_SWAP),
   createdBy: z.string().min(1),
   createdAt: timestampToDate,
 })
 export type LitterBox = z.infer<typeof litterBoxSchema> & { id: string }
+
+/**
+ * One line of the household's litter stock log: "bought N", "count N" (we
+ * have exactly N) or a box's full "swap" of N bags. Append-only; the level is
+ * derived in stock.ts, never stored.
+ */
+export const litterStockEventSchema = z.object({
+  kind: z.enum(LITTER_STOCK_KINDS),
+  bags: z.number().min(0).max(1000),
+  at: timestampToDate,
+  createdBy: z.string().min(1),
+  createdAt: timestampToDate,
+})
+export type LitterStockEvent = z.infer<typeof litterStockEventSchema> & { id: string }
 
 /**
  * A water bowl and when its water was last replaced — what the cats drank is

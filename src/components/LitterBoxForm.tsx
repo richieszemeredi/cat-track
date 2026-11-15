@@ -7,7 +7,13 @@ import {
   updateLitterBox,
   type LitterBox,
 } from '../lib/db'
-import { DEFAULT_LITTER_CHANGE_EVERY_WEEKS, weeksLabel } from '../lib/litter'
+import {
+  DEFAULT_BAGS_PER_SWAP,
+  DEFAULT_LITTER_CHANGE_EVERY_WEEKS,
+  MAX_BAGS_PER_SWAP,
+  weeksLabel,
+} from '../lib/litter'
+import { bagsLabel } from '../lib/stock'
 
 const FIELD_CLASS = 'field mt-1'
 
@@ -16,6 +22,8 @@ const DATE_FORMAT = 'yyyy-MM-dd'
 // Twelve weeks covers every litter on the shelf; a box already saved with a
 // longer interval keeps it (see the extra option below), the rules allow 52.
 const INTERVAL_CHOICES = Array.from({ length: 12 }, (_, i) => i + 1)
+
+const BAGS_CHOICES = Array.from({ length: MAX_BAGS_PER_SWAP }, (_, i) => i + 1)
 
 function todayStr(): string {
   return format(new Date(), DATE_FORMAT)
@@ -44,6 +52,7 @@ export function LitterBoxForm({
   const [everyWeeks, setEveryWeeks] = useState(
     existing?.changeEveryWeeks ?? DEFAULT_LITTER_CHANGE_EVERY_WEEKS,
   )
+  const [bagsPerSwap, setBagsPerSwap] = useState(existing?.bagsPerSwap ?? DEFAULT_BAGS_PER_SWAP)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -65,7 +74,7 @@ export function LitterBoxForm({
     }
 
     setBusy(true)
-    const input = { location: trimmed, lastChangedAt, changeEveryWeeks: everyWeeks }
+    const input = { location: trimmed, lastChangedAt, changeEveryWeeks: everyWeeks, bagsPerSwap }
     awaitOrQueued(
       existing === undefined
         ? addLitterBox(hid, uid, input)
@@ -76,6 +85,7 @@ export function LitterBoxForm({
           setLocation('')
           setDateStr(todayStr())
           setEveryWeeks(DEFAULT_LITTER_CHANGE_EVERY_WEEKS)
+          setBagsPerSwap(DEFAULT_BAGS_PER_SWAP)
         }
         onDone?.()
       })
@@ -152,6 +162,23 @@ export function LitterBoxForm({
           ).map((weeks) => (
             <option key={weeks} value={weeks}>
               {weeksLabel(weeks)}
+            </option>
+          ))}
+        </select>
+      </label>
+      <label className="text-sm font-semibold">
+        Bags per full swap
+        <select
+          data-testid="litter-bags-per-swap"
+          value={bagsPerSwap}
+          onChange={(event) => {
+            setBagsPerSwap(Number(event.target.value))
+          }}
+          className={FIELD_CLASS}
+        >
+          {BAGS_CHOICES.map((bags) => (
+            <option key={bags} value={bags}>
+              {bagsLabel(bags)}
             </option>
           ))}
         </select>
