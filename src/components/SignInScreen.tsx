@@ -1,5 +1,6 @@
 import { FirebaseError } from 'firebase/app'
 import { getRedirectResult } from 'firebase/auth'
+import { Cat } from 'lucide-react'
 import { useEffect, useState, type SubmitEvent } from 'react'
 import { devSignIn, signInWithGoogle } from '../lib/auth'
 import { auth, isEmulatorMode } from '../lib/firebase'
@@ -40,9 +41,7 @@ export function SignInScreen() {
   return (
     <main className="mx-auto flex min-h-dvh max-w-lg flex-col items-center justify-center gap-6 p-6">
       <div className="flex flex-col items-center gap-3 text-center">
-        <span aria-hidden="true" className="text-5xl leading-none">
-          🐈
-        </span>
+        <Cat aria-hidden="true" className="size-12 text-coral-ink" />
         <h1 className="text-4xl font-bold tracking-tight">CatTrack</h1>
         <p className="text-ink-soft">Food, weight &amp; health for your kitten — together.</p>
       </div>

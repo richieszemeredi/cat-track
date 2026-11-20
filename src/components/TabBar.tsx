@@ -1,16 +1,17 @@
 import { Link } from '@tanstack/react-router'
+import { Cat, House, Package, Utensils, Weight } from 'lucide-react'
 import { m } from 'motion/react'
 import { glide } from '../lib/motion'
 import { useSupplies } from '../lib/supplies'
 
-// Emoji earn their place here and nowhere else: in a bottom bar they are
+// Icons earn their place here and nowhere else: in a bottom bar they are
 // wayfinding you hit with a thumb, not decoration on a heading.
 const TABS = [
-  { to: '/', label: 'Home', emoji: '🏠' },
-  { to: '/weight', label: 'Weight', emoji: '⚖️' },
-  { to: '/plan', label: 'Plan', emoji: '🍽️' },
-  { to: '/supplies', label: 'Supplies', emoji: '📦' },
-  { to: '/profile', label: 'Profile', emoji: '🐱' },
+  { to: '/', label: 'Home', Icon: House },
+  { to: '/weight', label: 'Weight', Icon: Weight },
+  { to: '/plan', label: 'Plan', Icon: Utensils },
+  { to: '/supplies', label: 'Supplies', Icon: Package },
+  { to: '/profile', label: 'Profile', Icon: Cat },
 ] as const
 
 /**
@@ -20,7 +21,7 @@ const TABS = [
  * in both shapes, so there is only ever one "Main" landmark. AppShell pads
  * itself by the rail's 6rem to keep content out from under it.
  *
- * The coral pill behind the active emoji is ONE element that travels: each
+ * The coral pill behind the active icon is ONE element that travels: each
  * tab renders it only while active, and the shared layoutId makes Motion
  * slide it from the tab that lost it to the one that gained it — across the
  * bar or down the rail alike. `layoutRoot` is Motion's rule for layout inside
@@ -42,9 +43,7 @@ export function TabBar() {
       className="tab-bar fixed inset-x-0 bottom-0 border-t border-sand bg-surface/90 pr-[env(safe-area-inset-right)] pb-[env(safe-area-inset-bottom)] pl-[env(safe-area-inset-left)] backdrop-blur lg:top-0 lg:right-auto lg:w-[calc(6rem+env(safe-area-inset-left))] lg:border-t-0 lg:border-r lg:pt-[env(safe-area-inset-top)] lg:pr-0"
     >
       <div className="mx-auto flex max-w-lg items-stretch justify-around lg:flex-col lg:justify-start lg:gap-2 lg:py-6">
-        <span aria-hidden="true" className="mb-4 hidden text-center text-4xl leading-none lg:block">
-          🐈
-        </span>
+        <Cat aria-hidden="true" className="mx-auto mb-4 hidden size-9 text-coral-ink lg:block" />
         {TABS.map((tab) => {
           const dot = tab.to === '/supplies' && anyLow
           return (
@@ -58,10 +57,7 @@ export function TabBar() {
             >
               {({ isActive }) => (
                 <>
-                  <span
-                    aria-hidden="true"
-                    className="relative rounded-full px-4 py-1 text-xl leading-none"
-                  >
+                  <span aria-hidden="true" className="relative rounded-full px-4 py-1">
                     {isActive ? (
                       <m.span
                         layoutId="tab-pill"
@@ -71,13 +67,10 @@ export function TabBar() {
                     ) : null}
                     {/* Above every pill, not just this tab's: the pill lives in
                   one tab and slides across the others, and in tree order a
-                  later tab's pill would paint over an earlier tab's emoji on
+                  later tab's pill would paint over an earlier tab's icon on
                   its way past. The nav (fixed) keeps this z-index local. */}
-                    <span
-                      className={`relative z-10 transition-opacity duration-200 ease-squishy ${isActive ? '' : 'opacity-60'}`}
-                    >
-                      {tab.emoji}
-                    </span>
+                    <tab.Icon className="relative z-10 size-6" />
+
                     {dot ? (
                       <span
                         data-testid="supplies-dot"

@@ -1,12 +1,12 @@
+import { PawPrint } from 'lucide-react'
+
 export function Splash({ message = 'Warming up…' }: { message?: string }) {
   return (
     <div className="flex min-h-dvh flex-col items-center justify-center gap-3">
-      <span
+      <PawPrint
         aria-hidden="true"
-        className="animate-pulse text-4xl leading-none motion-reduce:animate-none"
-      >
-        🐾
-      </span>
+        className="size-9 animate-pulse text-coral-ink motion-reduce:animate-none"
+      />
       <p className="text-sm text-ink-soft">{message}</p>
     </div>
   )
