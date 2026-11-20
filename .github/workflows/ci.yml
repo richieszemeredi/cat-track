@@ -135,14 +135,19 @@ jobs:
 
       - name: Resolve Playwright version
         id: pw
-        run: echo "version=$(npx playwright --version | awk '{print $2}')" >> "$GITHUB_OUTPUT"
+        run: |
+          echo "version=$(npx playwright --version | awk '{print $2}')" >> "$GITHUB_OUTPUT"
+          echo "image=${ImageOS:?}" >> "$GITHUB_OUTPUT"
 
+      # Keyed on the runner image (ImageOS, e.g. ubuntu24), not just the OS:
+      # Playwright downloads a build per Ubuntu release, and a 24.04 WebKit
+      # restored onto 26.04 can't find its libicu when ubuntu-latest moves.
       - name: Cache Playwright browsers
         id: pw-cache
         uses: actions/cache@v6
         with:
           path: ~/.cache/ms-playwright
-          key: playwright-${{ runner.os }}-${{ steps.pw.outputs.version }}-${{ matrix.browser }}
+          key: playwright-${{ runner.os }}-${{ steps.pw.outputs.image }}-${{ steps.pw.outputs.version }}-${{ matrix.browser }}
 
       - name: Install Playwright browser
         if: steps.pw-cache.outputs.cache-hit != 'true'
